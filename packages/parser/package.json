@@ -1,0 +1,20 @@
+{
+  "name": "@logcat-ai/parser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bugreport parser: logcat, ANR traces, kernel log",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "yauzl-promise": "^4.0.0"
+  }
+}
