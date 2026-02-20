@@ -223,33 +223,40 @@ interface DeepAnalysisResult extends Omit<DeepAnalysisOverview, 'correlationFind
 }
 
 function tryParseDeepAnalysis(content: string): DeepAnalysisResult | null {
-  try {
-    // Extract JSON from markdown code blocks or raw text
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/)
-      ?? content.match(/\{[\s\S]*\}/)
-      ?? content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return null;
-    const raw = jsonMatch[1] ?? jsonMatch[0];
-    const parsed = JSON.parse(raw);
+  // Try each regex pattern in order, attempting to parse each match
+  const patterns: RegExp[] = [
+    /```(?:json)?\s*([\s\S]*?)```/,
+    /\{[\s\S]*\}/,
+    /\[[\s\S]*\]/,
+  ];
 
-    // New format: object with insights array
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.insights)) {
-      return parsed as DeepAnalysisResult;
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (!match) continue;
+    const raw = match[1] ?? match[0];
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      // New format: object with insights array
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.insights)) {
+        return parsed as DeepAnalysisResult;
+      }
+
+      // Legacy format: plain array of items
+      if (Array.isArray(parsed)) {
+        return {
+          executiveSummary: '',
+          systemDiagnosis: '',
+          insights: parsed as DeepAnalysisInsightItem[],
+        };
+      }
+    } catch {
+      // JSON parse failed for this pattern, try next
     }
-
-    // Legacy format: plain array of items
-    if (Array.isArray(parsed)) {
-      return {
-        executiveSummary: '',
-        systemDiagnosis: '',
-        insights: parsed as DeepAnalysisInsightItem[],
-      };
-    }
-
-    return null;
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 export default router;
