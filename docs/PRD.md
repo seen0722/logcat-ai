@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.1.0
-> **更新日期**：2026-02-19
-> **狀態**：Phase 1 開發中
+> **版本**：v0.2.0
+> **更新日期**：2026-02-20
+> **狀態**：Phase 1 完成，Phase 1.5 規劃中
 
 ---
 
@@ -129,6 +129,25 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 - **輸出**：根因推理 + 交叉比對 + 修復建議
 - **特色**：若使用者提供問題描述，AI 會聚焦在對應方向
 
+#### Enhanced Deep Analysis（v0.2.0 新增）
+- **Context Builder**：提供 targeted context 給 LLM（`context-builder.ts`）
+  - Full stack trace（ANR blocking chain 完整堆疊）
+  - Blocking chain stacks（鎖依賴相關線程堆疊）
+  - Temporal window（事件前後的 logcat context）
+  - Token budget 控制（60K tokens 上限，避免超出 LLM context window）
+- **結構化輸出**：LLM 回傳 JSON 格式，每個 insight 包含：
+  - `evidence`：支持此診斷的具體 log 證據
+  - `category`：問題分類（anr / crash / memory / kernel / performance / stability）
+  - `debuggingSteps`：逐步 debug 指引
+  - `impact`：影響範圍描述
+  - `affectedComponents`：受影響的系統元件清單
+  - `relatedInsights`：關聯的其他 insight（交叉比對）
+- **DeepAnalysisOverview**：executive summary 元件
+  - System Diagnosis（系統整體診斷）
+  - Correlation Findings（跨子系統交叉比對發現）
+  - Prioritized Actions（依優先級排序的建議動作）
+- **Backward Compatible**：支援舊版 array 格式回應，確保不同 LLM 能力的相容性
+
 ### 3.4 輸出設計
 
 #### Insights Cards
@@ -139,6 +158,11 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 - 可展開詳情：完整分析、相關 log 片段、stack trace
 - Deep Analysis 補充：根因推理 + 修復建議（LLM 產出）
 - 卡片按嚴重性排序，Critical 在最上方
+- **Deep Analysis 增強欄位**（v0.2.0）：
+  - Evidence（證據）：LLM 標注的具體 log 行
+  - Debugging Steps（debug 步驟）：逐步排查指引
+  - Impact / Affected Components：影響範圍與受影響元件
+  - Related Insights：與其他 insight 的關聯性
 
 #### 其他輸出元件
 - **四階段進度條**：上傳 → 解壓解析 → 規則分析 → AI 深度分析
@@ -277,7 +301,8 @@ llm-gateway/
 │   └── anthropic.ts      # Anthropic Claude API（預留）
 ├── prompt-templates/
 │   ├── analysis.ts       # 分析用 prompt 模板
-│   └── chat.ts           # 對話追問用 prompt 模板
+│   ├── chat.ts           # 對話追問用 prompt 模板
+│   └── context-builder.ts # Deep Analysis targeted context 建構（v0.2.0）
 └── types.ts
 ```
 
@@ -353,7 +378,8 @@ GEMINI_MODEL=gemini-2.0-flash
 logcat-ai/
 ├── docker-compose.yml
 ├── docs/
-│   └── PRD.md                   # 本文件
+│   ├── PRD.md                   # 本文件
+│   └── TODO.md                  # 結構化 TODO 追蹤
 ├── packages/
 │   ├── parser/                  # 核心 Parser 模組
 │   │   ├── src/
@@ -380,6 +406,8 @@ logcat-ai/
 │           ├── SystemOverview.tsx
 │           ├── Timeline.tsx
 │           ├── ANRDetail.tsx
+│           ├── DeepAnalysisOverview.tsx
+│           ├── StackTrace.tsx
 │           ├── ChatPanel.tsx
 │           └── ReportExport.tsx
 └── sample-bugreports/
@@ -501,8 +529,8 @@ Week 5: Deep Analysis + 部署
 ### 9.1 追蹤策略
 
 GitHub Issues + Project Board：
-- **4 個 Milestones** 對應 Week 1-5
-- **23 個 Issues** 涵蓋所有工作項目
+- **4 個 Milestones** 對應 Week 1-5 + Phase 1.5
+- **42 個 Issues** 涵蓋所有工作項目（#1-#29 已完成，#30-#42 Phase 1.5）
 - **Labels**：parser / backend / llm-gateway / frontend / infra / test + P0/P1/P2
 
 ### 9.2 每日工作流
@@ -566,13 +594,78 @@ GitHub Issues + Project Board：
 | #23 | ANRDetail（blocking chain + deadlock + lock graph + stack） | ✅ 完成 | Build 通過 |
 | #24 | ChatPanel（AI 對話追問 + streaming） | ✅ 完成 | Build 通過 |
 
-### Week 5: Deep Analysis + 部署 🔄
+### Week 5: Deep Analysis + 部署 ✅
 
 | Issue | 內容 | 狀態 | 測試 |
 |-------|------|------|------|
-| #25 | Deep Analysis 端對端整合 | 待開始 | - |
+| #25 | Deep Analysis 端對端整合 | ✅ 完成 | Build 通過 |
 | #26 | Docker Compose 部署 | 待開始 | - |
 | #27 | 端對端測試 | 待開始 | - |
+| #28 | Enhanced Deep Analysis（context builder + structured output + overview UI） | ✅ 完成 | Build 通過 |
+| #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 43 tests passed |
 
-**累計測試：66 passed（parser package）**
+**累計測試：109 passed（parser 66 + backend 43）**
 **Frontend Build：215 KB JS + 14.5 KB CSS（production）**
+
+---
+
+## 12. Phase 1.5 — BSP 分析能力強化（規劃中）
+
+基於 Tech Lead review 與新手 BSP 工程師使用回饋，識別出以下改善方向。
+
+### 12.1 系統分析能力改善
+
+| 優先級 | # | 內容 | 工作量 | 影響度 |
+|--------|---|------|--------|--------|
+| **P0** | #30 | **Timeline 重構：事件聚合 + 篩選 + severity 優先** | Medium | **Critical** |
+| **P0** | #31 | Dumpsys meminfo/cpuinfo parser | Medium | High |
+| **P0** | #32 | 擴充 kernel event detection（thermal throttling, storage I/O, suspend/resume） | Low | High |
+| P1 | #33 | Logcat 新增 Input dispatching timeout / HAL restart patterns | Low | Medium |
+| P1 | #34 | Health score 改善（frequency-based + recency weighting） | Medium | Medium |
+| P1 | #35 | Tombstone parser（native crash backtrace） | Medium | Medium |
+| P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low |
+
+### 12.2 新手 BSP 工程師 Debug 輔助
+
+| 優先級 | # | 內容 | 工作量 | 影響度 |
+|--------|---|------|--------|--------|
+| **P0** | #37 | HAL service 存活狀態偵測（lshal/hwservicemanager log） | Low | High |
+| **P0** | #38 | Boot 狀態分析（boot_completed, uptime, bootreason, sysserver restart count） | Low | High |
+| P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High |
+| P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High |
+| P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium |
+| P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium |
+
+### 12.3 #30 Timeline 重構（P0 最高優先）
+
+**問題**：實測 308 events，重複 SELinux denial 佔滿畫面，critical 事件被埋沒，Timeline 形同廢物。
+
+**改善範圍：**
+
+#### A. 資料層 — `packages/parser/src/basic-analyzer.ts` `buildTimeline()`
+1. **事件聚合**：相同 title + 相同 source 在 30 秒窗口內 → 合併為一條
+   - 新增 `TimelineEvent.count?: number` 和 `TimelineEvent.timeRange?: string`
+   - 例：`SELinux denial: system_app → vendor_sierra_fw_check_prop (×47)` + `boot+3808s ~ boot+3902s`
+2. **Kernel ↔ Logcat 時間對齊**：用 bugreport metadata 中的 uptime 將 `boot+Ns` 轉成 `MM-DD HH:mm:ss`（best effort）
+
+#### B. Types 更新 — `packages/parser/src/types.ts` + `packages/frontend/src/lib/types.ts`
+```typescript
+interface TimelineEvent {
+  // ... existing fields
+  count?: number;           // 聚合後的事件數量
+  timeRange?: string;       // 聚合的時間範圍
+}
+```
+
+#### C. 前端層 — `packages/frontend/src/components/Timeline.tsx`
+1. **Filter bar**：按 severity（Critical/Warning/Info toggle）和 source（Logcat/Kernel/ANR）篩選
+2. **預設隱藏 info**：只顯示 critical + warning，需手動開啟 info
+3. **聚合事件摺疊顯示**：`count > 1` 的事件以摺疊形式呈現，點擊可展開
+4. **Severity 視覺優先**：critical 用紅色左邊框強調
+5. **事件計數顯示**：header 顯示 `Timeline (12 shown / 308 total)`
+
+#### D. 驗收標準
+- 308 events 的 bugreport → 預設顯示 < 30 條（info 隱藏 + 聚合）
+- Critical/Warning 事件一眼可見，不被 SELinux noise 淹沒
+- 可切換顯示 info 級事件
+- 聚合事件顯示次數和時間範圍
