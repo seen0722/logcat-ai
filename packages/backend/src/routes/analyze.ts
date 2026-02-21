@@ -8,6 +8,7 @@ import {
   parseKernelLog,
   parseMemInfo,
   parseCpuInfo,
+  parseLshal,
   AnalysisResult,
   DeepAnalysisOverview,
 } from '@logcat-ai/parser';
@@ -115,6 +116,12 @@ router.get('/:id', async (req: Request, res: Response) => {
     );
     const cpuInfo = cpuInfoSection ? parseCpuInfo(cpuInfoSection.content) : undefined;
 
+    // Parse HARDWARE HALS (lshal output)
+    const halSection = unpackResult.sections.find(
+      (s) => s.name === 'HARDWARE HALS' || s.command.includes('lshal')
+    );
+    const halStatus = halSection ? parseLshal(halSection.content) : undefined;
+
     if (aborted) return;
     sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
@@ -133,6 +140,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       anrAnalyses,
       memInfo,
       cpuInfo,
+      halStatus,
       systemProperties: sysPropSection?.content,
     });
 

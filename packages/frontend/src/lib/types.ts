@@ -140,6 +140,34 @@ export interface BootStatusSummary {
   uptimeSeconds?: number;
 }
 
+export interface HALService {
+  interfaceName: string;
+  transport: string;
+  arch?: string;
+  status: string;
+  isVendor: boolean;
+}
+
+export interface HALFamily {
+  familyName: string;
+  shortName: string;
+  highestVersion: string;
+  highestStatus: string;
+  isVendor: boolean;
+  versionCount: number;
+}
+
+export interface HALStatusSummary {
+  totalServices: number;
+  aliveCount: number;
+  nonResponsiveCount: number;
+  declaredCount: number;
+  nonResponsiveServices: HALService[];
+  declaredServices: HALService[];
+  families: HALFamily[];
+  vendorIssueCount: number;
+}
+
 export interface DeepAnalysisOverview {
   executiveSummary: string;
   systemDiagnosis: string;
@@ -165,6 +193,7 @@ export interface AnalysisResult {
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
+  halStatus?: HALStatusSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

@@ -297,6 +297,38 @@ export interface CpuInfoSummary {
 }
 
 // ============================================================
+// HAL Status (lshal)
+// ============================================================
+
+export interface HALService {
+  interfaceName: string;   // e.g. "android.hardware.audio@6.0::IDevicesFactory/default"
+  transport: string;       // "hwbinder" | "passthrough"
+  arch?: string;           // "32" | "64" | "32+64"
+  status: string;          // "alive" | "non-responsive" | "declared"
+  isVendor: boolean;       // starts with "vendor."
+}
+
+export interface HALFamily {
+  familyName: string;       // e.g. "vendor.display.color::IDisplayColor"
+  shortName: string;        // e.g. "color"
+  highestVersion: string;   // e.g. "1.4"
+  highestStatus: string;    // status of the highest version: "alive" | "non-responsive" | "declared"
+  isVendor: boolean;
+  versionCount: number;     // how many versions exist
+}
+
+export interface HALStatusSummary {
+  totalServices: number;
+  aliveCount: number;
+  nonResponsiveCount: number;
+  declaredCount: number;
+  nonResponsiveServices: HALService[];  // only non-responsive ones
+  declaredServices: HALService[];       // declared but not registered
+  families: HALFamily[];                // all grouped families
+  vendorIssueCount: number;             // families where highest version is non-responsive or declared (vendor only)
+}
+
+// ============================================================
 // Basic Analyzer (Insights)
 // ============================================================
 
@@ -374,6 +406,7 @@ export interface AnalysisResult {
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
+  halStatus?: HALStatusSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

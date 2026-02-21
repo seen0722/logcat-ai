@@ -1,4 +1,4 @@
-import { MemInfoSummary, MemInfoProcess, CpuInfoSummary, CpuInfoProcess } from './types.js';
+import { MemInfoSummary, MemInfoProcess, CpuInfoSummary, CpuInfoProcess, HALStatusSummary, HALService, HALFamily } from './types.js';
 
 /**
  * Parse `dumpsys meminfo` system-level summary.
@@ -102,6 +102,279 @@ export function parseCpuInfo(content: string): CpuInfoSummary {
   result.topProcesses = processes.slice(0, 10);
 
   return result;
+}
+
+/**
+ * Parse `lshal --all --types=all` output from the HARDWARE HALS section.
+ *
+ * Typical format (table with | separators):
+ *   VINTF R | Interface | Transport | Arch | Thread Use | Server PID | Clients
+ *   Y       | android.hardware.audio@6.0::IDevicesFactory/default | hwbinder | 64 | ... | 1234 | ...
+ *
+ * Or tab/space-separated:
+ *   android.hardware.audio@6.0::IDevicesFactory/default hwbinder 64 1234
+ *
+ * Status is derived from the Server PID or explicit status columns.
+ * Lines with "N/A" PID or "declared;..." are declared-only services.
+ */
+export function parseLshal(content: string): HALStatusSummary {
+  const result: HALStatusSummary = {
+    totalServices: 0,
+    aliveCount: 0,
+    nonResponsiveCount: 0,
+    declaredCount: 0,
+    nonResponsiveServices: [],
+    declaredServices: [],
+    families: [],
+    vendorIssueCount: 0,
+  };
+
+  if (!content) return result;
+
+  const lines = content.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('VINTF') || trimmed.startsWith('Interface')) continue;
+
+    // Try pipe-delimited format first (most common in bugreports)
+    // Format: "Y | android.hardware.audio@6.0::IDevicesFactory/default | hwbinder | 64 | 1/1 | 1234 | 567 890"
+    // Or:     "  | vendor.some.hal@1.0::IFoo/default | hwbinder |    | N/A | N/A |"
+    if (trimmed.includes('|')) {
+      const parts = trimmed.split('|').map((p) => p.trim());
+      // Need at least: VINTF | Interface | Transport
+      if (parts.length < 3) continue;
+
+      // Interface is typically in column 1 (0-indexed), but could be 0 if no VINTF column
+      let interfaceName = '';
+      let transport = '';
+
+      // Find the column that looks like an interface name (contains :: or @)
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].includes('::') || parts[i].includes('@')) {
+          interfaceName = parts[i];
+          // Transport is the next column
+          if (i + 1 < parts.length) transport = parts[i + 1].toLowerCase();
+          break;
+        }
+      }
+
+      if (!interfaceName) continue;
+
+      // Determine status from the rest of the line
+      const status = inferHalStatus(trimmed);
+      const isVendor = interfaceName.startsWith('vendor.');
+
+      const service: HALService = {
+        interfaceName,
+        transport: transport || 'unknown',
+        status,
+        isVendor,
+      };
+
+      result.totalServices++;
+      if (status === 'alive') {
+        result.aliveCount++;
+      } else if (status === 'non-responsive') {
+        result.nonResponsiveCount++;
+        result.nonResponsiveServices.push(service);
+      } else if (status === 'declared') {
+        result.declaredCount++;
+        result.declaredServices.push(service);
+      }
+      continue;
+    }
+
+    // Try space/tab-delimited format
+    // Format: "android.hardware.audio@6.0::IDevicesFactory/default hwbinder 64 1234"
+    const spaceMatch = trimmed.match(/^(\S+@\S+::\S+)\s+(\w+)\s*(.*)/);
+    if (spaceMatch) {
+      const interfaceName = spaceMatch[1];
+      const transport = spaceMatch[2].toLowerCase();
+      const rest = spaceMatch[3];
+      const status = inferHalStatus(rest || trimmed);
+      const isVendor = interfaceName.startsWith('vendor.');
+
+      const service: HALService = {
+        interfaceName,
+        transport,
+        status,
+        isVendor,
+      };
+
+      result.totalServices++;
+      if (status === 'alive') {
+        result.aliveCount++;
+      } else if (status === 'non-responsive') {
+        result.nonResponsiveCount++;
+        result.nonResponsiveServices.push(service);
+      } else if (status === 'declared') {
+        result.declaredCount++;
+        result.declaredServices.push(service);
+      }
+    }
+  }
+
+  // Group services into families
+  const allServices = [
+    ...result.nonResponsiveServices,
+    ...result.declaredServices,
+  ];
+  // Collect alive services too (they're not stored separately, so rebuild from parsing)
+  // We need all parsed services for grouping — collect them during parsing
+  // Instead, re-derive from the content by grouping all recognized services
+  groupHALFamilies(result, content);
+
+  return result;
+}
+
+/**
+ * Group HAL services into interface families.
+ * Same interface at different versions (e.g. color@1.0, color@1.4) are grouped together.
+ * Only the highest version's status matters for each family.
+ */
+function groupHALFamilies(result: HALStatusSummary, content: string): void {
+  // Collect all services with their parsed info
+  const allServices: HALService[] = [];
+  const lines = content.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('VINTF') || trimmed.startsWith('Interface')) continue;
+
+    if (trimmed.includes('|')) {
+      const parts = trimmed.split('|').map((p) => p.trim());
+      if (parts.length < 3) continue;
+
+      let interfaceName = '';
+      let transport = '';
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].includes('::') || parts[i].includes('@')) {
+          interfaceName = parts[i];
+          if (i + 1 < parts.length) transport = parts[i + 1].toLowerCase();
+          break;
+        }
+      }
+      if (!interfaceName) continue;
+
+      allServices.push({
+        interfaceName,
+        transport: transport || 'unknown',
+        status: inferHalStatus(trimmed),
+        isVendor: interfaceName.startsWith('vendor.'),
+      });
+      continue;
+    }
+
+    const spaceMatch = trimmed.match(/^(\S+@\S+::\S+)\s+(\w+)\s*(.*)/);
+    if (spaceMatch) {
+      allServices.push({
+        interfaceName: spaceMatch[1],
+        transport: spaceMatch[2].toLowerCase(),
+        status: inferHalStatus(spaceMatch[3] || trimmed),
+        isVendor: spaceMatch[1].startsWith('vendor.'),
+      });
+    }
+  }
+
+  // Group by family key: interfaceName without @version and without /instance
+  const familyMap = new Map<string, { services: HALService[]; versions: Map<string, HALService> }>();
+
+  for (const svc of allServices) {
+    // Extract family key: everything before @version
+    // e.g. "vendor.display.color@1.4::IDisplayColor/default" → "vendor.display.color::IDisplayColor"
+    const beforeInstance = svc.interfaceName.split('/')[0]; // remove /default, /internal/0 etc
+    const familyKey = beforeInstance.replace(/@[\d.]+/, '');
+
+    // Extract version: between @ and ::
+    const versionMatch = beforeInstance.match(/@([\d.]+)/);
+    const version = versionMatch ? versionMatch[1] : '0';
+
+    if (!familyMap.has(familyKey)) {
+      familyMap.set(familyKey, { services: [], versions: new Map() });
+    }
+    const family = familyMap.get(familyKey)!;
+    family.services.push(svc);
+
+    // Keep highest-priority service per version (if multiple instances at same version)
+    const existing = family.versions.get(version);
+    if (!existing || statusPriority(svc.status) > statusPriority(existing.status)) {
+      family.versions.set(version, svc);
+    }
+  }
+
+  // Build HALFamily array
+  const families: HALFamily[] = [];
+  for (const [familyKey, { versions }] of familyMap) {
+    // Find highest version
+    const sortedVersions = [...versions.entries()].sort((a, b) => compareVersions(b[0], a[0]));
+    const [highestVersion, highestSvc] = sortedVersions[0];
+
+    // shortName: last segment before :: (without @version)
+    const beforeColons = familyKey.split('::')[0];
+    const segments = beforeColons.split('.');
+    const shortName = segments[segments.length - 1] || beforeColons;
+
+    families.push({
+      familyName: familyKey,
+      shortName,
+      highestVersion,
+      highestStatus: highestSvc.status,
+      isVendor: highestSvc.isVendor,
+      versionCount: versions.size,
+    });
+  }
+
+  result.families = families;
+  result.vendorIssueCount = families.filter(
+    (f) => f.isVendor && (f.highestStatus === 'non-responsive' || f.highestStatus === 'declared'),
+  ).length;
+}
+
+/** Compare two version strings numerically (e.g. "1.4" > "1.10" → false, "2.0" > "1.4" → true) */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
+/** Higher priority = more concerning status (used when multiple instances share a version) */
+function statusPriority(status: string): number {
+  if (status === 'alive') return 0;
+  if (status === 'declared') return 1;
+  if (status === 'non-responsive') return 2;
+  return 0;
+}
+
+/**
+ * Infer HAL service status from a line of lshal output.
+ * - If the line contains explicit status keywords, use those.
+ * - "N/A" in PID column or "declared" → declared
+ * - Numeric PID → alive
+ * - Otherwise, check for non-responsive indicators.
+ */
+function inferHalStatus(line: string): string {
+  const lower = line.toLowerCase();
+
+  // Explicit status keywords
+  if (/\bnon-responsive\b/.test(lower)) return 'non-responsive';
+  if (/\bdeclared\b/.test(lower)) return 'declared';
+  if (/\balive\b/.test(lower)) return 'alive';
+
+  // N/A in PID column typically means declared/not-running
+  // Check if PID field is N/A (common pattern: "| N/A |" or trailing "N/A")
+  if (/\|\s*N\/A\s*\|/.test(line) || /\bN\/A\b/.test(line)) return 'declared';
+
+  // If there's a numeric PID, it's alive
+  if (/\|\s*\d+\s*\|/.test(line) || /\b\d{2,}\b/.test(line)) return 'alive';
+
+  return 'alive';
 }
 
 /** Parse a KB value string like "5,832,568" to number 5832568 */

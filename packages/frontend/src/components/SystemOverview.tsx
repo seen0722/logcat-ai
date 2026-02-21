@@ -1,4 +1,4 @@
-import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary } from '../lib/types';
+import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary } from '../lib/types';
 
 interface Props {
   metadata: BugreportMetadata;
@@ -6,6 +6,7 @@ interface Props {
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
+  halStatus?: HALStatusSummary;
 }
 
 function scoreColor(score: number): string {
@@ -54,7 +55,7 @@ function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
-export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus }: Props) {
+export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus }: Props) {
   const { breakdown } = healthScore;
 
   return (
@@ -121,9 +122,9 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
         <ScoreRing score={breakdown.kernel} label="Kernel" />
       </div>
 
-      {/* Memory & CPU Summary */}
-      {(memInfo || cpuInfo) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+      {/* Memory, CPU & HAL Summary */}
+      {(memInfo || cpuInfo || halStatus) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
           {memInfo && memInfo.totalRamKb > 0 && (
             <div className="bg-surface rounded-lg p-3 space-y-2">
               <h3 className="text-sm font-semibold text-gray-400">Memory</h3>
@@ -172,6 +173,49 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               )}
             </div>
           )}
+
+          {halStatus && halStatus.families.length > 0 && (() => {
+            const aliveFamilies = halStatus.families.filter((f) => f.highestStatus === 'alive').length;
+            const totalFamilies = halStatus.families.length;
+            const nonResponsive = halStatus.families.filter((f) => f.isVendor && f.highestStatus === 'non-responsive');
+            const declared = halStatus.families.filter((f) => f.isVendor && f.highestStatus === 'declared');
+            return (
+              <div className="bg-surface rounded-lg p-3 space-y-2">
+                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
+                <p className="text-sm">
+                  Alive <span className="font-medium text-green-400">{aliveFamilies}</span>
+                  {' / '}
+                  <span className="font-medium text-gray-200">{totalFamilies} families</span>
+                  {nonResponsive.length > 0 && (
+                    <span className="text-red-400 ml-2">({nonResponsive.length} non-responsive)</span>
+                  )}
+                  {declared.length > 0 && (
+                    <span className="text-amber-400 ml-2">({declared.length} declared)</span>
+                  )}
+                </p>
+                {nonResponsive.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500">Non-responsive vendor HALs</span>
+                    {nonResponsive.slice(0, 5).map((f, i) => (
+                      <div key={i} className="text-xs text-red-400 truncate" title={f.familyName}>
+                        {f.shortName}@{f.highestVersion}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {declared.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500">Declared vendor HALs (not running)</span>
+                    {declared.slice(0, 5).map((f, i) => (
+                      <div key={i} className="text-xs text-amber-400 truncate" title={f.familyName}>
+                        {f.shortName}@{f.highestVersion}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

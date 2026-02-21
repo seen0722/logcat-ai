@@ -14,6 +14,7 @@ import {
   MemInfoSummary,
   CpuInfoSummary,
   BootStatusSummary,
+  HALStatusSummary,
 } from './types.js';
 
 // ============================================================
@@ -27,6 +28,7 @@ export interface BasicAnalyzerInput {
   anrAnalyses: ANRTraceAnalysis[];
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
+  halStatus?: HALStatusSummary;
   systemProperties?: string;
 }
 
@@ -35,7 +37,7 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, systemProperties } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, systemProperties } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
   const anrInsights = generateANRInsights(anrAnalyses);
@@ -43,6 +45,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const kernelInsights = generateKernelInsights(kernelResult);
   const resourceInsights = generateResourceInsights(memInfo, cpuInfo);
   const bootInsights = generateBootInsights(bootStatus);
+  const halInsights = generateHALInsights(halStatus);
 
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
@@ -56,6 +59,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...mergeKernelInsights(kernelInsights),
     ...resourceInsights,
     ...bootInsights,
+    ...halInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -83,6 +87,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(memInfo ? { memInfo } : {}),
     ...(cpuInfo ? { cpuInfo } : {}),
     bootStatus,
+    ...(halStatus ? { halStatus } : {}),
   };
 }
 
@@ -584,6 +589,47 @@ function generateResourceInsights(
         source: 'cross',
       });
     }
+  }
+
+  return insights;
+}
+
+// ============================================================
+// HAL Status → Insights
+// ============================================================
+
+function generateHALInsights(halStatus?: HALStatusSummary): InsightCard[] {
+  if (!halStatus || halStatus.totalServices === 0) return [];
+
+  const insights: InsightCard[] = [];
+
+  // Use family-level analysis: only flag vendor families whose HIGHEST version is problematic
+  const vendorFamilies = halStatus.families.filter((f) => f.isVendor);
+
+  const nonResponsiveFamilies = vendorFamilies.filter((f) => f.highestStatus === 'non-responsive');
+  if (nonResponsiveFamilies.length > 0) {
+    const names = nonResponsiveFamilies.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'stability',
+      title: `${nonResponsiveFamilies.length} vendor HAL family(s) non-responsive`,
+      description: `The following vendor HAL families have their highest version non-responsive: ${names}. These may cause hardware-related functionality to fail.`,
+      source: 'cross',
+    });
+  }
+
+  const declaredFamilies = vendorFamilies.filter((f) => f.highestStatus === 'declared');
+  if (declaredFamilies.length > 0) {
+    const names = declaredFamilies.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'stability',
+      title: `${declaredFamilies.length} vendor HAL family(s) declared but not running`,
+      description: `The following vendor HAL families are declared in the VINTF manifest but not registered: ${names}. The corresponding hardware features may be unavailable.`,
+      source: 'cross',
+    });
   }
 
   return insights;

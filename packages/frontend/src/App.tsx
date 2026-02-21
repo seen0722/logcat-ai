@@ -49,6 +49,7 @@ export default function App() {
             memInfo={result.memInfo}
             cpuInfo={result.cpuInfo}
             bootStatus={result.bootStatus}
+            halStatus={result.halStatus}
           />
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMemInfo, parseCpuInfo } from '../src/dumpsys-parser.js';
+import { parseMemInfo, parseCpuInfo, parseLshal } from '../src/dumpsys-parser.js';
 import { analyzeBasic, analyzeBootStatus, BasicAnalyzerInput } from '../src/basic-analyzer.js';
 import { BugreportMetadata, LogcatParseResult, KernelParseResult, LogEntry } from '../src/types.js';
 
@@ -413,5 +413,167 @@ describe('analyzeBootStatus', () => {
     expect(bootInsight!.severity).toBe('warning');
     expect(result.bootStatus).toBeDefined();
     expect(result.bootStatus!.bootReason).toBe('kernel_panic');
+  });
+});
+
+// ============================================================
+// parseLshal (#37)
+// ============================================================
+
+describe('parseLshal', () => {
+  it('should parse pipe-delimited lshal output with alive/declared/non-responsive', () => {
+    const content = `
+VINTF R | Interface                                                        | Transport | Arch | Thread Use | Server PID | Clients
+Y       | android.hardware.audio@6.0::IDevicesFactory/default              | hwbinder  | 64   | 1/1        | 1234       | 567
+Y       | android.hardware.camera.provider@2.7::ICameraProvider/internal/0 | hwbinder  | 64   | 2/2        | 2345       | 890
+Y       | vendor.trimble.hardware.trmbkeypad@1.0::ITrmbKeypad/default      | hwbinder  |      | N/A        | N/A        |
+        | android.hardware.graphics.composer@2.4::IComposer/default        | hwbinder  | 64   | 1/1        | 456        | 789
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(4);
+    expect(result.aliveCount).toBe(3);
+    expect(result.declaredCount).toBe(1);
+    expect(result.declaredServices).toHaveLength(1);
+    expect(result.declaredServices[0].interfaceName).toContain('trmbkeypad');
+    expect(result.declaredServices[0].isVendor).toBe(true);
+
+    // Verify families
+    expect(result.families).toHaveLength(4);
+    const trmbFamily = result.families.find((f) => f.shortName === 'trmbkeypad');
+    expect(trmbFamily).toBeDefined();
+    expect(trmbFamily!.highestVersion).toBe('1.0');
+    expect(trmbFamily!.highestStatus).toBe('declared');
+    expect(trmbFamily!.isVendor).toBe(true);
+    expect(result.vendorIssueCount).toBe(1);
+  });
+
+  it('should correctly identify vendor vs android HALs', () => {
+    const content = `
+VINTF R | Interface                                                        | Transport | Arch | Thread Use | Server PID | Clients
+Y       | android.hardware.audio@6.0::IDevicesFactory/default              | hwbinder  | 64   | 1/1        | 1234       | 567
+Y       | vendor.example.hal@1.0::IExample/default                         | hwbinder  | 32   | 1/1        | 2345       | 890
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(2);
+    const androidHal = result.aliveCount;
+    expect(androidHal).toBe(2);
+    // Check vendor detection in declared/non-responsive (both alive here, so check isVendor flag indirectly)
+    expect(result.declaredServices).toHaveLength(0);
+    expect(result.nonResponsiveServices).toHaveLength(0);
+  });
+
+  it('should return zero values for empty input', () => {
+    const result = parseLshal('');
+    expect(result.totalServices).toBe(0);
+    expect(result.aliveCount).toBe(0);
+    expect(result.nonResponsiveCount).toBe(0);
+    expect(result.declaredCount).toBe(0);
+    expect(result.nonResponsiveServices).toHaveLength(0);
+    expect(result.declaredServices).toHaveLength(0);
+    expect(result.families).toHaveLength(0);
+    expect(result.vendorIssueCount).toBe(0);
+  });
+
+  it('should return zero values for header-only input', () => {
+    const content = `
+VINTF R | Interface | Transport | Arch | Thread Use | Server PID | Clients
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(0);
+  });
+
+  it('should handle lines with explicit status keywords', () => {
+    const content = `
+VINTF R | Interface                                                        | Transport | Status
+Y       | android.hardware.audio@6.0::IDevicesFactory/default              | hwbinder  | alive
+Y       | vendor.example.sensor@1.0::ISensor/default                       | hwbinder  | non-responsive
+Y       | vendor.example.radio@2.0::IRadio/default                         | hwbinder  | declared
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(3);
+    expect(result.aliveCount).toBe(1);
+    expect(result.nonResponsiveCount).toBe(1);
+    expect(result.declaredCount).toBe(1);
+    expect(result.nonResponsiveServices[0].isVendor).toBe(true);
+    expect(result.declaredServices[0].isVendor).toBe(true);
+  });
+
+  it('should parse space-delimited format', () => {
+    const content = `
+android.hardware.audio@6.0::IDevicesFactory/default hwbinder alive
+vendor.example.hal@1.0::IExample/default hwbinder declared
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(2);
+    expect(result.aliveCount).toBe(1);
+    expect(result.declaredCount).toBe(1);
+    expect(result.declaredServices[0].interfaceName).toBe('vendor.example.hal@1.0::IExample/default');
+    expect(result.families).toHaveLength(2);
+  });
+
+  it('should group multiple versions into one family and use highest version status', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | vendor.display.color@1.0::IDisplayColor/default             | hwbinder  | non-responsive
+Y       | vendor.display.color@1.2::IDisplayColor/default             | hwbinder  | non-responsive
+Y       | vendor.display.color@1.4::IDisplayColor/default             | hwbinder  | non-responsive
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(3);
+    expect(result.nonResponsiveCount).toBe(3);
+
+    // Only 1 family
+    expect(result.families).toHaveLength(1);
+    const colorFamily = result.families[0];
+    expect(colorFamily.shortName).toBe('color');
+    expect(colorFamily.highestVersion).toBe('1.4');
+    expect(colorFamily.highestStatus).toBe('non-responsive');
+    expect(colorFamily.versionCount).toBe(3);
+    expect(colorFamily.isVendor).toBe(true);
+    expect(result.vendorIssueCount).toBe(1);
+  });
+
+  it('should treat family as alive when highest version is alive even if lower versions are non-responsive', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | vendor.display.color@1.0::IDisplayColor/default             | hwbinder  | non-responsive
+Y       | vendor.display.color@1.2::IDisplayColor/default             | hwbinder  | non-responsive
+Y       | vendor.display.color@1.5::IDisplayColor/default             | hwbinder  | alive
+`;
+
+    const result = parseLshal(content);
+    expect(result.totalServices).toBe(3);
+
+    // Family should show alive (highest version is alive)
+    expect(result.families).toHaveLength(1);
+    const colorFamily = result.families[0];
+    expect(colorFamily.shortName).toBe('color');
+    expect(colorFamily.highestVersion).toBe('1.5');
+    expect(colorFamily.highestStatus).toBe('alive');
+    expect(colorFamily.versionCount).toBe(3);
+    // vendorIssueCount should be 0 — highest version is alive
+    expect(result.vendorIssueCount).toBe(0);
+  });
+
+  it('should compute vendorIssueCount only for vendor families', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | android.hardware.audio@6.0::IDevicesFactory/default         | hwbinder  | non-responsive
+Y       | vendor.example.sensor@1.0::ISensor/default                  | hwbinder  | non-responsive
+Y       | vendor.example.radio@2.0::IRadio/default                    | hwbinder  | declared
+Y       | vendor.example.display@1.0::IDisplay/default                | hwbinder  | alive
+`;
+
+    const result = parseLshal(content);
+    expect(result.families).toHaveLength(4);
+    // Only vendor families with issues count: sensor (non-responsive) + radio (declared) = 2
+    // android.hardware.audio is non-responsive but NOT vendor, so excluded
+    expect(result.vendorIssueCount).toBe(2);
   });
 });
