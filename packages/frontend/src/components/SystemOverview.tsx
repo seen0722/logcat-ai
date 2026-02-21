@@ -181,25 +181,25 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             const oemDeclared = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus === 'declared');
             const bspNR = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'non-responsive');
             const bspDeclared = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'declared');
-            const totalNR = oemNR.length + bspNR.length;
-            const totalDeclared = oemDeclared.length + bspDeclared.length;
+            const isTruncated = halStatus.truncated;
             return (
               <div className="bg-surface rounded-lg p-3 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-400">
-                  HAL Services
-                  {halStatus.truncated && (
-                    <span className="ml-2 text-amber-400" title="lshal output was truncated — data may be incomplete">&#x26A0;</span>
-                  )}
-                </h3>
+                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
+                {isTruncated && (
+                  <div className="bg-amber-900/30 border border-amber-700/50 rounded px-2 py-1.5 text-xs text-amber-300">
+                    <span className="font-semibold">lshal was killed by system</span>
+                    <span className="text-amber-400/80"> — Services not yet pinged when lshal was terminated will appear as non-responsive or declared. Only OEM HAL status below is reliable.</span>
+                  </div>
+                )}
                 <p className="text-sm">
                   Alive <span className="font-medium text-green-400">{aliveFamilies}</span>
                   {' / '}
                   <span className="font-medium text-gray-200">{totalFamilies} families</span>
-                  {totalNR > 0 && (
-                    <span className="text-red-400 ml-2">({totalNR} non-responsive)</span>
+                  {oemNR.length > 0 && (
+                    <span className="text-red-400 ml-2">({oemNR.length} OEM non-responsive)</span>
                   )}
-                  {totalDeclared > 0 && (
-                    <span className="text-amber-400 ml-2">({totalDeclared} declared)</span>
+                  {!isTruncated && bspNR.length > 0 && (
+                    <span className="text-red-400/70 ml-2">({bspNR.length} BSP non-responsive)</span>
                   )}
                 </p>
                 {oemNR.length > 0 && (
@@ -222,7 +222,22 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                     ))}
                   </div>
                 )}
-                {bspNR.length > 0 && (
+                {isTruncated && bspNR.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="text-gray-600 cursor-pointer">BSP HALs — {bspNR.length} shown as non-responsive (likely lshal artifact)</summary>
+                    <div className="space-y-1 mt-1">
+                      {bspNR.slice(0, 10).map((f, i) => (
+                        <div key={i} className="text-gray-500 truncate" title={f.familyName}>
+                          {f.shortName}@{f.highestVersion}
+                        </div>
+                      ))}
+                      {bspNR.length > 10 && (
+                        <div className="text-gray-600">...and {bspNR.length - 10} more</div>
+                      )}
+                    </div>
+                  </details>
+                )}
+                {!isTruncated && bspNR.length > 0 && (
                   <details className="text-xs">
                     <summary className="text-gray-500 cursor-pointer">BSP HALs — non-responsive ({bspNR.length})</summary>
                     <div className="space-y-1 mt-1">
@@ -237,7 +252,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                     </div>
                   </details>
                 )}
-                {bspDeclared.length > 0 && (
+                {!isTruncated && bspDeclared.length > 0 && (
                   <details className="text-xs">
                     <summary className="text-gray-500 cursor-pointer">BSP HALs — declared ({bspDeclared.length})</summary>
                     <div className="space-y-1 mt-1">
