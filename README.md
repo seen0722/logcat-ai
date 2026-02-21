@@ -107,6 +107,10 @@ npm run test       # Run tests across all packages
 npm run lint       # Lint TypeScript sources
 ```
 
+## AI-Assisted Development
+
+See [CLAUDE.md](./CLAUDE.md) for architecture overview, Android BSP domain knowledge, and guidance for AI coding assistants working in this repository.
+
 ## License
 
 MIT
