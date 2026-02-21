@@ -14,6 +14,8 @@ export interface InsightCard {
   stackTrace?: string;
   timestamp?: string;
   source: 'logcat' | 'anr' | 'kernel' | 'cross';
+  suggestedAllowRule?: string;
+  debugCommands?: string[];
   deepAnalysis?: {
     rootCause: string;
     fixSuggestion: string;

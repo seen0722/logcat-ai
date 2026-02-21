@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLogcat } from '../src/logcat-parser.js';
+import { parseLogcat, classifyTag, computeTagStats } from '../src/logcat-parser.js';
 
 describe('parseLogcat', () => {
   it('should parse standard logcat lines', () => {
@@ -156,5 +156,74 @@ describe('parseLogcat', () => {
     expect(result.totalLines).toBe(3);
     expect(result.parsedLines).toBe(2);
     expect(result.parseErrors).toBe(1);
+  });
+
+  // Tag stats (#39)
+  it('should compute tagStats for E/F level entries', () => {
+    const content = [
+      '01-15 10:00:00.000  1000  1001 E vendor_sensor: sensor error',
+      '01-15 10:00:00.100  1000  1001 E vendor_sensor: another error',
+      '01-15 10:00:00.200  1000  1001 E ActivityManager: process crash',
+      '01-15 10:00:00.300  1000  1001 F AndroidRuntime: FATAL EXCEPTION: main',
+      '01-15 10:00:00.400  1000  1001 I ActivityManager: Start proc',
+      '01-15 10:00:00.500  1000  1001 D WindowManager: relayout',
+    ].join('\n');
+
+    const result = parseLogcat(content);
+    expect(result.tagStats).toBeDefined();
+    expect(result.tagStats!.length).toBe(3);
+    // vendor_sensor has 2 errors, should be first
+    expect(result.tagStats![0].tag).toBe('vendor_sensor');
+    expect(result.tagStats![0].count).toBe(2);
+    expect(result.tagStats![0].classification).toBe('vendor');
+  });
+});
+
+describe('classifyTag', () => {
+  it('should classify framework tags', () => {
+    expect(classifyTag('ActivityManager')).toBe('framework');
+    expect(classifyTag('WindowManager')).toBe('framework');
+    expect(classifyTag('SystemServer')).toBe('framework');
+    expect(classifyTag('Watchdog')).toBe('framework');
+    expect(classifyTag('AndroidRuntime')).toBe('framework');
+  });
+
+  it('should classify vendor tags by prefix', () => {
+    expect(classifyTag('vendor_sensor')).toBe('vendor');
+    expect(classifyTag('hal_audio')).toBe('vendor');
+    expect(classifyTag('hw_camera')).toBe('vendor');
+    expect(classifyTag('thermal_monitor')).toBe('vendor');
+    expect(classifyTag('camera_service')).toBe('vendor');
+    expect(classifyTag('gnss_driver')).toBe('vendor');
+  });
+
+  it('should classify vendor tags by chipset keywords', () => {
+    expect(classifyTag('QtiTelephony')).toBe('vendor');
+    expect(classifyTag('qcom_audio')).toBe('vendor');
+    expect(classifyTag('mtk_gps')).toBe('vendor');
+    expect(classifyTag('MediaTekPower')).toBe('vendor');
+  });
+
+  it('should classify app tags as default', () => {
+    expect(classifyTag('MyApp')).toBe('app');
+    expect(classifyTag('com.example.app')).toBe('app');
+    expect(classifyTag('FlutterEngine')).toBe('app');
+  });
+});
+
+describe('computeTagStats', () => {
+  it('should return empty array for no E/F entries', () => {
+    const entries = [
+      { timestamp: '', pid: 1, tid: 1, level: 'I' as const, tag: 'Tag', message: '', raw: '', lineNumber: 1 },
+    ];
+    expect(computeTagStats(entries)).toHaveLength(0);
+  });
+
+  it('should limit to top 20 tags', () => {
+    const entries = Array.from({ length: 25 }, (_, i) => ({
+      timestamp: '', pid: 1, tid: 1, level: 'E' as const,
+      tag: `Tag${i}`, message: '', raw: '', lineNumber: i,
+    }));
+    expect(computeTagStats(entries).length).toBeLessThanOrEqual(20);
   });
 });

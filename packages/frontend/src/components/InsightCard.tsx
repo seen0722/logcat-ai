@@ -215,6 +215,50 @@ export default function InsightCard({ insight }: Props) {
             </div>
           )}
 
+          {insight.suggestedAllowRule && (
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide">SELinux Allow Rule</span>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="flex-1 p-2 bg-surface rounded text-xs text-amber-300 font-mono">
+                  {insight.suggestedAllowRule}
+                </code>
+                <button
+                  className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(insight.suggestedAllowRule!);
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          )}
+
+          {insight.debugCommands && insight.debugCommands.length > 0 && (
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Suggested Debug Commands</span>
+              <div className="mt-1 space-y-1">
+                {insight.debugCommands.map((cmd, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <code className="flex-1 p-1.5 bg-surface rounded text-xs text-green-300 font-mono">
+                      {cmd}
+                    </code>
+                    <button
+                      className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(cmd);
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {insight.deepAnalysis && (
             <DeepAnalysisBlock deepAnalysis={insight.deepAnalysis} />
           )}

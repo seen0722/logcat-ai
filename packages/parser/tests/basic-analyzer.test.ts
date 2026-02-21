@@ -388,6 +388,108 @@ describe('analyzeBasic', () => {
     const result = analyzeBasic(makeInput({ metadata }));
     expect(result.metadata.deviceModel).toBe('Pixel 8');
   });
+
+  // Debug commands (#41)
+  it('should attach debugCommands to logcat anomaly insights', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: [
+        { type: 'anr', severity: 'critical', timestamp: '01-15 10:00:00.000', entries: [], processName: 'app', summary: 'ANR in app' },
+        { type: 'oom', severity: 'critical', timestamp: '01-15 10:01:00.000', entries: [], summary: 'OOM' },
+        { type: 'binder_timeout', severity: 'warning', timestamp: '01-15 10:02:00.000', entries: [], summary: 'Binder timeout' },
+      ],
+      totalLines: 3,
+      parsedLines: 3,
+      parseErrors: 0,
+    };
+
+    const result = analyzeBasic(makeInput({ logcatResult }));
+    const anrInsight = result.insights.find((i) => i.title.includes('ANR'));
+    expect(anrInsight?.debugCommands).toBeDefined();
+    expect(anrInsight!.debugCommands!.length).toBeGreaterThan(0);
+    expect(anrInsight!.debugCommands!.some((c) => c.includes('dumpsys activity'))).toBe(true);
+
+    const oomInsight = result.insights.find((i) => i.title.includes('OOM'));
+    expect(oomInsight?.debugCommands).toBeDefined();
+    expect(oomInsight!.debugCommands!.some((c) => c.includes('meminfo'))).toBe(true);
+  });
+
+  it('should attach debugCommands to kernel event insights', () => {
+    const kernelResult: KernelParseResult = {
+      entries: [{
+        timestamp: 900, level: '<5>', facility: '',
+        message: 'avc: denied { read } for pid=1234 comm="app" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_file:s0 tclass=file',
+        raw: '<5>[  900.000000] avc: denied { read } for pid=1234 comm="app" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_file:s0 tclass=file',
+      }],
+      events: [{
+        type: 'selinux_denial',
+        severity: 'info',
+        timestamp: 900,
+        entries: [{ timestamp: 900, level: '<5>', facility: '', message: 'avc: denied { read }', raw: '' }],
+        summary: 'SELinux denial',
+        details: { scontext: 'u:r:untrusted_app:s0', tcontext: 'u:object_r:system_file:s0', tclass: 'file', permission: 'read' },
+      }],
+      totalLines: 1,
+    };
+
+    const result = analyzeBasic(makeInput({ kernelResult }));
+    const selinuxInsight = result.insights.find((i) => i.title.includes('SELinux'));
+    expect(selinuxInsight?.debugCommands).toBeDefined();
+    expect(selinuxInsight!.debugCommands!.some((c) => c.includes('getenforce'))).toBe(true);
+  });
+
+  // SELinux allow rule (#40)
+  it('should attach suggestedAllowRule to SELinux denial insights', () => {
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: [{
+        type: 'selinux_denial',
+        severity: 'info',
+        timestamp: 900,
+        entries: [{ timestamp: 900, level: '<5>', facility: '', message: 'avc: denied', raw: '' }],
+        summary: 'SELinux denial: u:r:untrusted_app:s0 → u:object_r:system_file:s0',
+        details: { scontext: 'u:r:untrusted_app:s0', tcontext: 'u:object_r:system_file:s0', tclass: 'file', permission: 'read write' },
+      }],
+      totalLines: 1,
+    };
+
+    const result = analyzeBasic(makeInput({ kernelResult }));
+    const selinuxInsight = result.insights.find((i) => i.title.includes('SELinux'));
+    expect(selinuxInsight?.suggestedAllowRule).toBe('allow untrusted_app system_file:file { read write };');
+    expect(selinuxInsight?.description).toContain('allow untrusted_app');
+  });
+
+  // Tag stats (#39)
+  it('should generate Top Error Tags insight and logTagStats', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [
+        { timestamp: '', pid: 1, tid: 1, level: 'E', tag: 'vendor_sensor', message: 'err', raw: '', lineNumber: 1 },
+        { timestamp: '', pid: 1, tid: 1, level: 'E', tag: 'vendor_sensor', message: 'err', raw: '', lineNumber: 2 },
+        { timestamp: '', pid: 1, tid: 1, level: 'E', tag: 'ActivityManager', message: 'err', raw: '', lineNumber: 3 },
+        { timestamp: '', pid: 1, tid: 1, level: 'F', tag: 'MyApp', message: 'fatal', raw: '', lineNumber: 4 },
+        { timestamp: '', pid: 1, tid: 1, level: 'I', tag: 'SomeTag', message: 'info', raw: '', lineNumber: 5 },
+      ],
+      anomalies: [],
+      totalLines: 5,
+      parsedLines: 5,
+      parseErrors: 0,
+      tagStats: [
+        { tag: 'vendor_sensor', count: 2, classification: 'vendor' },
+        { tag: 'ActivityManager', count: 1, classification: 'framework' },
+        { tag: 'MyApp', count: 1, classification: 'app' },
+      ],
+    };
+
+    const result = analyzeBasic(makeInput({ logcatResult }));
+    const tagInsight = result.insights.find((i) => i.title.includes('Top Error Tags'));
+    expect(tagInsight).toBeDefined();
+    expect(tagInsight!.severity).toBe('info');
+    expect(tagInsight!.description).toContain('vendor=2');
+    expect(tagInsight!.description).toContain('framework=1');
+    expect(tagInsight!.description).toContain('app=1');
+    expect(result.logTagStats).toBeDefined();
+    expect(result.logTagStats!.length).toBe(3);
+  });
 });
 
 // ============================================================

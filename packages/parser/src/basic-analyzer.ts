@@ -8,14 +8,18 @@ import {
   SystemHealthScore,
   LogcatParseResult,
   LogcatAnomaly,
+  LogcatAnomalyType,
   KernelParseResult,
   KernelEvent,
+  KernelEventType,
   ANRTraceAnalysis,
   MemInfoSummary,
   CpuInfoSummary,
   BootStatusSummary,
   HALStatusSummary,
+  TagStat,
 } from './types.js';
+import { generateSELinuxAllowRule } from './kernel-parser.js';
 
 // ============================================================
 // Main Entry Point
@@ -47,6 +51,8 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const bootInsights = generateBootInsights(bootStatus);
   const halInsights = generateHALInsights(halStatus);
 
+  const tagInsights = generateTagInsights(logcatResult.tagStats);
+
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
   const filteredLogcat = hasANRTraceInsights
@@ -60,6 +66,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...resourceInsights,
     ...bootInsights,
     ...halInsights,
+    ...tagInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -88,6 +95,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(cpuInfo ? { cpuInfo } : {}),
     bootStatus,
     ...(halStatus ? { halStatus } : {}),
+    ...(logcatResult.tagStats && logcatResult.tagStats.length > 0 ? { logTagStats: logcatResult.tagStats } : {}),
   };
 }
 
@@ -104,6 +112,117 @@ const SEVERITY_ORDER: Record<Severity, number> = {
 function compareBySeverity(a: InsightCard, b: InsightCard): number {
   return SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
 }
+
+// ============================================================
+// Debug Commands Mapping
+// ============================================================
+
+const LOGCAT_DEBUG_COMMANDS: Partial<Record<LogcatAnomalyType, string[]>> = {
+  anr: [
+    'adb shell dumpsys activity processes',
+    'adb shell dumpsys activity top',
+    'adb bugreport',
+  ],
+  fatal_exception: [
+    'adb logcat -b crash -d',
+    'adb shell dumpsys meminfo <pid>',
+  ],
+  native_crash: [
+    'adb logcat -b crash -d',
+    'adb shell dumpsys meminfo <pid>',
+  ],
+  oom: [
+    'adb shell dumpsys meminfo',
+    'adb shell cat /proc/meminfo',
+    'adb shell dumpsys activity oom',
+  ],
+  watchdog: [
+    'adb shell dumpsys activity services',
+    'adb shell top -n 1 -s cpu',
+  ],
+  binder_timeout: [
+    'adb shell dumpsys binder_state',
+    'adb shell service list',
+  ],
+  hal_service_death: [
+    'adb shell lshal --all',
+    'adb shell dumpsys hwservicemanager',
+  ],
+  input_dispatching_timeout: [
+    'adb shell dumpsys activity processes',
+    'adb shell dumpsys input',
+  ],
+  system_server_crash: [
+    'adb logcat -b crash -d',
+    'adb shell dumpsys activity services',
+  ],
+};
+
+const KERNEL_DEBUG_COMMANDS: Partial<Record<KernelEventType, string[]>> = {
+  kernel_panic: [
+    'adb shell dmesg',
+    'adb shell cat /proc/last_kmsg',
+  ],
+  watchdog_reset: [
+    'adb shell dmesg',
+    'adb shell cat /proc/last_kmsg',
+  ],
+  oom_kill: [
+    'adb shell dumpsys meminfo',
+    'adb shell cat /proc/meminfo',
+  ],
+  lowmemory_killer: [
+    'adb shell dumpsys meminfo',
+    'adb shell cat /proc/meminfo',
+  ],
+  kswapd_active: [
+    'adb shell dumpsys meminfo',
+    'adb shell procrank',
+  ],
+  thermal_shutdown: [
+    'adb shell dumpsys thermalservice',
+    'adb shell cat /sys/class/thermal/thermal_zone*/temp',
+  ],
+  thermal_throttling: [
+    'adb shell dumpsys thermalservice',
+    'adb shell cat /sys/class/thermal/thermal_zone*/temp',
+  ],
+  selinux_denial: [
+    'adb shell getenforce',
+    'adb shell dmesg | grep avc',
+  ],
+  storage_io_error: [
+    'adb shell df -h',
+    'adb shell dumpsys diskstats',
+  ],
+  driver_error: [
+    'adb shell dmesg',
+    'adb shell lshal --all',
+  ],
+  gpu_error: [
+    'adb shell dmesg',
+    'adb shell dumpsys SurfaceFlinger',
+  ],
+  suspend_resume_error: [
+    'adb shell dmesg',
+    'adb shell dumpsys power',
+  ],
+};
+
+const BOOT_DEBUG_COMMANDS = [
+  'adb shell getprop sys.boot_completed',
+  'adb shell getprop sys.boot.reason',
+];
+
+const RESOURCE_MEMORY_DEBUG_COMMANDS = [
+  'adb shell dumpsys meminfo',
+  'adb shell procrank',
+];
+
+const RESOURCE_CPU_DEBUG_COMMANDS = [
+  'adb shell top -n 1 -s cpu',
+  'adb shell dumpsys cpuinfo',
+];
 
 // ============================================================
 // Logcat → Insights
@@ -143,6 +262,7 @@ function logcatAnomalyToInsight(anomaly: LogcatAnomaly): InsightCard {
     relatedLogSnippet: logSnippet,
     timestamp: anomaly.timestamp,
     source: 'logcat',
+    debugCommands: LOGCAT_DEBUG_COMMANDS[anomaly.type],
   };
 }
 
@@ -176,6 +296,39 @@ function describeLogcatAnomaly(anomaly: LogcatAnomaly): string {
     default:
       return `Anomaly detected${process}${pid}.`;
   }
+}
+
+// ============================================================
+// Tag Stats → Insights
+// ============================================================
+
+function generateTagInsights(tagStats?: TagStat[]): InsightCard[] {
+  if (!tagStats || tagStats.length === 0) return [];
+
+  const vendorTags = tagStats.filter((t) => t.classification === 'vendor');
+  const frameworkTags = tagStats.filter((t) => t.classification === 'framework');
+  const appTags = tagStats.filter((t) => t.classification === 'app');
+
+  const vendorCount = vendorTags.reduce((s, t) => s + t.count, 0);
+  const frameworkCount = frameworkTags.reduce((s, t) => s + t.count, 0);
+  const appCount = appTags.reduce((s, t) => s + t.count, 0);
+
+  const lines: string[] = [];
+  lines.push(`Error/Fatal log distribution: vendor=${vendorCount}, framework=${frameworkCount}, app=${appCount}`);
+  lines.push('');
+
+  for (const stat of tagStats.slice(0, 15)) {
+    lines.push(`  [${stat.classification}] ${stat.tag}: ${stat.count} errors`);
+  }
+
+  return [{
+    id: '',
+    severity: 'info',
+    category: 'stability',
+    title: 'Top Error Tags (E/F level)',
+    description: lines.join('\n'),
+    source: 'logcat',
+  }];
 }
 
 // ============================================================
@@ -365,7 +518,7 @@ function generateKernelInsights(result: KernelParseResult): InsightCard[] {
 function kernelEventToInsight(event: KernelEvent): InsightCard {
   const category = KERNEL_EVENT_CATEGORY[event.type] ?? 'kernel';
 
-  return {
+  const card: InsightCard = {
     id: '',
     severity: event.severity,
     category,
@@ -375,6 +528,23 @@ function kernelEventToInsight(event: KernelEvent): InsightCard {
     timestamp: `boot+${event.timestamp.toFixed(3)}s`,
     source: 'kernel',
   };
+
+  // Attach SELinux allow rule if applicable
+  if (event.type === 'selinux_denial') {
+    const allowRule = generateSELinuxAllowRule(event.details);
+    if (allowRule) {
+      card.suggestedAllowRule = allowRule;
+      card.description += `\nSuggested allow rule: ${allowRule}`;
+    }
+  }
+
+  // Attach debug commands
+  const kernelCmds = KERNEL_DEBUG_COMMANDS[event.type];
+  if (kernelCmds) {
+    card.debugCommands = kernelCmds;
+  }
+
+  return card;
 }
 
 function describeKernelEvent(event: KernelEvent): string {
@@ -504,6 +674,7 @@ function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {
       title: 'Boot not completed',
       description: 'sys.boot_completed was not set. The device may not have finished booting successfully.',
       source: 'cross',
+      debugCommands: BOOT_DEBUG_COMMANDS,
     });
   }
 
@@ -516,6 +687,7 @@ function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {
       title: `System server restarted ${bootStatus.systemServerRestarts} time(s)`,
       description: `system_server was restarted ${bootStatus.systemServerRestarts} time(s) since boot. Frequent restarts indicate serious system instability.`,
       source: 'cross',
+      debugCommands: ['adb logcat -b crash -d', 'adb shell dumpsys activity services'],
     });
   }
 
@@ -527,6 +699,7 @@ function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {
       title: `Abnormal boot reason: ${bootStatus.bootReason}`,
       description: `The device booted with reason "${bootStatus.bootReason}", which may indicate a crash, watchdog reset, or power issue.`,
       source: 'cross',
+      debugCommands: BOOT_DEBUG_COMMANDS,
     });
   }
 
@@ -559,6 +732,7 @@ function generateResourceInsights(
         title: 'Low available memory',
         description: `Only ${(freeRatio * 100).toFixed(1)}% of RAM is free (${usedGb} GB used / ${totalGb} GB total). Top consumers: ${topProcs || 'N/A'}.`,
         source: 'cross',
+        debugCommands: RESOURCE_MEMORY_DEBUG_COMMANDS,
       });
     }
   }
@@ -576,6 +750,7 @@ function generateResourceInsights(
         title: 'High CPU usage',
         description: `Total CPU usage is ${cpuInfo.totalCpuPercent}% (${cpuInfo.userPercent}% user + ${cpuInfo.kernelPercent}% kernel). Top consumers: ${topProcs || 'N/A'}.`,
         source: 'cross',
+        debugCommands: RESOURCE_CPU_DEBUG_COMMANDS,
       });
     }
 
@@ -587,6 +762,7 @@ function generateResourceInsights(
         title: 'High I/O wait',
         description: `I/O wait is ${cpuInfo.ioWaitPercent}%, indicating the CPU is frequently waiting for disk or storage operations.`,
         source: 'cross',
+        debugCommands: ['adb shell df -h', 'adb shell dumpsys diskstats'],
       });
     }
   }

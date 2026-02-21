@@ -76,12 +76,21 @@ export interface LogcatAnomaly {
   summary: string;
 }
 
+export type TagClassification = 'vendor' | 'framework' | 'app';
+
+export interface TagStat {
+  tag: string;
+  count: number;
+  classification: TagClassification;
+}
+
 export interface LogcatParseResult {
   entries: LogEntry[];
   anomalies: LogcatAnomaly[];
   totalLines: number;
   parsedLines: number;
   parseErrors: number;
+  tagStats?: TagStat[];
 }
 
 // ============================================================
@@ -348,6 +357,8 @@ export interface InsightCard {
   stackTrace?: string;              // relevant stack trace
   timestamp?: string;
   source: 'logcat' | 'anr' | 'kernel' | 'cross';
+  suggestedAllowRule?: string;      // SELinux allow rule suggestion
+  debugCommands?: string[];         // suggested debug commands
   deepAnalysis?: {                  // filled by LLM in Deep Analysis mode
     rootCause: string;
     fixSuggestion: string;
@@ -409,6 +420,7 @@ export interface AnalysisResult {
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
+  logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

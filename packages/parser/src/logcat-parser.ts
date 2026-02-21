@@ -5,6 +5,8 @@ import {
   LogcatAnomalyType,
   LogcatParseResult,
   Severity,
+  TagClassification,
+  TagStat,
 } from './types.js';
 
 // Standard logcat threadtime format:
@@ -15,6 +17,60 @@ const LOGCAT_LINE_RE =
   /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(.+?):\s+(.*)/;
 const LOGCAT_LINE_NO_UID_RE =
   /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(.+?):\s+(.*)/;
+
+// ============================================================
+// Tag Classification
+// ============================================================
+
+const VENDOR_TAG_PATTERNS = /^(vendor|hal_|hw_|sensor|gnss|nfc|bluetooth|thermal|power|display|camera|audio_hw|gps|modem|ril|radio|wifi_hal)/i;
+const VENDOR_TAG_KEYWORDS = /qti|qcom|mtk|mediatek|sprd|samsung|nxp|exynos|hisilicon|kirin|unisoc/i;
+
+const FRAMEWORK_TAGS = new Set([
+  'ActivityManager', 'WindowManager', 'PackageManager', 'SystemServer',
+  'InputDispatcher', 'SurfaceFlinger', 'AudioFlinger', 'PowerManagerService',
+  'ConnectivityService', 'NetworkController', 'WifiService', 'BluetoothAdapter',
+  'LocationManagerService', 'TelephonyManager', 'StatusBarManagerService',
+  'NotificationManagerService', 'AlarmManagerService', 'JobScheduler',
+  'ContentResolver', 'AccountManagerService', 'DevicePolicyManager',
+  'DisplayManagerService', 'InputMethodManagerService', 'AccessibilityManagerService',
+  'AppOps', 'BatteryService', 'StorageManagerService', 'UsageStatsService',
+  'Watchdog', 'Zygote', 'art', 'dalvikvm', 'AndroidRuntime',
+  'ServiceManager', 'SystemUI', 'Binder', 'JavaBinder', 'BinderProxy',
+  'InputReader', 'InputTransport', 'Looper', 'ActivityThread',
+  'ActivityTaskManager', 'WindowManagerService', 'View', 'ViewRootImpl',
+  'Choreographer', 'RenderThread', 'hwui', 'GC', 'StrictMode',
+]);
+
+/**
+ * Classify a logcat tag into vendor, framework, or app.
+ */
+export function classifyTag(tag: string): TagClassification {
+  if (FRAMEWORK_TAGS.has(tag)) return 'framework';
+  if (VENDOR_TAG_PATTERNS.test(tag) || VENDOR_TAG_KEYWORDS.test(tag)) return 'vendor';
+  return 'app';
+}
+
+/**
+ * Compute top error tags (E/F level) with classification.
+ * Returns top 20 tags sorted by frequency.
+ */
+export function computeTagStats(entries: LogEntry[]): TagStat[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.level === 'E' || entry.level === 'F') {
+      counts.set(entry.tag, (counts.get(entry.tag) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([tag, count]) => ({
+      tag,
+      count,
+      classification: classifyTag(tag),
+    }));
+}
 
 /**
  * Parse logcat text into structured entries and detect anomalies.
@@ -71,6 +127,7 @@ export function parseLogcat(content: string): LogcatParseResult {
   }
 
   const anomalies = detectAnomalies(entries);
+  const tagStats = computeTagStats(entries);
 
   return {
     entries,
@@ -78,6 +135,7 @@ export function parseLogcat(content: string): LogcatParseResult {
     totalLines: lines.length,
     parsedLines: entries.length,
     parseErrors,
+    tagStats,
   };
 }
 

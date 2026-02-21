@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseKernelLog } from '../src/kernel-parser.js';
+import { parseKernelLog, generateSELinuxAllowRule } from '../src/kernel-parser.js';
 
 describe('parseKernelLog', () => {
   it('should parse basic dmesg entries', () => {
@@ -216,6 +216,15 @@ describe('parseKernelLog', () => {
     expect(result.events[0].type).toBe('suspend_resume_error');
   });
 
+  // SELinux permission extraction (#40)
+  it('should extract permission field from SELinux denial', () => {
+    const content =
+      '<5>[  900.000000] avc: denied { read write } for pid=1234 comm="app" name="config" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_file:s0 tclass=file';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].details.permission).toBe('read write');
+  });
+
   // No events
   it('should return empty events for clean log', () => {
     const content = [
@@ -227,5 +236,65 @@ describe('parseKernelLog', () => {
     const result = parseKernelLog(content);
     expect(result.entries).toHaveLength(3);
     expect(result.events).toHaveLength(0);
+  });
+});
+
+describe('generateSELinuxAllowRule', () => {
+  it('should generate correct allow rule from denial details', () => {
+    const details = {
+      scontext: 'u:r:untrusted_app:s0',
+      tcontext: 'u:object_r:system_file:s0',
+      tclass: 'file',
+      permission: 'read write',
+    };
+    const rule = generateSELinuxAllowRule(details);
+    expect(rule).toBe('allow untrusted_app system_file:file { read write };');
+  });
+
+  it('should handle single permission', () => {
+    const details = {
+      scontext: 'u:r:hal_audio:s0',
+      tcontext: 'u:object_r:proc:s0',
+      tclass: 'file',
+      permission: 'read',
+    };
+    const rule = generateSELinuxAllowRule(details);
+    expect(rule).toBe('allow hal_audio proc:file { read };');
+  });
+
+  it('should return null when scontext is missing', () => {
+    const details = {
+      tcontext: 'u:object_r:system_file:s0',
+      tclass: 'file',
+      permission: 'read',
+    };
+    expect(generateSELinuxAllowRule(details)).toBeNull();
+  });
+
+  it('should return null when permission is missing', () => {
+    const details = {
+      scontext: 'u:r:untrusted_app:s0',
+      tcontext: 'u:object_r:system_file:s0',
+      tclass: 'file',
+    };
+    expect(generateSELinuxAllowRule(details)).toBeNull();
+  });
+
+  it('should return null for malformed scontext', () => {
+    const details = {
+      scontext: 'invalid',
+      tcontext: 'u:object_r:system_file:s0',
+      tclass: 'file',
+      permission: 'read',
+    };
+    expect(generateSELinuxAllowRule(details)).toBeNull();
+  });
+
+  it('should work end-to-end with parseKernelLog', () => {
+    const content =
+      '<5>[  900.000000] avc: denied { read write } for pid=1234 comm="app" name="config" scontext=u:r:untrusted_app:s0 tcontext=u:object_r:system_file:s0 tclass=file';
+    const result = parseKernelLog(content);
+    const rule = generateSELinuxAllowRule(result.events[0].details);
+    expect(rule).toBe('allow untrusted_app system_file:file { read write };');
   });
 });

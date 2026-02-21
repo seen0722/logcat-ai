@@ -219,13 +219,40 @@ const KERNEL_RULES: KernelRule[] = [
       const scontext = e.message.match(/scontext=(\S+)/);
       const tcontext = e.message.match(/tcontext=(\S+)/);
       const tclass = e.message.match(/tclass=(\S+)/);
+      const permission = e.message.match(/\{\s*([^}]+?)\s*\}/);
       if (scontext) fields.scontext = scontext[1];
       if (tcontext) fields.tcontext = tcontext[1];
       if (tclass) fields.tclass = tclass[1];
+      if (permission) fields.permission = permission[1].trim();
       return fields;
     },
   },
 ];
+
+/**
+ * Generate a SELinux allow rule from a denial event's details.
+ * Returns null if required fields are missing.
+ */
+export function generateSELinuxAllowRule(details: Record<string, string | number>): string | null {
+  const scontext = details.scontext as string | undefined;
+  const tcontext = details.tcontext as string | undefined;
+  const tclass = details.tclass as string | undefined;
+  const permission = details.permission as string | undefined;
+
+  if (!scontext || !tcontext || !tclass || !permission) return null;
+
+  // Extract domain from scontext: u:r:domain:s0 → domain
+  const domainMatch = scontext.match(/^u:r:([^:]+):/);
+  // Extract type from tcontext: u:object_r:type:s0 → type
+  const typeMatch = tcontext.match(/^u:[^:]+:([^:]+):/);
+
+  if (!domainMatch || !typeMatch) return null;
+
+  const domain = domainMatch[1];
+  const type = typeMatch[1];
+
+  return `allow ${domain} ${type}:${tclass} { ${permission} };`;
+}
 
 function detectKernelEvents(entries: KernelLogEntry[]): KernelEvent[] {
   const events: KernelEvent[] = [];
