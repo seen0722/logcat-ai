@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeBasic, BasicAnalyzerInput } from '../src/basic-analyzer.js';
-import { BugreportMetadata, LogcatParseResult, KernelParseResult, ANRTraceAnalysis } from '../src/types.js';
+import { analyzeBasic, BasicAnalyzerInput, aggregateTimelineEvents } from '../src/basic-analyzer.js';
+import { BugreportMetadata, LogcatParseResult, KernelParseResult, ANRTraceAnalysis, TimelineEvent } from '../src/types.js';
 
 function makeMetadata(overrides?: Partial<BugreportMetadata>): BugreportMetadata {
   return {
@@ -164,10 +164,11 @@ describe('analyzeBasic', () => {
     };
 
     const result = analyzeBasic(makeInput({ kernelResult }));
-    expect(result.insights).toHaveLength(1);
-    expect(result.insights[0].source).toBe('kernel');
-    expect(result.insights[0].category).toBe('memory');
-    expect(result.insights[0].severity).toBe('critical');
+    const kernelInsights = result.insights.filter((i) => i.source === 'kernel');
+    expect(kernelInsights).toHaveLength(1);
+    expect(kernelInsights[0].source).toBe('kernel');
+    expect(kernelInsights[0].category).toBe('memory');
+    expect(kernelInsights[0].severity).toBe('critical');
   });
 
   it('should sort insights by severity (critical > warning > info)', () => {
@@ -319,5 +320,118 @@ describe('analyzeBasic', () => {
     const metadata = makeMetadata({ deviceModel: 'Pixel 8' });
     const result = analyzeBasic(makeInput({ metadata }));
     expect(result.metadata.deviceModel).toBe('Pixel 8');
+  });
+});
+
+// ============================================================
+// aggregateTimelineEvents
+// ============================================================
+
+describe('aggregateTimelineEvents', () => {
+  function makeEvent(overrides?: Partial<TimelineEvent>): TimelineEvent {
+    return {
+      timestamp: '01-15 10:00:00.000',
+      source: 'kernel',
+      severity: 'info',
+      label: 'SELinux denial: scontext=u:r:hal_audio:s0 tcontext=u:object_r:proc:s0',
+      ...overrides,
+    };
+  }
+
+  it('should aggregate 3 adjacent events with same label+source+severity', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ timestamp: 'boot+3808s' }),
+      makeEvent({ timestamp: 'boot+3850s' }),
+      makeEvent({ timestamp: 'boot+3902s' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(1);
+    expect(result[0].count).toBe(3);
+    expect(result[0].timeRange).toBe('boot+3808s ~ boot+3902s');
+    expect(result[0].label).toBe(events[0].label);
+    expect(result[0].details).toBeUndefined();
+  });
+
+  it('should not aggregate events with different labels', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ label: 'SELinux denial A' }),
+      makeEvent({ label: 'SELinux denial B' }),
+      makeEvent({ label: 'SELinux denial C' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(3);
+    result.forEach((e) => {
+      expect(e.count).toBeUndefined();
+      expect(e.timeRange).toBeUndefined();
+    });
+  });
+
+  it('should not aggregate events with different sources', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ source: 'kernel' }),
+      makeEvent({ source: 'logcat' }),
+      makeEvent({ source: 'kernel' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(3);
+  });
+
+  it('should not aggregate events with different severities', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ severity: 'info' }),
+      makeEvent({ severity: 'warning' }),
+      makeEvent({ severity: 'info' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(3);
+  });
+
+  it('should handle mixed events: aggregate duplicates, keep unique', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ timestamp: '01-15 09:00:00.000', severity: 'critical', label: 'ANR in app', source: 'logcat' }),
+      makeEvent({ timestamp: 'boot+100s', label: 'SELinux denial X' }),
+      makeEvent({ timestamp: 'boot+101s', label: 'SELinux denial X' }),
+      makeEvent({ timestamp: 'boot+102s', label: 'SELinux denial X' }),
+      makeEvent({ timestamp: 'boot+200s', label: 'OOM kill', severity: 'critical' }),
+      makeEvent({ timestamp: 'boot+300s', label: 'SELinux denial Y' }),
+      makeEvent({ timestamp: 'boot+301s', label: 'SELinux denial Y' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(4);
+    // First: standalone critical ANR
+    expect(result[0].label).toBe('ANR in app');
+    expect(result[0].count).toBeUndefined();
+    // Second: aggregated SELinux X
+    expect(result[1].label).toBe('SELinux denial X');
+    expect(result[1].count).toBe(3);
+    expect(result[1].timeRange).toBe('boot+100s ~ boot+102s');
+    // Third: standalone OOM
+    expect(result[2].label).toBe('OOM kill');
+    expect(result[2].count).toBeUndefined();
+    // Fourth: aggregated SELinux Y
+    expect(result[3].label).toBe('SELinux denial Y');
+    expect(result[3].count).toBe(2);
+  });
+
+  it('should not set count or timeRange for single events', () => {
+    const events: TimelineEvent[] = [makeEvent()];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(1);
+    expect(result[0].count).toBeUndefined();
+    expect(result[0].timeRange).toBeUndefined();
+  });
+
+  it('should return empty array for empty input', () => {
+    expect(aggregateTimelineEvents([])).toHaveLength(0);
+  });
+
+  it('should preserve details from the first event', () => {
+    const events: TimelineEvent[] = [
+      makeEvent({ timestamp: 'boot+1s', details: 'first details' }),
+      makeEvent({ timestamp: 'boot+2s', details: 'second details' }),
+    ];
+    const result = aggregateTimelineEvents(events);
+    expect(result).toHaveLength(1);
+    expect(result[0].details).toBe('first details');
   });
 });

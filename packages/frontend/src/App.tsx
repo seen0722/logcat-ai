@@ -48,6 +48,7 @@ export default function App() {
             healthScore={result.healthScore}
             memInfo={result.memInfo}
             cpuInfo={result.cpuInfo}
+            bootStatus={result.bootStatus}
           />
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />

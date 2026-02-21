@@ -13,6 +13,7 @@ import {
   ANRTraceAnalysis,
   MemInfoSummary,
   CpuInfoSummary,
+  BootStatusSummary,
 } from './types.js';
 
 // ============================================================
@@ -35,10 +36,12 @@ export interface BasicAnalyzerInput {
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo } = input;
 
+  const bootStatus = analyzeBootStatus(logcatResult, kernelResult);
   const anrInsights = generateANRInsights(anrAnalyses);
   const logcatInsights = generateLogcatInsights(logcatResult);
   const kernelInsights = generateKernelInsights(kernelResult);
   const resourceInsights = generateResourceInsights(memInfo, cpuInfo);
+  const bootInsights = generateBootInsights(bootStatus);
 
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
@@ -51,6 +54,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...anrInsights,
     ...mergeKernelInsights(kernelInsights),
     ...resourceInsights,
+    ...bootInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -77,6 +81,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     kernelResult,
     ...(memInfo ? { memInfo } : {}),
     ...(cpuInfo ? { cpuInfo } : {}),
+    bootStatus,
   };
 }
 
@@ -108,6 +113,8 @@ const LOGCAT_ANOMALY_CATEGORY: Record<string, InsightCategory> = {
   binder_timeout: 'performance',
   slow_operation: 'performance',
   strict_mode: 'performance',
+  input_dispatching_timeout: 'anr',
+  hal_service_death: 'stability',
 };
 
 function generateLogcatInsights(result: LogcatParseResult): InsightCard[] {
@@ -156,6 +163,10 @@ function describeLogcatAnomaly(anomaly: LogcatAnomaly): string {
       return `A slow operation was detected on the main thread${process}${pid}.`;
     case 'strict_mode':
       return `StrictMode violation detected${process}${pid}. This indicates a policy violation (e.g., disk I/O on main thread).`;
+    case 'input_dispatching_timeout':
+      return `Input dispatching timed out${process}${pid}. The window is not responding to input events within the expected time.`;
+    case 'hal_service_death':
+      return `A HAL service died or restarted${process}${pid}. This may cause hardware-related functionality to fail temporarily.`;
     default:
       return `Anomaly detected${process}${pid}.`;
   }
@@ -334,8 +345,11 @@ const KERNEL_EVENT_CATEGORY: Record<string, InsightCategory> = {
   driver_error: 'kernel',
   gpu_error: 'kernel',
   thermal_shutdown: 'kernel',
+  thermal_throttling: 'performance',
   watchdog_reset: 'stability',
   selinux_denial: 'kernel',
+  storage_io_error: 'stability',
+  suspend_resume_error: 'kernel',
 };
 
 function generateKernelInsights(result: KernelParseResult): InsightCard[] {
@@ -381,6 +395,15 @@ function describeKernelEvent(event: KernelEvent): string {
     }
     case 'watchdog_reset':
       return 'The hardware watchdog timer expired and triggered a system reset. A critical system component may have become unresponsive.';
+    case 'thermal_throttling': {
+      const temp = event.details.temperature;
+      const tempStr = temp ? ` Temperature: ${temp}°C.` : '';
+      return `Thermal throttling is active, reducing CPU/GPU performance to prevent overheating.${tempStr}`;
+    }
+    case 'storage_io_error':
+      return `A storage I/O error was detected. This may indicate a failing storage device, filesystem corruption, or eMMC/UFS issues.`;
+    case 'suspend_resume_error':
+      return `A suspend/resume cycle failed. This can cause excessive battery drain or wake-lock issues.`;
     case 'selinux_denial': {
       const src = event.details.scontext ?? 'unknown';
       const tgt = event.details.tcontext ?? 'unknown';
@@ -389,6 +412,102 @@ function describeKernelEvent(event: KernelEvent): string {
     default:
       return `Kernel event detected: ${event.summary}`;
   }
+}
+
+// ============================================================
+// Boot Status Analysis
+// ============================================================
+
+export function analyzeBootStatus(
+  logcatResult: LogcatParseResult,
+  kernelResult: KernelParseResult,
+): BootStatusSummary {
+  let bootCompleted = false;
+  let bootReason: string | undefined;
+  let systemServerRestarts = 0;
+
+  // Scan logcat for boot_completed and system_server restarts
+  for (const entry of logcatResult.entries) {
+    if (entry.message.includes('sys.boot_completed=1') ||
+        (entry.tag === 'BootReceiver' && /boot.*completed/i.test(entry.message)) ||
+        (entry.tag === 'ActivityManager' && entry.message.includes('Boot completed'))) {
+      bootCompleted = true;
+    }
+
+    // Count system_server restarts (Zygote forking system_server)
+    if (entry.tag === 'Zygote' && entry.message.includes('System server process')) {
+      systemServerRestarts++;
+    }
+    if (entry.tag === 'ActivityManager' && entry.message.includes('Force stopping')) {
+      // Additional signal but don't double-count
+    }
+  }
+
+  // Look for boot reason in kernel log
+  // Common: "Boot reason: reboot", "androidboot.bootreason=watchdog"
+  for (const entry of kernelResult.entries) {
+    const reasonMatch = entry.message.match(/(?:Boot reason|androidboot\.bootreason)[=:\s]+(\S+)/i);
+    if (reasonMatch) {
+      bootReason = reasonMatch[1];
+      break;
+    }
+  }
+
+  // Estimate uptime from last kernel timestamp
+  let uptimeSeconds: number | undefined;
+  if (kernelResult.entries.length > 0) {
+    uptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
+  }
+
+  // First boot counts as 1, so restarts = count - 1 (if > 0)
+  const restartCount = systemServerRestarts > 1 ? systemServerRestarts - 1 : 0;
+
+  return {
+    bootCompleted,
+    bootReason,
+    systemServerRestarts: restartCount,
+    uptimeSeconds,
+  };
+}
+
+function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {
+  const insights: InsightCard[] = [];
+
+  if (!bootStatus.bootCompleted && bootStatus.uptimeSeconds != null) {
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'stability',
+      title: 'Boot not completed',
+      description: 'sys.boot_completed was not set. The device may not have finished booting successfully.',
+      source: 'cross',
+    });
+  }
+
+  if (bootStatus.systemServerRestarts > 0) {
+    const severity: Severity = bootStatus.systemServerRestarts >= 3 ? 'critical' : 'warning';
+    insights.push({
+      id: '',
+      severity,
+      category: 'stability',
+      title: `System server restarted ${bootStatus.systemServerRestarts} time(s)`,
+      description: `system_server was restarted ${bootStatus.systemServerRestarts} time(s) since boot. Frequent restarts indicate serious system instability.`,
+      source: 'cross',
+    });
+  }
+
+  if (bootStatus.bootReason && !/reboot|normal/i.test(bootStatus.bootReason)) {
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'stability',
+      title: `Abnormal boot reason: ${bootStatus.bootReason}`,
+      description: `The device booted with reason "${bootStatus.bootReason}", which may indicate a crash, watchdog reset, or power issue.`,
+      source: 'cross',
+    });
+  }
+
+  return insights;
 }
 
 // ============================================================
@@ -609,6 +728,7 @@ function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult
       case 'fatal_exception': score -= 10; break;
       case 'native_crash': score -= 15; break;
       case 'watchdog': score -= 25; break;
+      case 'hal_service_death': score -= 10; break;
     }
   }
 
@@ -644,6 +764,7 @@ function calcResponsivenessScore(logcat: LogcatParseResult, anrAnalyses: ANRTrac
   for (const a of logcat.anomalies) {
     switch (a.type) {
       case 'anr': score -= 20; break;
+      case 'input_dispatching_timeout': score -= 20; break;
       case 'binder_timeout': score -= 10; break;
       case 'slow_operation': score -= 5; break;
     }
@@ -675,6 +796,9 @@ function calcKernelScore(kernel: KernelParseResult): number {
       case 'watchdog_reset': score -= 30; break;
       case 'gpu_error': score -= 15; break;
       case 'driver_error': score -= 10; break;
+      case 'thermal_throttling': score -= 8; break;
+      case 'storage_io_error': score -= 10; break;
+      case 'suspend_resume_error': score -= 5; break;
       case 'selinux_denial': score -= 2; break;
     }
   }

@@ -133,6 +133,13 @@ export interface CpuInfoSummary {
   topProcesses: CpuInfoProcess[];
 }
 
+export interface BootStatusSummary {
+  bootCompleted: boolean;
+  bootReason?: string;
+  systemServerRestarts: number;
+  uptimeSeconds?: number;
+}
+
 export interface DeepAnalysisOverview {
   executiveSummary: string;
   systemDiagnosis: string;
@@ -157,6 +164,7 @@ export interface AnalysisResult {
   anrAnalyses: ANRTraceAnalysis[];
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
+  bootStatus?: BootStatusSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

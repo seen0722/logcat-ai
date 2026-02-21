@@ -120,6 +120,25 @@ describe('parseLogcat', () => {
     expect(result.anomalies).toHaveLength(2);
   });
 
+  // Input dispatching timeout (#33)
+  it('should detect input_dispatching_timeout', () => {
+    const content = '01-15 10:00:00.000  1000  1001 E InputDispatcher: Input dispatching timed out (com.example.app/com.example.app.MainActivity)';
+    const result = parseLogcat(content);
+    expect(result.anomalies).toHaveLength(1);
+    expect(result.anomalies[0].type).toBe('input_dispatching_timeout');
+    expect(result.anomalies[0].severity).toBe('critical');
+  });
+
+  // HAL service death (#37)
+  it('should detect hal_service_death', () => {
+    const content = '01-15 10:00:00.000  1000  1001 E hwservicemanager: service vendor.audio@2.0::IAudio has died';
+    const result = parseLogcat(content);
+    expect(result.anomalies).toHaveLength(1);
+    expect(result.anomalies[0].type).toBe('hal_service_death');
+    expect(result.anomalies[0].severity).toBe('warning');
+    expect(result.anomalies[0].summary).toContain('HAL service died');
+  });
+
   it('should handle empty content', () => {
     const result = parseLogcat('');
     expect(result.entries).toHaveLength(0);

@@ -157,6 +157,52 @@ const KERNEL_RULES: KernelRule[] = [
     extractDetails: (e) => ({ message: e.message }),
   },
   {
+    type: 'thermal_throttling',
+    severity: 'warning',
+    match: (e) =>
+      /thermal/i.test(e.message) &&
+      /throttl/i.test(e.message),
+    summarize: (e) => {
+      const zone = e.message.match(/zone\s+(\S+)/i)?.[1] ?? '';
+      return zone ? `Thermal throttling: ${zone}` : 'Thermal throttling detected';
+    },
+    extractDetails: (e) => {
+      const tempMatch = e.message.match(/(\d+)\s*(?:°?C|celsius|mC)/i);
+      const details: Record<string, string | number> = {};
+      if (tempMatch) details.temperature = parseInt(tempMatch[1], 10);
+      return details;
+    },
+  },
+  {
+    type: 'storage_io_error',
+    severity: 'warning',
+    match: (e) =>
+      /mmc\d*.*error/i.test(e.message) ||
+      /EXT4-fs error/i.test(e.message) ||
+      /I\/O error.*dev\s+(sd|mmc|nvme)/i.test(e.message) ||
+      /Buffer I\/O error/i.test(e.message),
+    summarize: (e) => {
+      const truncated = e.message.slice(0, 100);
+      return `Storage I/O error: ${truncated}`;
+    },
+    extractDetails: (e) => ({ message: e.message }),
+  },
+  {
+    type: 'suspend_resume_error',
+    severity: 'warning',
+    match: (e) =>
+      /suspend.*abort/i.test(e.message) ||
+      /resume.*fail/i.test(e.message) ||
+      /PM:.*suspend.*error/i.test(e.message) ||
+      /suspend entry.*error/i.test(e.message),
+    summarize: (e) => {
+      if (/abort/i.test(e.message)) return 'Suspend aborted';
+      if (/resume.*fail/i.test(e.message)) return 'Resume failed';
+      return 'Suspend/resume error';
+    },
+    extractDetails: (e) => ({ message: e.message }),
+  },
+  {
     type: 'selinux_denial',
     severity: 'info',
     match: (e) => /avc:\s+denied/i.test(e.message) || /selinux/i.test(e.message),

@@ -188,6 +188,30 @@ const ANOMALY_RULES: AnomalyRule[] = [
         : 'StrictMode violation';
     },
   },
+  {
+    type: 'input_dispatching_timeout',
+    severity: 'critical',
+    match: (e) =>
+      /Input dispatching timed out/i.test(e.message) ||
+      (e.tag === 'InputDispatcher' && /timeout/i.test(e.message)),
+    summarize: (e) => {
+      const m = e.message.match(/timed out.*?(\S+\/\S+)/);
+      return m ? `Input dispatching timeout: ${m[1]}` : 'Input dispatching timeout';
+    },
+  },
+  {
+    type: 'hal_service_death',
+    severity: 'warning',
+    match: (e) =>
+      (/hwservicemanager/i.test(e.tag) && /died|restart/i.test(e.message)) ||
+      (/HwServiceManager/i.test(e.tag) && /died|restart/i.test(e.message)) ||
+      (e.tag === 'ServiceManager' && /service.*died/i.test(e.message)) ||
+      (e.tag === 'servicemanager' && /service.*died/i.test(e.message)),
+    summarize: (e) => {
+      const m = e.message.match(/(?:service\s+)?['"]?(\S+?)['"]?\s+(?:has\s+)?died/i);
+      return m ? `HAL service died: ${m[1]}` : 'HAL service died';
+    },
+  },
 ];
 
 function detectAnomalies(entries: LogEntry[]): LogcatAnomaly[] {

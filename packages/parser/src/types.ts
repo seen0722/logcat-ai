@@ -62,7 +62,9 @@ export type LogcatAnomalyType =
   | 'strict_mode'
   | 'watchdog'
   | 'native_crash'
-  | 'system_server_crash';
+  | 'system_server_crash'
+  | 'input_dispatching_timeout'
+  | 'hal_service_death';
 
 export interface LogcatAnomaly {
   type: LogcatAnomalyType;
@@ -221,10 +223,13 @@ export type KernelEventType =
   | 'lowmemory_killer'
   | 'driver_error'
   | 'thermal_shutdown'
+  | 'thermal_throttling'
   | 'watchdog_reset'
   | 'selinux_denial'
   | 'gpu_error'
-  | 'kswapd_active';
+  | 'kswapd_active'
+  | 'storage_io_error'
+  | 'suspend_resume_error';
 
 export interface KernelLogEntry {
   timestamp: number;     // seconds since boot
@@ -247,6 +252,17 @@ export interface KernelParseResult {
   entries: KernelLogEntry[];
   events: KernelEvent[];
   totalLines: number;
+}
+
+// ============================================================
+// Boot Status
+// ============================================================
+
+export interface BootStatusSummary {
+  bootCompleted: boolean;
+  bootReason?: string;
+  systemServerRestarts: number;
+  uptimeSeconds?: number;
 }
 
 // ============================================================
@@ -357,6 +373,7 @@ export interface AnalysisResult {
   kernelResult: KernelParseResult;
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
+  bootStatus?: BootStatusSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

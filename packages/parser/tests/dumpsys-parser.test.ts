@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseMemInfo, parseCpuInfo } from '../src/dumpsys-parser.js';
-import { analyzeBasic, BasicAnalyzerInput } from '../src/basic-analyzer.js';
-import { BugreportMetadata, LogcatParseResult, KernelParseResult } from '../src/types.js';
+import { analyzeBasic, analyzeBootStatus, BasicAnalyzerInput } from '../src/basic-analyzer.js';
+import { BugreportMetadata, LogcatParseResult, KernelParseResult, LogEntry } from '../src/types.js';
 
 // ============================================================
 // parseMemInfo
@@ -264,5 +264,120 @@ describe('Resource Insights integration', () => {
     const baseline = analyzeBasic(makeInput());
 
     expect(withHighCpu.healthScore.breakdown.responsiveness).toBeLessThan(baseline.healthScore.breakdown.responsiveness);
+  });
+});
+
+// ============================================================
+// Boot Status Analysis (#38)
+// ============================================================
+
+describe('analyzeBootStatus', () => {
+  function makeLogEntry(overrides: Partial<LogEntry>): LogEntry {
+    return {
+      timestamp: '01-15 10:00:00.000',
+      pid: 1000,
+      tid: 1000,
+      level: 'I',
+      tag: 'System',
+      message: '',
+      raw: '',
+      lineNumber: 1,
+      ...overrides,
+    };
+  }
+
+  it('should detect boot_completed', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [
+        makeLogEntry({ tag: 'BootReceiver', message: 'sys.boot_completed=1' }),
+      ],
+      anomalies: [],
+      totalLines: 1,
+      parsedLines: 1,
+      parseErrors: 0,
+    };
+    const kernelResult = { entries: [], events: [], totalLines: 0 };
+
+    const result = analyzeBootStatus(logcatResult, kernelResult);
+    expect(result.bootCompleted).toBe(true);
+    expect(result.systemServerRestarts).toBe(0);
+  });
+
+  it('should detect boot reason from kernel log', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: [],
+      totalLines: 0,
+      parsedLines: 0,
+      parseErrors: 0,
+    };
+    const kernelResult = {
+      entries: [{
+        timestamp: 0.001,
+        level: '<6>',
+        facility: '',
+        message: 'androidboot.bootreason=watchdog',
+        raw: '<6>[    0.001000] androidboot.bootreason=watchdog',
+      }],
+      events: [],
+      totalLines: 1,
+    };
+
+    const result = analyzeBootStatus(logcatResult, kernelResult);
+    expect(result.bootReason).toBe('watchdog');
+    expect(result.uptimeSeconds).toBeCloseTo(0.001);
+  });
+
+  it('should count system_server restarts', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [
+        makeLogEntry({ tag: 'Zygote', message: 'System server process 1234 has been created' }),
+        makeLogEntry({ tag: 'Zygote', message: 'System server process 5678 has been created' }),
+        makeLogEntry({ tag: 'Zygote', message: 'System server process 9012 has been created' }),
+      ],
+      anomalies: [],
+      totalLines: 3,
+      parsedLines: 3,
+      parseErrors: 0,
+    };
+    const kernelResult = { entries: [], events: [], totalLines: 0 };
+
+    const result = analyzeBootStatus(logcatResult, kernelResult);
+    expect(result.systemServerRestarts).toBe(2); // 3 starts - 1 initial = 2 restarts
+  });
+
+  it('should generate insight for abnormal boot reason', () => {
+    const input: BasicAnalyzerInput = {
+      metadata: {
+        androidVersion: '14',
+        sdkLevel: 34,
+        buildFingerprint: 'test',
+        deviceModel: 'Test',
+        manufacturer: 'Test',
+        buildDate: '2024-01-01',
+        bugreportTimestamp: new Date('2024-01-15T10:00:00Z'),
+        kernelVersion: '5.10',
+      } as BugreportMetadata,
+      logcatResult: { entries: [], anomalies: [], totalLines: 0, parsedLines: 0, parseErrors: 0 },
+      kernelResult: {
+        entries: [{
+          timestamp: 100,
+          level: '<6>',
+          facility: '',
+          message: 'androidboot.bootreason=kernel_panic',
+          raw: '',
+        }],
+        events: [],
+        totalLines: 1,
+      },
+      anrAnalyses: [],
+    };
+
+    const result = analyzeBasic(input);
+    const bootInsight = result.insights.find((i) => i.title.includes('Abnormal boot reason'));
+    expect(bootInsight).toBeDefined();
+    expect(bootInsight!.severity).toBe('warning');
+    expect(result.bootStatus).toBeDefined();
+    expect(result.bootStatus!.bootReason).toBe('kernel_panic');
   });
 });

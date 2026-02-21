@@ -174,6 +174,48 @@ describe('parseKernelLog', () => {
     expect(result.events[2].type).toBe('kernel_panic');
   });
 
+  // Thermal throttling (#32)
+  it('should detect thermal_throttling', () => {
+    const content = '<4>[  500.000000] thermal thermal_zone0: throttling activated';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('thermal_throttling');
+    expect(result.events[0].severity).toBe('warning');
+    expect(result.events[0].summary).toContain('Thermal throttling');
+  });
+
+  // Storage I/O error (#32)
+  it('should detect storage_io_error for mmc', () => {
+    const content = '<3>[  600.000000] mmc0: error -110 whilst initialising SD card';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('storage_io_error');
+    expect(result.events[0].severity).toBe('warning');
+  });
+
+  it('should detect storage_io_error for EXT4-fs', () => {
+    const content = '<3>[  601.000000] EXT4-fs error (device sda1): ext4_lookup:1234: inode #5678';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('storage_io_error');
+  });
+
+  // Suspend/resume error (#32)
+  it('should detect suspend_resume_error for suspend abort', () => {
+    const content = '<4>[  700.000000] PM: suspend entry (deep): suspend abort';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('suspend_resume_error');
+    expect(result.events[0].summary).toContain('Suspend');
+  });
+
+  it('should detect suspend_resume_error for resume fail', () => {
+    const content = '<4>[  701.000000] PM: resume from suspend failed';
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('suspend_resume_error');
+  });
+
   // No events
   it('should return empty events for clean log', () => {
     const content = [

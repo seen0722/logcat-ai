@@ -1,10 +1,11 @@
-import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary } from '../lib/types';
+import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary } from '../lib/types';
 
 interface Props {
   metadata: BugreportMetadata;
   healthScore: SystemHealthScore;
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
+  bootStatus?: BootStatusSummary;
 }
 
 function scoreColor(score: number): string {
@@ -46,7 +47,14 @@ function formatKbToGb(kb: number): string {
   return (kb / 1048576).toFixed(1);
 }
 
-export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo }: Props) {
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus }: Props) {
   const { breakdown } = healthScore;
 
   return (
@@ -72,6 +80,36 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             {metadata.buildFingerprint.split('/').slice(-2).join('/')}
           </p>
         </div>
+        {bootStatus && (
+          <>
+            <div>
+              <span className="text-gray-500">Boot</span>
+              <p className={`font-medium ${bootStatus.bootCompleted ? 'text-green-400' : 'text-red-400'}`}>
+                {bootStatus.bootCompleted ? 'Completed' : 'Incomplete'}
+              </p>
+            </div>
+            {bootStatus.uptimeSeconds != null && (
+              <div>
+                <span className="text-gray-500">Uptime</span>
+                <p className="font-medium">{formatUptime(bootStatus.uptimeSeconds)}</p>
+              </div>
+            )}
+            {bootStatus.bootReason && (
+              <div>
+                <span className="text-gray-500">Boot Reason</span>
+                <p className={`font-medium ${/reboot|normal/i.test(bootStatus.bootReason) ? '' : 'text-amber-400'}`}>
+                  {bootStatus.bootReason}
+                </p>
+              </div>
+            )}
+            {bootStatus.systemServerRestarts > 0 && (
+              <div>
+                <span className="text-gray-500">SS Restarts</span>
+                <p className="font-medium text-red-400">{bootStatus.systemServerRestarts}</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Health Scores */}
