@@ -340,6 +340,48 @@ export interface HALStatusSummary {
 }
 
 // ============================================================
+// Tombstone (Native Crash)
+// ============================================================
+
+export type NativeCrashSignal = 'SIGSEGV' | 'SIGABRT' | 'SIGBUS' | 'SIGFPE' | 'SIGILL' | 'SIGTRAP' | 'UNKNOWN';
+
+export interface NativeStackFrame {
+  frameNumber: number;       // #00, #01, ...
+  pc: string;                // program counter hex value
+  binary: string;            // /system/lib64/libc.so
+  function?: string;         // symbol name
+  offset?: number;           // function offset in bytes
+  buildId?: string;          // build ID if present
+  raw: string;               // original line
+}
+
+export interface TombstoneAnalysis {
+  fileName: string;          // tombstone file path
+  pid: number;
+  tid: number;
+  processName: string;
+  threadName?: string;
+  signal: number;            // signal number (11, 6, etc.)
+  signalName: NativeCrashSignal;
+  signalCode?: string;       // e.g. "SEGV_MAPERR", "SI_TKILL"
+  faultAddr?: string;        // fault address hex
+  abi?: string;              // "arm64", "arm", "x86_64", "x86"
+  buildFingerprint?: string;
+  timestamp?: string;
+  backtrace: NativeStackFrame[];
+  crashedInBinary?: string;  // top frame binary (e.g. "/vendor/lib64/hw/foo.so")
+  isVendorCrash: boolean;    // crashed in /vendor/ or /odm/ path
+  abortMessage?: string;     // abort message if SIGABRT
+  registers?: Record<string, string>;
+  summary: string;           // one-line crash summary
+}
+
+export interface TombstoneParseResult {
+  analyses: TombstoneAnalysis[];
+  totalFiles: number;
+}
+
+// ============================================================
 // Basic Analyzer (Insights)
 // ============================================================
 
@@ -356,7 +398,7 @@ export interface InsightCard {
   relatedLogSnippet?: string;       // relevant log excerpt
   stackTrace?: string;              // relevant stack trace
   timestamp?: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'cross';
+  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone';
   suggestedAllowRule?: string;      // SELinux allow rule suggestion
   debugCommands?: string[];         // suggested debug commands
   deepAnalysis?: {                  // filled by LLM in Deep Analysis mode
@@ -374,7 +416,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;                // normalized ISO timestamp or relative
-  source: 'logcat' | 'anr' | 'kernel';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone';
   severity: Severity;
   label: string;
   details?: string;
@@ -420,6 +462,7 @@ export interface AnalysisResult {
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
+  tombstoneAnalyses?: TombstoneAnalysis[];
   logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
 }

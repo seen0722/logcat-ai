@@ -9,6 +9,7 @@ import {
   parseMemInfo,
   parseCpuInfo,
   parseLshal,
+  parseTombstones,
   AnalysisResult,
   DeepAnalysisOverview,
 } from '@logcat-ai/parser';
@@ -122,6 +123,9 @@ router.get('/:id', async (req: Request, res: Response) => {
     );
     const halStatus = halSection ? parseLshal(halSection.content, unpackResult.metadata.manufacturer) : undefined;
 
+    // Parse tombstones (native crash dumps)
+    const tombstoneResult = parseTombstones(unpackResult.tombstoneContents);
+
     if (aborted) return;
     sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
@@ -141,6 +145,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       memInfo,
       cpuInfo,
       halStatus,
+      tombstoneAnalyses: tombstoneResult.analyses,
       systemProperties: sysPropSection?.content,
     });
 

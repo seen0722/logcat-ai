@@ -13,7 +13,7 @@ export interface InsightCard {
   relatedLogSnippet?: string;
   stackTrace?: string;
   timestamp?: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'cross';
+  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone';
   suggestedAllowRule?: string;
   debugCommands?: string[];
   deepAnalysis?: {
@@ -31,7 +31,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;
-  source: 'logcat' | 'anr' | 'kernel';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone';
   severity: Severity;
   label: string;
   details?: string;
@@ -172,6 +172,36 @@ export interface HALStatusSummary {
   truncated: boolean;
 }
 
+export interface NativeStackFrame {
+  frameNumber: number;
+  pc: string;
+  binary: string;
+  function?: string;
+  offset?: number;
+  buildId?: string;
+  raw: string;
+}
+
+export interface TombstoneAnalysis {
+  fileName: string;
+  pid: number;
+  tid: number;
+  processName: string;
+  threadName?: string;
+  signal: number;
+  signalName: string;
+  signalCode?: string;
+  faultAddr?: string;
+  abi?: string;
+  buildFingerprint?: string;
+  timestamp?: string;
+  backtrace: NativeStackFrame[];
+  crashedInBinary?: string;
+  isVendorCrash: boolean;
+  abortMessage?: string;
+  summary: string;
+}
+
 export interface DeepAnalysisOverview {
   executiveSummary: string;
   systemDiagnosis: string;
@@ -198,6 +228,7 @@ export interface AnalysisResult {
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
+  tombstoneAnalyses?: TombstoneAnalysis[];
   logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
 }

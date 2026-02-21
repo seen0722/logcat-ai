@@ -21,22 +21,24 @@ const SOURCE_COLOR: Record<string, string> = {
   logcat: 'text-blue-400',
   anr: 'text-red-400',
   kernel: 'text-amber-400',
+  tombstone: 'text-rose-500',
 };
 
 const SOURCE_BTN: Record<string, { active: string; label: string }> = {
   logcat: { active: 'bg-blue-500/20 text-blue-400 border-blue-500/50', label: 'Logcat' },
   kernel: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/50', label: 'Kernel' },
   anr: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'ANR' },
+  tombstone: { active: 'bg-rose-500/20 text-rose-500 border-rose-500/50', label: 'Tombstone' },
 };
 
 const INACTIVE_BTN = 'bg-transparent text-gray-500 border-gray-700';
 
 const ALL_SEVERITIES: Severity[] = ['critical', 'warning', 'info'];
-const ALL_SOURCES = ['logcat', 'kernel', 'anr'] as const;
+const ALL_SOURCES = ['logcat', 'kernel', 'anr', 'tombstone'] as const;
 
 export default function Timeline({ events }: Props) {
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(new Set(['critical', 'warning']));
-  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(['logcat', 'anr', 'kernel']));
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(['logcat', 'anr', 'kernel', 'tombstone']));
 
   if (events.length === 0) return null;
 

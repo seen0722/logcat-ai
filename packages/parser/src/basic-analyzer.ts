@@ -18,6 +18,7 @@ import {
   BootStatusSummary,
   HALStatusSummary,
   TagStat,
+  TombstoneAnalysis,
 } from './types.js';
 import { generateSELinuxAllowRule } from './kernel-parser.js';
 
@@ -33,6 +34,7 @@ export interface BasicAnalyzerInput {
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
   halStatus?: HALStatusSummary;
+  tombstoneAnalyses?: TombstoneAnalysis[];
   systemProperties?: string;
 }
 
@@ -41,7 +43,7 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, systemProperties } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
   const anrInsights = generateANRInsights(anrAnalyses);
@@ -50,6 +52,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const resourceInsights = generateResourceInsights(memInfo, cpuInfo);
   const bootInsights = generateBootInsights(bootStatus);
   const halInsights = generateHALInsights(halStatus);
+  const tombstoneInsights = generateTombstoneInsights(tombstoneAnalyses);
 
   const tagInsights = generateTagInsights(logcatResult.tagStats);
 
@@ -66,6 +69,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...resourceInsights,
     ...bootInsights,
     ...halInsights,
+    ...tombstoneInsights,
     ...tagInsights,
   ];
 
@@ -80,8 +84,8 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     card.id = `insight-${i + 1}`;
   });
 
-  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses);
-  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo);
+  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses);
+  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses);
 
   return {
     metadata,
@@ -95,6 +99,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(cpuInfo ? { cpuInfo } : {}),
     bootStatus,
     ...(halStatus ? { halStatus } : {}),
+    ...(tombstoneAnalyses && tombstoneAnalyses.length > 0 ? { tombstoneAnalyses } : {}),
     ...(logcatResult.tagStats && logcatResult.tagStats.length > 0 ? { logTagStats: logcatResult.tagStats } : {}),
   };
 }
@@ -859,13 +864,65 @@ function generateHALInsights(halStatus?: HALStatusSummary): InsightCard[] {
 }
 
 // ============================================================
+// Tombstone → Insights
+// ============================================================
+
+const TOMBSTONE_DEBUG_COMMANDS = [
+  'adb shell ls -la /data/tombstones/',
+  'adb logcat -b crash -d',
+  'adb shell debuggerd <pid>',
+];
+
+function generateTombstoneInsights(analyses?: TombstoneAnalysis[]): InsightCard[] {
+  if (!analyses || analyses.length === 0) return [];
+
+  return analyses.map((analysis) => {
+    const vendorTag = analysis.isVendorCrash ? ' [Vendor]' : '';
+    const title = `Native Crash: ${analysis.signalName}${vendorTag} in ${analysis.processName}`;
+
+    const descParts: string[] = [];
+    descParts.push(analysis.summary);
+
+    if (analysis.crashedInBinary) {
+      descParts.push(`Crashed in: ${analysis.crashedInBinary}`);
+    }
+    if (analysis.faultAddr) {
+      descParts.push(`Fault address: ${analysis.faultAddr}`);
+    }
+    if (analysis.abi) {
+      descParts.push(`ABI: ${analysis.abi}`);
+    }
+    if (analysis.abortMessage) {
+      descParts.push(`Abort message: ${analysis.abortMessage}`);
+    }
+
+    const stackTrace = analysis.backtrace.length > 0
+      ? analysis.backtrace.slice(0, 20).map((f) => f.raw).join('\n')
+      : undefined;
+
+    return {
+      id: '',
+      severity: 'critical' as Severity,
+      category: 'crash' as InsightCategory,
+      title,
+      description: descParts.join('\n'),
+      stackTrace,
+      timestamp: analysis.timestamp,
+      source: 'tombstone' as const,
+      debugCommands: TOMBSTONE_DEBUG_COMMANDS,
+    };
+  });
+}
+
+// ============================================================
 // Timeline Builder
 // ============================================================
 
 export function buildTimeline(
   logcatResult: LogcatParseResult,
   kernelResult: KernelParseResult,
-  anrAnalyses: ANRTraceAnalysis[]
+  anrAnalyses: ANRTraceAnalysis[],
+  tombstoneAnalyses?: TombstoneAnalysis[],
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -901,6 +958,19 @@ export function buildTimeline(
       label: `ANR: ${reasonLabel} in ${analysis.processName}`,
       details: `Confidence: ${analysis.mainThread.confidence}`,
     });
+  }
+
+  // Tombstone native crashes
+  if (tombstoneAnalyses) {
+    for (const analysis of tombstoneAnalyses) {
+      events.push({
+        timestamp: analysis.timestamp ?? 'unknown',
+        source: 'tombstone',
+        severity: 'critical',
+        label: analysis.summary,
+        details: analysis.crashedInBinary ?? undefined,
+      });
+    }
   }
 
   // Sort: logcat timestamps (MM-DD HH:mm:ss) first, then kernel (boot+), then unknown
@@ -1013,8 +1083,9 @@ export function calculateHealthScore(
   anrAnalyses: ANRTraceAnalysis[],
   memInfo?: MemInfoSummary,
   cpuInfo?: CpuInfoSummary,
+  tombstoneAnalyses?: TombstoneAnalysis[],
 ): SystemHealthScore {
-  let stability = calcStabilityScore(logcatResult, kernelResult);
+  let stability = calcStabilityScore(logcatResult, kernelResult, tombstoneAnalyses);
   let memory = calcMemoryScore(logcatResult, kernelResult);
   let responsiveness = calcResponsivenessScore(logcatResult, anrAnalyses);
   let kernel = calcKernelScore(kernelResult);
@@ -1056,7 +1127,7 @@ export function calculateHealthScore(
   };
 }
 
-function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult): number {
+function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult, tombstoneAnalyses?: TombstoneAnalysis[]): number {
   let score = 100;
   const counts = new Map<string, number>();
 
@@ -1084,6 +1155,13 @@ function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult
     const cfg = STABILITY_KERNEL[e.type];
     if (cfg) {
       score -= dampedDeduction(counts, e.type, cfg[0], cfg[1]);
+    }
+  }
+
+  // Tombstone native crashes: 15 per crash, max 40
+  if (tombstoneAnalyses) {
+    for (const _t of tombstoneAnalyses) {
+      score -= dampedDeduction(counts, 'tombstone_native_crash', 15, 40);
     }
   }
 
