@@ -1022,10 +1022,17 @@ export function aggregateTimelineEvents(events: TimelineEvent[]): TimelineEvent[
 }
 
 function normalizeTimestamp(ts: string): string {
-  // Keep logcat timestamps as-is (they sort lexicographically)
-  // Prefix kernel boot timestamps with 'boot+' for grouping
+  // Keep logcat timestamps as-is (they sort lexicographically: "MM-DD HH:mm:ss.SSS")
+  // Prefix kernel boot timestamps with 'Z_' so they sort after logcat
   if (ts.startsWith('boot+')) return `Z_${ts}`;
   if (ts === 'unknown') return 'ZZ_unknown';
+  // Convert full date format "YYYY-MM-DD HH:mm:ss..." (from tombstone/ANR) to "MM-DD HH:mm:ss.SSS"
+  // so it sorts correctly alongside logcat timestamps
+  const fullDateMatch = ts.match(/^\d{4}-(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\.(\d+))?/);
+  if (fullDateMatch) {
+    const millis = fullDateMatch[3] ? fullDateMatch[3].slice(0, 3).padEnd(3, '0') : '000';
+    return `${fullDateMatch[1]} ${fullDateMatch[2]}.${millis}`;
+  }
   return ts;
 }
 
