@@ -224,7 +224,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 )}
                 {isTruncated && bspNR.length > 0 && (
                   <details className="text-xs">
-                    <summary className="text-gray-600 cursor-pointer">BSP HALs — {bspNR.length} shown as non-responsive (likely lshal artifact)</summary>
+                    <summary className="text-gray-600 cursor-pointer">BSP HALs — {bspNR.length} shown as non-responsive (unreliable — lshal was killed before completion)</summary>
                     <div className="space-y-1 mt-1">
                       {bspNR.slice(0, 10).map((f, i) => (
                         <div key={i} className="text-gray-500 truncate" title={f.familyName}>
