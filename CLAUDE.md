@@ -28,6 +28,17 @@ npm run dev -w packages/backend
 npm run dev -w packages/frontend
 ```
 
+### Sanity Testing with Real Bugreports
+
+After completing a new feature or making changes to parser/backend, run sanity tests against the two real bugreport files in `sample-bugreports/`. These can be tested by uploading through the frontend or by calling the backend API directly:
+
+```bash
+# Upload and analyze via API
+curl -F "file=@sample-bugreports/bugreport-T70-AQ3A.250408.001-2026-01-27-15-33-02_Keypad_stopped_working.zip" http://localhost:8000/api/upload
+curl -F "file=@sample-bugreports/bugreport-T70-AQ3A.250408.001-2026-02-04-16-34-47 _dock.zip" http://localhost:8000/api/upload
+# Then GET /api/analyze/:id to trigger analysis
+```
+
 ## Architecture
 
 TypeScript monorepo (npm workspaces) with three packages: `parser`, `backend`, `frontend`.
