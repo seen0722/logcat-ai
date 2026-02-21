@@ -1,8 +1,10 @@
-import { BugreportMetadata, SystemHealthScore } from '../lib/types';
+import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary } from '../lib/types';
 
 interface Props {
   metadata: BugreportMetadata;
   healthScore: SystemHealthScore;
+  memInfo?: MemInfoSummary;
+  cpuInfo?: CpuInfoSummary;
 }
 
 function scoreColor(score: number): string {
@@ -40,7 +42,11 @@ function ScoreRing({ score, label, size = 64 }: { score: number; label: string; 
   );
 }
 
-export default function SystemOverview({ metadata, healthScore }: Props) {
+function formatKbToGb(kb: number): string {
+  return (kb / 1048576).toFixed(1);
+}
+
+export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo }: Props) {
   const { breakdown } = healthScore;
 
   return (
@@ -76,6 +82,60 @@ export default function SystemOverview({ metadata, healthScore }: Props) {
         <ScoreRing score={breakdown.responsiveness} label="Response" />
         <ScoreRing score={breakdown.kernel} label="Kernel" />
       </div>
+
+      {/* Memory & CPU Summary */}
+      {(memInfo || cpuInfo) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {memInfo && memInfo.totalRamKb > 0 && (
+            <div className="bg-surface rounded-lg p-3 space-y-2">
+              <h3 className="text-sm font-semibold text-gray-400">Memory</h3>
+              <p className="text-sm">
+                Used <span className="font-medium text-gray-200">{formatKbToGb(memInfo.usedRamKb)} GB</span>
+                {' / '}
+                Total <span className="font-medium text-gray-200">{formatKbToGb(memInfo.totalRamKb)} GB</span>
+                <span className="text-gray-500 ml-2">
+                  ({((memInfo.freeRamKb / memInfo.totalRamKb) * 100).toFixed(0)}% free)
+                </span>
+              </p>
+              {memInfo.topProcesses.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500">Top processes (PSS)</span>
+                  {memInfo.topProcesses.slice(0, 3).map((p, i) => (
+                    <div key={i} className="flex justify-between text-xs text-gray-400">
+                      <span className="truncate mr-2">{p.processName}</span>
+                      <span className="shrink-0">{(p.totalPssKb / 1024).toFixed(0)} MB</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {cpuInfo && cpuInfo.totalCpuPercent > 0 && (
+            <div className="bg-surface rounded-lg p-3 space-y-2">
+              <h3 className="text-sm font-semibold text-gray-400">CPU</h3>
+              <p className="text-sm">
+                Total <span className="font-medium text-gray-200">{cpuInfo.totalCpuPercent}%</span>
+                <span className="text-gray-500 ml-2">
+                  ({cpuInfo.userPercent}% user / {cpuInfo.kernelPercent}% kernel
+                  {cpuInfo.ioWaitPercent > 0 && ` / ${cpuInfo.ioWaitPercent}% iowait`})
+                </span>
+              </p>
+              {cpuInfo.topProcesses.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500">Top processes</span>
+                  {cpuInfo.topProcesses.slice(0, 3).map((p, i) => (
+                    <div key={i} className="flex justify-between text-xs text-gray-400">
+                      <span className="truncate mr-2">{p.processName}</span>
+                      <span className="shrink-0">{p.cpuPercent}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

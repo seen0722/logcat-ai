@@ -11,6 +11,8 @@ import {
   KernelParseResult,
   KernelEvent,
   ANRTraceAnalysis,
+  MemInfoSummary,
+  CpuInfoSummary,
 } from './types.js';
 
 // ============================================================
@@ -22,6 +24,8 @@ export interface BasicAnalyzerInput {
   logcatResult: LogcatParseResult;
   kernelResult: KernelParseResult;
   anrAnalyses: ANRTraceAnalysis[];
+  memInfo?: MemInfoSummary;
+  cpuInfo?: CpuInfoSummary;
 }
 
 /**
@@ -29,11 +33,12 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo } = input;
 
   const anrInsights = generateANRInsights(anrAnalyses);
   const logcatInsights = generateLogcatInsights(logcatResult);
   const kernelInsights = generateKernelInsights(kernelResult);
+  const resourceInsights = generateResourceInsights(memInfo, cpuInfo);
 
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
@@ -45,6 +50,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...filteredLogcat,
     ...anrInsights,
     ...mergeKernelInsights(kernelInsights),
+    ...resourceInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -59,7 +65,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   });
 
   const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses);
-  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses);
+  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo);
 
   return {
     metadata,
@@ -69,6 +75,8 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     anrAnalyses,
     logcatResult,
     kernelResult,
+    ...(memInfo ? { memInfo } : {}),
+    ...(cpuInfo ? { cpuInfo } : {}),
   };
 }
 
@@ -384,6 +392,67 @@ function describeKernelEvent(event: KernelEvent): string {
 }
 
 // ============================================================
+// Resource (meminfo / cpuinfo) → Insights
+// ============================================================
+
+function generateResourceInsights(
+  memInfo?: MemInfoSummary,
+  cpuInfo?: CpuInfoSummary,
+): InsightCard[] {
+  const insights: InsightCard[] = [];
+
+  if (memInfo && memInfo.totalRamKb > 0) {
+    const freeRatio = memInfo.freeRamKb / memInfo.totalRamKb;
+    if (freeRatio < 0.1) {
+      const usedGb = (memInfo.usedRamKb / 1048576).toFixed(1);
+      const totalGb = (memInfo.totalRamKb / 1048576).toFixed(1);
+      const topProcs = memInfo.topProcesses
+        .slice(0, 3)
+        .map((p) => `${p.processName} (${(p.totalPssKb / 1024).toFixed(0)} MB)`)
+        .join(', ');
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'memory',
+        title: 'Low available memory',
+        description: `Only ${(freeRatio * 100).toFixed(1)}% of RAM is free (${usedGb} GB used / ${totalGb} GB total). Top consumers: ${topProcs || 'N/A'}.`,
+        source: 'cross',
+      });
+    }
+  }
+
+  if (cpuInfo) {
+    if (cpuInfo.totalCpuPercent > 80) {
+      const topProcs = cpuInfo.topProcesses
+        .slice(0, 3)
+        .map((p) => `${p.processName} (${p.cpuPercent}%)`)
+        .join(', ');
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'performance',
+        title: 'High CPU usage',
+        description: `Total CPU usage is ${cpuInfo.totalCpuPercent}% (${cpuInfo.userPercent}% user + ${cpuInfo.kernelPercent}% kernel). Top consumers: ${topProcs || 'N/A'}.`,
+        source: 'cross',
+      });
+    }
+
+    if (cpuInfo.ioWaitPercent > 20) {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'performance',
+        title: 'High I/O wait',
+        description: `I/O wait is ${cpuInfo.ioWaitPercent}%, indicating the CPU is frequently waiting for disk or storage operations.`,
+        source: 'cross',
+      });
+    }
+  }
+
+  return insights;
+}
+
+// ============================================================
 // Timeline Builder
 // ============================================================
 
@@ -435,7 +504,45 @@ export function buildTimeline(
     return ta.localeCompare(tb);
   });
 
-  return events;
+  return aggregateTimelineEvents(events);
+}
+
+/**
+ * Aggregate adjacent timeline events with same label + source + severity.
+ * Adjacent duplicates (e.g. repeated SELinux denials) get merged into one
+ * event with a count and time range.
+ */
+export function aggregateTimelineEvents(events: TimelineEvent[]): TimelineEvent[] {
+  if (events.length === 0) return [];
+
+  const result: TimelineEvent[] = [];
+  let current = { ...events[0] };
+  let count = 1;
+  let firstTimestamp = current.timestamp;
+
+  for (let i = 1; i < events.length; i++) {
+    const e = events[i];
+    if (e.label === current.label && e.source === current.source && e.severity === current.severity) {
+      count++;
+      // Update last timestamp for range
+      if (count === 2) {
+        // Start tracking range
+        current.timeRange = `${firstTimestamp} ~ ${e.timestamp}`;
+      } else {
+        // Extend range end
+        current.timeRange = `${firstTimestamp} ~ ${e.timestamp}`;
+      }
+      current.count = count;
+    } else {
+      result.push(current);
+      current = { ...e };
+      count = 1;
+      firstTimestamp = e.timestamp;
+    }
+  }
+  result.push(current);
+
+  return result;
 }
 
 function normalizeTimestamp(ts: string): string {
@@ -453,12 +560,31 @@ function normalizeTimestamp(ts: string): string {
 export function calculateHealthScore(
   logcatResult: LogcatParseResult,
   kernelResult: KernelParseResult,
-  anrAnalyses: ANRTraceAnalysis[]
+  anrAnalyses: ANRTraceAnalysis[],
+  memInfo?: MemInfoSummary,
+  cpuInfo?: CpuInfoSummary,
 ): SystemHealthScore {
   const stability = calcStabilityScore(logcatResult, kernelResult);
-  const memory = calcMemoryScore(logcatResult, kernelResult);
-  const responsiveness = calcResponsivenessScore(logcatResult, anrAnalyses);
+  let memory = calcMemoryScore(logcatResult, kernelResult);
+  let responsiveness = calcResponsivenessScore(logcatResult, anrAnalyses);
   const kernel = calcKernelScore(kernelResult);
+
+  // Factor in dumpsys meminfo
+  if (memInfo && memInfo.totalRamKb > 0) {
+    const freeRatio = memInfo.freeRamKb / memInfo.totalRamKb;
+    if (freeRatio < 0.05) memory -= 20;
+    else if (freeRatio < 0.1) memory -= 10;
+    memory = clamp(memory, 0, 100);
+  }
+
+  // Factor in dumpsys cpuinfo
+  if (cpuInfo) {
+    if (cpuInfo.totalCpuPercent > 90) responsiveness -= 15;
+    else if (cpuInfo.totalCpuPercent > 80) responsiveness -= 8;
+    if (cpuInfo.ioWaitPercent > 30) responsiveness -= 10;
+    else if (cpuInfo.ioWaitPercent > 20) responsiveness -= 5;
+    responsiveness = clamp(responsiveness, 0, 100);
+  }
 
   // Weighted average
   const overall = Math.round(

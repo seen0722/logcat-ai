@@ -33,6 +33,8 @@ export interface TimelineEvent {
   severity: Severity;
   label: string;
   details?: string;
+  count?: number;
+  timeRange?: string;
 }
 
 export interface SystemHealthScore {
@@ -104,6 +106,33 @@ export interface ANRTraceAnalysis {
   };
 }
 
+export interface MemInfoProcess {
+  pid: number;
+  processName: string;
+  totalPssKb: number;
+}
+
+export interface MemInfoSummary {
+  totalRamKb: number;
+  freeRamKb: number;
+  usedRamKb: number;
+  topProcesses: MemInfoProcess[];
+}
+
+export interface CpuInfoProcess {
+  pid: number;
+  processName: string;
+  cpuPercent: number;
+}
+
+export interface CpuInfoSummary {
+  totalCpuPercent: number;
+  userPercent: number;
+  kernelPercent: number;
+  ioWaitPercent: number;
+  topProcesses: CpuInfoProcess[];
+}
+
 export interface DeepAnalysisOverview {
   executiveSummary: string;
   systemDiagnosis: string;
@@ -126,6 +155,8 @@ export interface AnalysisResult {
   timeline: TimelineEvent[];
   healthScore: SystemHealthScore;
   anrAnalyses: ANRTraceAnalysis[];
+  memInfo?: MemInfoSummary;
+  cpuInfo?: CpuInfoSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 

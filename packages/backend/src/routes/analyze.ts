@@ -6,6 +6,8 @@ import {
   parseLogcat,
   parseANRTrace,
   parseKernelLog,
+  parseMemInfo,
+  parseCpuInfo,
   AnalysisResult,
   DeepAnalysisOverview,
 } from '@logcat-ai/parser';
@@ -95,6 +97,21 @@ router.get('/:id', async (req: Request, res: Response) => {
     const kernelResult = parseKernelLog(kernelSection?.content ?? '');
 
     if (aborted) return;
+    sendSSE(res, { stage: 'parsing', progress: 60, message: 'Parsing dumpsys meminfo/cpuinfo...' });
+
+    // Parse dumpsys meminfo
+    const memInfoSection = unpackResult.sections.find(
+      (s) => s.command.includes('dumpsys meminfo')
+    );
+    const memInfo = memInfoSection ? parseMemInfo(memInfoSection.content) : undefined;
+
+    // Parse dumpsys cpuinfo
+    const cpuInfoSection = unpackResult.sections.find(
+      (s) => s.command.includes('dumpsys cpuinfo')
+    );
+    const cpuInfo = cpuInfoSection ? parseCpuInfo(cpuInfoSection.content) : undefined;
+
+    if (aborted) return;
     sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
     // Stage 3: Basic Analysis
@@ -105,6 +122,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       logcatResult,
       kernelResult,
       anrAnalyses,
+      memInfo,
+      cpuInfo,
     });
 
     // Store result for later use (chat, deep analysis re-run)

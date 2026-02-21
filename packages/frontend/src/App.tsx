@@ -46,6 +46,8 @@ export default function App() {
           <SystemOverview
             metadata={result.metadata}
             healthScore={result.healthScore}
+            memInfo={result.memInfo}
+            cpuInfo={result.cpuInfo}
           />
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />

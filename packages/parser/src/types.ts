@@ -250,6 +250,37 @@ export interface KernelParseResult {
 }
 
 // ============================================================
+// Dumpsys meminfo / cpuinfo
+// ============================================================
+
+export interface MemInfoProcess {
+  pid: number;
+  processName: string;
+  totalPssKb: number;
+}
+
+export interface MemInfoSummary {
+  totalRamKb: number;
+  freeRamKb: number;
+  usedRamKb: number;
+  topProcesses: MemInfoProcess[];  // top 10 by PSS
+}
+
+export interface CpuInfoProcess {
+  pid: number;
+  processName: string;
+  cpuPercent: number;
+}
+
+export interface CpuInfoSummary {
+  totalCpuPercent: number;
+  userPercent: number;
+  kernelPercent: number;
+  ioWaitPercent: number;
+  topProcesses: CpuInfoProcess[];  // top 10 by CPU%
+}
+
+// ============================================================
 // Basic Analyzer (Insights)
 // ============================================================
 
@@ -286,6 +317,8 @@ export interface TimelineEvent {
   severity: Severity;
   label: string;
   details?: string;
+  count?: number;                   // aggregated event count
+  timeRange?: string;               // aggregated time range, e.g. "boot+3808s ~ boot+3902s"
 }
 
 export interface SystemHealthScore {
@@ -322,6 +355,8 @@ export interface AnalysisResult {
   anrAnalyses: ANRTraceAnalysis[];
   logcatResult: LogcatParseResult;
   kernelResult: KernelParseResult;
+  memInfo?: MemInfoSummary;
+  cpuInfo?: CpuInfoSummary;
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 
