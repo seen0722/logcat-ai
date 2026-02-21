@@ -198,6 +198,7 @@ export interface AnalysisResult {
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
+  logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
 }
 
@@ -213,6 +214,14 @@ export interface UploadResponse {
   id: string;
   filename: string;
   size: number;
+}
+
+export type TagClassification = 'vendor' | 'framework' | 'app';
+
+export interface TagStat {
+  tag: string;
+  count: number;
+  classification: TagClassification;
 }
 
 export type AnalysisMode = 'quick' | 'deep';

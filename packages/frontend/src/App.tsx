@@ -7,6 +7,7 @@ import Timeline from './components/Timeline';
 import ANRDetail from './components/ANRDetail';
 import ChatPanel from './components/ChatPanel';
 import DeepAnalysisOverview from './components/DeepAnalysisOverview';
+import TagStats from './components/TagStats';
 
 export default function App() {
   const { phase, uploadId, progress, result, error, start, reset } = useAnalysis();
@@ -51,6 +52,9 @@ export default function App() {
             bootStatus={result.bootStatus}
             halStatus={result.halStatus}
           />
+          {result.logTagStats && result.logTagStats.length > 0 && (
+            <TagStats tagStats={result.logTagStats} />
+          )}
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
           )}
