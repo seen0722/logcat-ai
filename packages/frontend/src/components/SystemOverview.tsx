@@ -161,7 +161,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               </p>
               {cpuInfo.topProcesses.length > 0 && (
                 <div className="space-y-1">
-                  <span className="text-xs text-gray-500">Top processes</span>
+                  <span className="text-xs text-gray-500">Top processes (per-core %)</span>
                   {cpuInfo.topProcesses.slice(0, 3).map((p, i) => (
                     <div key={i} className="flex justify-between text-xs text-gray-400">
                       <span className="truncate mr-2">{p.processName}</span>
