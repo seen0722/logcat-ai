@@ -279,7 +279,7 @@ describe('analyzeBasic', () => {
     expect(result.healthScore.overall).toBeLessThan(70);
   });
 
-  it('should clamp health scores to 0', () => {
+  it('should apply frequency-based damping for repeated events', () => {
     const kernelResult: KernelParseResult = {
       entries: [],
       events: [
@@ -292,8 +292,30 @@ describe('analyzeBasic', () => {
     };
 
     const result = analyzeBasic(makeInput({ kernelResult }));
+    // With damping: 1st=-40, 2nd=-20, 3rd=-10 → capped at 60 max per type
+    // kernel score should be 100 - 60 = 40 (not 0)
+    expect(result.healthScore.breakdown.kernel).toBe(40);
+    // stability also gets damped kernel_panic deductions
+    expect(result.healthScore.breakdown.stability).toBe(40);
+    // Both should be > 0 thanks to damping
+    expect(result.healthScore.breakdown.kernel).toBeGreaterThan(0);
+    expect(result.healthScore.breakdown.stability).toBeGreaterThan(0);
+  });
+
+  it('should clamp health scores to 0 with diverse severe events', () => {
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: [
+        { type: 'kernel_panic', severity: 'critical', timestamp: 1, entries: [], summary: 'p1', details: {} },
+        { type: 'thermal_shutdown', severity: 'critical', timestamp: 2, entries: [], summary: 'ts', details: {} },
+        { type: 'watchdog_reset', severity: 'critical', timestamp: 3, entries: [], summary: 'wr', details: {} },
+      ],
+      totalLines: 3,
+    };
+
+    const result = analyzeBasic(makeInput({ kernelResult }));
+    // kernel_panic=-40, thermal_shutdown=-30, watchdog_reset=-30 = -100 → 0
     expect(result.healthScore.breakdown.kernel).toBe(0);
-    expect(result.healthScore.breakdown.stability).toBe(0);
   });
 
   it('should treat idle_main_thread ANR as info severity', () => {
@@ -314,6 +336,51 @@ describe('analyzeBasic', () => {
     const result = analyzeBasic(makeInput({ anrAnalyses }));
     const anrInsight = result.insights.find((i) => i.source === 'anr');
     expect(anrInsight!.severity).toBe('info');
+  });
+
+  it('should produce reasonable kernel score with many SELinux denials', () => {
+    // Simulate 270 SELinux denials — previously scored kernel=0
+    const selinuxEvents = Array.from({ length: 270 }, (_, i) => ({
+      type: 'selinux_denial' as const,
+      severity: 'info' as const,
+      timestamp: i,
+      entries: [{ timestamp: i, level: '<5>', facility: '', message: `avc: denied`, raw: `avc: denied ${i}` }],
+      summary: `SELinux denial ${i}`,
+      details: { scontext: 'u:r:hal_audio:s0', tcontext: 'u:object_r:proc:s0' },
+    }));
+
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: selinuxEvents,
+      totalLines: 270,
+    };
+
+    const result = analyzeBasic(makeInput({ kernelResult }));
+    // With damping (max 15 per type for selinux_denial), kernel score should be ~85
+    expect(result.healthScore.breakdown.kernel).toBeGreaterThanOrEqual(80);
+    expect(result.healthScore.breakdown.kernel).toBeLessThanOrEqual(100);
+  });
+
+  it('should produce reasonable responsiveness score with multiple ANRs', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: Array.from({ length: 10 }, (_, i) => ({
+        type: 'anr' as const,
+        severity: 'critical' as const,
+        timestamp: `01-15 10:0${i}:00.000`,
+        entries: [],
+        processName: 'com.example.app',
+        summary: `ANR ${i}`,
+      })),
+      totalLines: 10,
+      parsedLines: 10,
+      parseErrors: 0,
+    };
+
+    const result = analyzeBasic(makeInput({ logcatResult }));
+    // With damping (max 50 per type), responsiveness should be ~50 not 0
+    expect(result.healthScore.breakdown.responsiveness).toBeGreaterThanOrEqual(45);
+    expect(result.healthScore.breakdown.responsiveness).toBeLessThanOrEqual(60);
   });
 
   it('should preserve metadata in result', () => {

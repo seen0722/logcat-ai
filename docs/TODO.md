@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-20
+> **更新日期**：2026-02-21
 
 ---
 
@@ -45,137 +45,107 @@
 - [x] #28 Enhanced Deep Analysis（context builder + structured output + overview UI）
 - [x] #29 Backend Tests — 43 tests
 
-**累計：109 tests passed**
-
 ---
 
 ## 2. Phase 1.5 — BSP Analysis Enhancement
 
-### A. 系統分析能力（#30-#36）
+### ✅ Completed（7/13）
 
-#### #30 Timeline 重構 ⭐ P0 最高優先
-
-> **問題**：308 events 中重複 SELinux denial 佔滿畫面，critical 事件被埋沒。
-
-- [ ] **A. 事件聚合** — `packages/parser/src/basic-analyzer.ts` `buildTimeline()`
-  - 相同 title + 相同 source 在 30 秒窗口內合併為一條
-  - 新增 `TimelineEvent.count` 和 `TimelineEvent.timeRange`
-  - Kernel ↔ Logcat 時間對齊（best effort）
-- [ ] **B. Types 更新** — `packages/parser/src/types.ts` + `packages/frontend/src/lib/types.ts`
-  - `count?: number`（聚合後的事件數量）
-  - `timeRange?: string`（聚合的時間範圍）
-- [ ] **C. 前端 Filter + 摺疊** — `packages/frontend/src/components/Timeline.tsx`
+- [x] #30 **Timeline 重構** — P0
+  - 事件聚合：相鄰相同 label+source+severity 事件自動合併，顯示 ×count + 時間範圍
   - Filter bar：severity toggle（Critical/Warning/Info）+ source filter（Logcat/Kernel/ANR）
   - 預設隱藏 info，只顯示 critical + warning
-  - 聚合事件摺疊顯示，點擊可展開
-  - Severity 視覺優先：critical 紅色左邊框
-  - Header 顯示 `Timeline (12 shown / 308 total)`
-- **驗收標準**：
-  - 308 events → 預設顯示 < 30 條
-  - Critical/Warning 一眼可見
-  - 可切換顯示 info 級事件
-  - 聚合事件顯示次數和時間範圍
+  - Critical 紅色左邊框，聚合事件 ×count badge
+  - Header 顯示 `(X shown / Y total)`
+  - 8 tests（aggregateTimelineEvents）
 
----
+- [x] #31 **Dumpsys meminfo/cpuinfo Parser** — P0
+  - 新增 `dumpsys-parser.ts`：parseMemInfo / parseCpuInfo
+  - 解析 Total/Free/Used RAM、top 10 PSS processes
+  - 解析 TOTAL CPU%（user/kernel/iowait）、top 10 CPU processes
+  - 整合至 SystemOverview 卡片（Memory + CPU 區塊）
+  - Section search fallback：dedicated section → generic DUMPSYS section content search
+  - 7 tests（parseMemInfo + parseCpuInfo）
 
-#### #31 Dumpsys meminfo/cpuinfo Parser — P0
+- [x] #32 **Kernel Event Detection 擴充** — P0
+  - 新增 thermal_throttling（warning）：`/thermal.*throttl/`
+  - 新增 storage_io_error（warning）：`/mmc.*error|EXT4-fs error/`
+  - 新增 suspend_resume_error（warning）：`/suspend.*abort|resume.*fail/`
+  - 整合至 Health Score kernel 子分數
+  - 5 tests
 
-- [ ] 解析 bugreport 中的 `DUMP OF SERVICE meminfo` 和 `DUMP OF SERVICE cpuinfo` 段落
-- [ ] 產出結構化的記憶體與 CPU 使用狀況（top processes, available memory, CPU load）
-- [ ] 整合至 SystemOverview 卡片顯示
-- **涉及檔案**：`packages/parser/src/` 新增 dumpsys-parser.ts、`basic-analyzer.ts`、`types.ts`
-- **驗收標準**：解析結果包含 top 10 memory consumers、CPU 使用率、available RAM
+- [x] #33 **Logcat 新增偵測 Patterns** — P1
+  - 新增 input_dispatching_timeout（critical）：`/Input dispatching timed out/` + `InputDispatcher` tag
+  - 新增 hal_service_death（warning）：`hwservicemanager`/`ServiceManager` + `died/restart`
+  - 整合至 Health Score（responsiveness / stability）
+  - 2 tests
 
-#### #32 Kernel Event Detection 擴充 — P0
+- [x] #34 **Health Score 改善** — P1
+  - Frequency-based damping：同類事件重複出現時遞減扣分
+    - 1st=100%, 2nd=50%, 3rd=25%, 4th+=10%
+    - 每種事件類型有 maxTotalPerType 上限
+  - 效果：270 SELinux denials kernel score 0→76，10 ANRs responsiveness 0→50
+  - 所有 sub-scores 取 Math.round() 避免浮點數精度問題
+  - 3 tests（damping、SELinux、ANR scenarios）
 
-- [ ] 新增 thermal throttling 偵測（`/thermal.*throttl/`）
-- [ ] 新增 storage I/O error 偵測（`/mmc.*error|EXT4-fs error/`）
-- [ ] 新增 suspend/resume 異常偵測（`/suspend.*abort|resume.*fail/`）
-- **涉及檔案**：`packages/parser/src/kernel-parser.ts`、`types.ts`
-- **驗收標準**：新增事件類型可被正確偵測，並出現在 Timeline 與 Insights
+- [x] #37 **HAL Service 存活狀態偵測** — P0
+  - 透過 #33 hal_service_death 規則偵測
+  - 產出 Insight card（warning severity, stability category）
 
-#### #33 Logcat 新增偵測 Patterns — P1
+- [x] #38 **Boot 狀態分析** — P0
+  - analyzeBootStatus()：優先讀 SYSTEM PROPERTIES（sys.boot_completed、sys.boot.reason.last）
+  - Fallback：logcat → kernel log
+  - 偵測 system_server restart count（Zygote fork 次數 - 1）
+  - 估算 uptime（kernel log 最後 timestamp）
+  - Boot status UI：Boot 狀態（綠/紅）、Uptime、Boot Reason、SS Restarts
+  - generateBootInsights()：incomplete boot / SS restarts / abnormal boot reason
+  - 6 tests + 5 integration tests（real bugreport）
 
-- [ ] Input dispatching timeout（`/Input dispatching timed out/`）
-- [ ] HAL service restart（`/HwServiceManager.*died|hwservicemanager.*restart/`）
-- **涉及檔案**：`packages/parser/src/logcat-parser.ts`
-- **驗收標準**：新 pattern 可從 logcat 中被偵測並分類
+### 🔲 Remaining（6/13）
 
-#### #34 Health Score 改善 — P1
+#### P1 Tasks
 
-- [ ] Frequency-based scoring：重複出現的問題降低健康分數權重
-- [ ] Recency weighting：最近的事件權重高於舊事件
-- **涉及檔案**：`packages/parser/src/basic-analyzer.ts` `calculateHealthScore()`
-- **驗收標準**：健康分數更能反映系統實際狀態，不被大量重複的低嚴重性事件拉低
+- [ ] #39 **Log Tag 自動分類 + Top Error Tags**
+  - 將 log tags 自動分類為 vendor / framework / app
+  - 統計 error level 以上的 top tags（前 20 名）
+  - **涉及檔案**：`logcat-parser.ts`、`basic-analyzer.ts`、前端新增元件
+  - **驗收標準**：前端可顯示 error tag 排行榜
 
-#### #35 Tombstone Parser — P1
+- [ ] #40 **SELinux Denial → Allow Rule 自動生成**
+  - 解析 SELinux denial 中的 scontext、tcontext、tclass、permission
+  - 自動生成對應的 `allow` rule（sepolicy 格式）
+  - **涉及檔案**：`kernel-parser.ts` 或新增 selinux-parser.ts
+  - **驗收標準**：每條 SELinux denial 產出可複製的 allow rule
 
-- [ ] 解析 `/data/tombstones/` 下的 native crash 檔案
-- [ ] 提取 backtrace、signal info、fault address、registers
-- **涉及檔案**：`packages/parser/src/` 新增 tombstone-parser.ts、`unpacker.ts`、`types.ts`
-- **驗收標準**：可解析 tombstone 並產出結構化 native crash 資訊
+- [ ] #41 **Quick Debug Commands 自動生成**
+  - 根據偵測到的問題自動產出對應的 adb debug 腳本
+  - ANR → `adb shell dumpsys activity processes`；OOM → `adb shell dumpsys meminfo`
+  - **涉及檔案**：`basic-analyzer.ts` 或新增模組
+  - **驗收標準**：每類問題至少有 2-3 個 debug 指令建議
 
-#### #36 BSP-Specific Prompt Tuning — P2
+- [ ] #35 **Tombstone Parser**
+  - 解析 `/data/tombstones/` 下的 native crash 檔案
+  - 提取 backtrace、signal info、fault address、registers
+  - **涉及檔案**：新增 `tombstone-parser.ts`、`unpacker.ts`、`types.ts`
+  - **驗收標準**：可解析 tombstone 並產出結構化 native crash 資訊
 
-- [ ] Deep Analysis prompt 區分 vendor / framework / app 層問題
-- [ ] 針對 BSP 常見問題（driver, HAL, kernel）提供專屬分析模板
-- **涉及檔案**：`packages/backend/src/llm-gateway/prompt-templates/analysis.ts`
-- **驗收標準**：Deep Analysis 對 BSP 相關問題的診斷品質提升
+#### P2 Tasks
 
----
+- [ ] #36 **BSP-Specific Prompt Tuning**
+  - Deep Analysis prompt 區分 vendor / framework / app 層問題
+  - 針對 BSP 常見問題提供專屬分析模板
+  - **涉及檔案**：`prompt-templates/analysis.ts`
 
-### B. 新手 Debug 輔助（#37-#42）
-
-#### #37 HAL Service 存活狀態偵測 — P0
-
-- [ ] 從 logcat 偵測 `lshal`、`hwservicemanager` 相關訊息
-- [ ] 識別 HAL service crash/restart 事件
-- [ ] 產出 HAL status summary（哪些 HAL 有異常）
-- **涉及檔案**：`packages/parser/src/logcat-parser.ts`、`basic-analyzer.ts`
-- **驗收標準**：可偵測 HAL service 異常並列出受影響的 HAL 服務
-
-#### #38 Boot 狀態分析 — P0
-
-- [ ] 偵測 `sys.boot_completed`、system uptime、boot reason
-- [ ] 計算 system_server restart count
-- [ ] 產出 boot status summary
-- **涉及檔案**：`packages/parser/src/logcat-parser.ts`、`basic-analyzer.ts`、`types.ts`
-- **驗收標準**：可顯示裝置 boot 狀態、重啟次數、boot reason
-
-#### #39 Log Tag 自動分類 + Top Error Tags — P1
-
-- [ ] 將 log tags 自動分類為 vendor / framework / app
-- [ ] 統計 error level 以上的 top tags（前 20 名）
-- **涉及檔案**：`packages/parser/src/logcat-parser.ts`、`basic-analyzer.ts`
-- **驗收標準**：前端可顯示 error tag 排行榜，幫助快速定位問題來源
-
-#### #40 SELinux Denial → Allow Rule 自動生成 — P1
-
-- [ ] 解析 SELinux denial 訊息中的 scontext、tcontext、tclass、permission
-- [ ] 自動生成對應的 `allow` rule（sepolicy 格式）
-- **涉及檔案**：`packages/parser/src/kernel-parser.ts` 或新增 selinux-parser.ts
-- **驗收標準**：每條 SELinux denial 都能產出可複製的 allow rule
-
-#### #41 Quick Debug Commands 自動生成 — P1
-
-- [ ] 根據偵測到的問題自動產出對應的 adb debug 腳本
-- [ ] 例如：發現 ANR → 產出 `adb shell dumpsys activity processes`；發現 OOM → 產出 `adb shell dumpsys meminfo`
-- **涉及檔案**：`packages/parser/src/basic-analyzer.ts` 或新增模組
-- **驗收標準**：每類問題至少有 2-3 個對應的 debug 指令建議
-
-#### #42 BSP Quick Reference 面板 — P2
-
-- [ ] 前端新增整合面板：device state + resource snapshot + HAL status
-- [ ] 一頁式總覽，讓新手 BSP 工程師快速掌握裝置狀態
-- **涉及檔案**：`packages/frontend/src/components/` 新增 BSPQuickReference.tsx
-- **驗收標準**：面板整合所有 BSP 相關資訊，一眼可見裝置健康狀態
+- [ ] #42 **BSP Quick Reference 面板**
+  - 前端新增整合面板：device state + resource snapshot + HAL status
+  - 一頁式總覽
+  - **涉及檔案**：新增 `BSPQuickReference.tsx`
 
 ---
 
 ## 3. Phase 2 — Advanced Features（Phase 1.5 完成後）
 
 - [ ] Function Calling（LLM 主動搜尋 logcat、查線程）
-- [ ] Tombstone Parser（Native crash 分析）— 可能在 Phase 1.5 #35 提前實作
 - [ ] Embedding + Vector Store（RAG 語意搜尋大型 logcat）
 - [ ] 比較模式（兩份 bugreport 差異分析）
 - [ ] Lock Graph 視覺化（D3.js 力導向圖）
@@ -189,3 +159,13 @@
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
+
+---
+
+## 5. Test Summary
+
+| Package | Tests | 說明 |
+|---------|-------|------|
+| parser | 108 | unpacker(5) + logcat(14) + anr(18) + kernel(24) + basic-analyzer(15) + dumpsys(19) + timeline(8) + integration(5) |
+| backend | 43 | routes + analyzer + parser integration |
+| **Total** | **151** | |

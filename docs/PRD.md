@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
 > **版本**：v0.2.0
-> **更新日期**：2026-02-20
-> **狀態**：Phase 1 完成，Phase 1.5 規劃中
+> **更新日期**：2026-02-21
+> **狀態**：Phase 1 完成，Phase 1.5 進行中（7/13 完成）
 
 ---
 
@@ -191,7 +191,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 {timestamp, pid, tid, level, tag, message}
 ```
 
-異常偵測規則（9 種）：
+異常偵測規則（11 種）：
 | 類型 | 比對方式 | 嚴重性 |
 |------|---------|--------|
 | ANR | `ActivityManager` + `ANR in` | Critical |
@@ -200,8 +200,10 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 | System Server Crash | `FATAL EXCEPTION` + `system_server` | Critical |
 | OOM | `Out of memory` / `lowmemorykiller` | Critical |
 | Watchdog | `WATCHDOG KILLING` / `Blocked in` | Critical |
+| Input Dispatching Timeout | `Input dispatching timed out` | Critical |
 | Binder Timeout | `Binder transaction timeout` | Warning |
 | Slow Operation | `Looper` + `Slow` | Warning |
+| HAL Service Death | `hwservicemanager` + `died/restart` | Warning |
 | StrictMode | `StrictMode` + `violation` | Info |
 
 ### 4.3 ANR Trace Parser（核心）
@@ -259,27 +261,34 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 
 ### 4.5 Kernel Log Parser
 
-解析 dmesg 格式，偵測 9 種事件：
+解析 dmesg 格式，偵測 12 種事件：
 
 | 類型 | 嚴重性 | 偵測方式 |
 |------|--------|---------|
 | Kernel Panic | Critical | `/Kernel panic/` |
 | OOM Kill | Critical | `/Out of memory: Kill process/` |
+| Thermal Shutdown | Critical | `/thermal.*shutdown/` |
+| Watchdog Reset | Critical | `/watchdog.*(reset\|bark)/` |
 | Low Memory Killer | Warning | `/lowmemorykiller/` |
 | kswapd Active | Warning | `/kswapd.*active/` |
 | Driver Error | Warning | `/error.*driver/` |
 | GPU Error | Warning | `/gpu.*(fault\|error\|hang)/` |
-| Thermal Shutdown | Critical | `/thermal.*shutdown/` |
-| Watchdog Reset | Critical | `/watchdog.*(reset\|bark)/` |
+| Thermal Throttling | Warning | `/thermal.*throttl/` |
+| Storage I/O Error | Warning | `/mmc.*error\|EXT4-fs error/` |
+| Suspend/Resume Error | Warning | `/suspend.*abort\|resume.*fail/` |
 | SELinux Denial | Info | `/avc: denied/` |
 
 ### 4.6 Basic Analyzer（純規則引擎）
 
 不需要 LLM 即可完成：
-- 聚合三個 Parser 的結果
-- 產出 Insights Cards（問題清單，按嚴重性排序）
-- 建構跨子系統時間軸
+- 聚合三個 Parser 的結果（含 dumpsys meminfo/cpuinfo）
+- 產出 Insights Cards（問題清單，按嚴重性排序，自動合併重複項）
+- 建構跨子系統時間軸（含事件聚合，相鄰重複事件自動合併顯示次數）
 - 計算系統健康分數（0-100，breakdown: stability/memory/responsiveness/kernel）
+  - **Frequency-based damping**：同類事件重複出現時遞減扣分（1st=100%, 2nd=50%, 3rd=25%, 4th+=10%）
+  - 每種事件類型有最大扣分上限，防止大量重複事件將分數拉到 0
+- Boot 狀態分析（sys.boot_completed、boot reason、system_server restart count）
+- 資源監控 Insights（低記憶體 <10%、高 CPU >80%、高 I/O wait >20%）
 - **完成 Basic Analyzer 即提供 70% 的分析價值**
 
 ---
@@ -385,10 +394,11 @@ logcat-ai/
 │   │   ├── src/
 │   │   │   ├── types.ts         # 共用型別定義
 │   │   │   ├── unpacker.ts      # ZIP 解壓 + 段落切割
-│   │   │   ├── logcat-parser.ts # Logcat 解析
-│   │   │   ├── anr-parser.ts    # ANR Trace 解析
-│   │   │   ├── kernel-parser.ts # Kernel Log 解析
-│   │   │   └── basic-analyzer.ts
+│   │   │   ├── logcat-parser.ts # Logcat 解析（11 種異常偵測）
+│   │   │   ├── anr-parser.ts    # ANR Trace 解析（18-case）
+│   │   │   ├── kernel-parser.ts # Kernel Log 解析（12 種事件偵測）
+│   │   │   ├── dumpsys-parser.ts # Dumpsys meminfo/cpuinfo 解析
+│   │   │   └── basic-analyzer.ts # 規則引擎 + Health Score（frequency damping）
 │   │   └── tests/
 │   ├── backend/                 # API Server
 │   │   └── src/
@@ -604,7 +614,7 @@ GitHub Issues + Project Board：
 | #28 | Enhanced Deep Analysis（context builder + structured output + overview UI） | ✅ 完成 | Build 通過 |
 | #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 43 tests passed |
 
-**累計測試：109 passed（parser 66 + backend 43）**
+**累計測試：151 passed（parser 108 + backend 43）**
 **Frontend Build：215 KB JS + 14.5 KB CSS（production）**
 
 ---
@@ -615,26 +625,26 @@ GitHub Issues + Project Board：
 
 ### 12.1 系統分析能力改善
 
-| 優先級 | # | 內容 | 工作量 | 影響度 |
-|--------|---|------|--------|--------|
-| **P0** | #30 | **Timeline 重構：事件聚合 + 篩選 + severity 優先** | Medium | **Critical** |
-| **P0** | #31 | Dumpsys meminfo/cpuinfo parser | Medium | High |
-| **P0** | #32 | 擴充 kernel event detection（thermal throttling, storage I/O, suspend/resume） | Low | High |
-| P1 | #33 | Logcat 新增 Input dispatching timeout / HAL restart patterns | Low | Medium |
-| P1 | #34 | Health score 改善（frequency-based + recency weighting） | Medium | Medium |
-| P1 | #35 | Tombstone parser（native crash backtrace） | Medium | Medium |
-| P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low |
+| 優先級 | # | 內容 | 工作量 | 影響度 | 狀態 |
+|--------|---|------|--------|--------|------|
+| **P0** | #30 | **Timeline 重構：事件聚合 + 篩選 + severity 優先** | Medium | **Critical** | ✅ 完成 |
+| **P0** | #31 | Dumpsys meminfo/cpuinfo parser | Medium | High | ✅ 完成 |
+| **P0** | #32 | 擴充 kernel event detection（thermal throttling, storage I/O, suspend/resume） | Low | High | ✅ 完成 |
+| P1 | #33 | Logcat 新增 Input dispatching timeout / HAL restart patterns | Low | Medium | ✅ 完成 |
+| P1 | #34 | Health score 改善（frequency-based damping） | Medium | Medium | ✅ 完成 |
+| P1 | #35 | Tombstone parser（native crash backtrace） | Medium | Medium | 待開始 |
+| P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low | 待開始 |
 
 ### 12.2 新手 BSP 工程師 Debug 輔助
 
-| 優先級 | # | 內容 | 工作量 | 影響度 |
-|--------|---|------|--------|--------|
-| **P0** | #37 | HAL service 存活狀態偵測（lshal/hwservicemanager log） | Low | High |
-| **P0** | #38 | Boot 狀態分析（boot_completed, uptime, bootreason, sysserver restart count） | Low | High |
-| P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High |
-| P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High |
-| P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium |
-| P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium |
+| 優先級 | # | 內容 | 工作量 | 影響度 | 狀態 |
+|--------|---|------|--------|--------|------|
+| **P0** | #37 | HAL service 存活狀態偵測（lshal/hwservicemanager log） | Low | High | ✅ 完成 |
+| **P0** | #38 | Boot 狀態分析（boot_completed, uptime, bootreason, sysserver restart count） | Low | High | ✅ 完成 |
+| P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High | 待開始 |
+| P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High | 待開始 |
+| P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium | 待開始 |
+| P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium | 待開始 |
 
 ### 12.3 #30 Timeline 重構（P0 最高優先）
 

@@ -694,6 +694,50 @@ function normalizeTimestamp(ts: string): string {
 // Health Score Calculator
 // ============================================================
 
+/**
+ * Apply frequency-based damping to repeated events of the same type.
+ * 1st occurrence: full penalty
+ * 2nd occurrence: 50% penalty
+ * 3rd occurrence: 25% penalty
+ * 4th+ occurrences: 10% penalty each (capped at maxTotal per type)
+ *
+ * This prevents 270 SELinux denials from scoring -540 (→0).
+ * Instead: -2 + -1 + -0.5 + 267×-0.2 = ~-57 (→43), much more reasonable.
+ */
+function dampedDeduction(
+  counts: Map<string, number>,
+  type: string,
+  basePenalty: number,
+  maxTotalPerType: number = basePenalty * 5,
+): number {
+  const n = (counts.get(type) ?? 0) + 1;
+  counts.set(type, n);
+
+  let factor: number;
+  if (n === 1) factor = 1.0;
+  else if (n === 2) factor = 0.5;
+  else if (n === 3) factor = 0.25;
+  else factor = 0.1;
+
+  const penalty = basePenalty * factor;
+
+  // Check if we've already reached the max total deduction for this type
+  // Approximate: sum of previous penalties
+  const prevTotal = sumDampedPenalties(n - 1, basePenalty);
+  if (prevTotal >= maxTotalPerType) return 0;
+  return Math.min(penalty, maxTotalPerType - prevTotal);
+}
+
+/** Sum of damped penalties for the first n occurrences */
+function sumDampedPenalties(n: number, basePenalty: number): number {
+  if (n <= 0) return 0;
+  let sum = basePenalty; // 1st: 100%
+  if (n >= 2) sum += basePenalty * 0.5; // 2nd: 50%
+  if (n >= 3) sum += basePenalty * 0.25; // 3rd: 25%
+  if (n >= 4) sum += (n - 3) * basePenalty * 0.1; // 4th+: 10% each
+  return sum;
+}
+
 export function calculateHealthScore(
   logcatResult: LogcatParseResult,
   kernelResult: KernelParseResult,
@@ -701,10 +745,10 @@ export function calculateHealthScore(
   memInfo?: MemInfoSummary,
   cpuInfo?: CpuInfoSummary,
 ): SystemHealthScore {
-  const stability = calcStabilityScore(logcatResult, kernelResult);
+  let stability = calcStabilityScore(logcatResult, kernelResult);
   let memory = calcMemoryScore(logcatResult, kernelResult);
   let responsiveness = calcResponsivenessScore(logcatResult, anrAnalyses);
-  const kernel = calcKernelScore(kernelResult);
+  let kernel = calcKernelScore(kernelResult);
 
   // Factor in dumpsys meminfo
   if (memInfo && memInfo.totalRamKb > 0) {
@@ -723,6 +767,12 @@ export function calculateHealthScore(
     responsiveness = clamp(responsiveness, 0, 100);
   }
 
+  // Round all sub-scores to integers
+  stability = Math.round(stability);
+  memory = Math.round(memory);
+  responsiveness = Math.round(responsiveness);
+  kernel = Math.round(kernel);
+
   // Weighted average
   const overall = Math.round(
     stability * 0.30 +
@@ -739,20 +789,33 @@ export function calculateHealthScore(
 
 function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult): number {
   let score = 100;
+  const counts = new Map<string, number>();
+
+  const STABILITY_LOGCAT: Record<string, [number, number]> = {
+    system_server_crash: [30, 60],
+    fatal_exception: [10, 30],
+    native_crash: [15, 40],
+    watchdog: [25, 50],
+    hal_service_death: [10, 30],
+  };
 
   for (const a of logcat.anomalies) {
-    switch (a.type) {
-      case 'system_server_crash': score -= 30; break;
-      case 'fatal_exception': score -= 10; break;
-      case 'native_crash': score -= 15; break;
-      case 'watchdog': score -= 25; break;
-      case 'hal_service_death': score -= 10; break;
+    const cfg = STABILITY_LOGCAT[a.type];
+    if (cfg) {
+      score -= dampedDeduction(counts, a.type, cfg[0], cfg[1]);
     }
   }
 
+  const STABILITY_KERNEL: Record<string, [number, number]> = {
+    kernel_panic: [40, 60],
+    watchdog_reset: [30, 50],
+  };
+
   for (const e of kernel.events) {
-    if (e.type === 'kernel_panic') score -= 40;
-    if (e.type === 'watchdog_reset') score -= 30;
+    const cfg = STABILITY_KERNEL[e.type];
+    if (cfg) {
+      score -= dampedDeduction(counts, e.type, cfg[0], cfg[1]);
+    }
   }
 
   return clamp(score, 0, 100);
@@ -760,16 +823,24 @@ function calcStabilityScore(logcat: LogcatParseResult, kernel: KernelParseResult
 
 function calcMemoryScore(logcat: LogcatParseResult, kernel: KernelParseResult): number {
   let score = 100;
+  const counts = new Map<string, number>();
 
   for (const a of logcat.anomalies) {
-    if (a.type === 'oom') score -= 20;
+    if (a.type === 'oom') {
+      score -= dampedDeduction(counts, 'oom', 20, 40);
+    }
   }
 
+  const MEMORY_KERNEL: Record<string, [number, number]> = {
+    oom_kill: [25, 50],
+    lowmemory_killer: [10, 30],
+    kswapd_active: [5, 20],
+  };
+
   for (const e of kernel.events) {
-    switch (e.type) {
-      case 'oom_kill': score -= 25; break;
-      case 'lowmemory_killer': score -= 10; break;
-      case 'kswapd_active': score -= 5; break;
+    const cfg = MEMORY_KERNEL[e.type];
+    if (cfg) {
+      score -= dampedDeduction(counts, e.type, cfg[0], cfg[1]);
     }
   }
 
@@ -778,13 +849,19 @@ function calcMemoryScore(logcat: LogcatParseResult, kernel: KernelParseResult): 
 
 function calcResponsivenessScore(logcat: LogcatParseResult, anrAnalyses: ANRTraceAnalysis[]): number {
   let score = 100;
+  const counts = new Map<string, number>();
+
+  const RESP_LOGCAT: Record<string, [number, number]> = {
+    anr: [20, 50],
+    input_dispatching_timeout: [20, 50],
+    binder_timeout: [10, 30],
+    slow_operation: [5, 20],
+  };
 
   for (const a of logcat.anomalies) {
-    switch (a.type) {
-      case 'anr': score -= 20; break;
-      case 'input_dispatching_timeout': score -= 20; break;
-      case 'binder_timeout': score -= 10; break;
-      case 'slow_operation': score -= 5; break;
+    const cfg = RESP_LOGCAT[a.type];
+    if (cfg) {
+      score -= dampedDeduction(counts, a.type, cfg[0], cfg[1]);
     }
   }
 
@@ -792,12 +869,11 @@ function calcResponsivenessScore(logcat: LogcatParseResult, anrAnalyses: ANRTrac
     if (!analysis.mainThread) continue;
     const reason = analysis.mainThread.blockReason;
     if (reason === 'idle_main_thread') {
-      // Likely false ANR, minimal penalty
-      score -= 2;
+      score -= dampedDeduction(counts, 'anr_idle', 2, 10);
     } else if (reason === 'deadlock') {
-      score -= 25;
+      score -= dampedDeduction(counts, 'anr_deadlock', 25, 50);
     } else {
-      score -= 15;
+      score -= dampedDeduction(counts, 'anr_trace', 15, 40);
     }
   }
 
@@ -806,18 +882,24 @@ function calcResponsivenessScore(logcat: LogcatParseResult, anrAnalyses: ANRTrac
 
 function calcKernelScore(kernel: KernelParseResult): number {
   let score = 100;
+  const counts = new Map<string, number>();
+
+  const KERNEL_PENALTIES: Record<string, [number, number]> = {
+    kernel_panic: [40, 60],
+    thermal_shutdown: [30, 50],
+    watchdog_reset: [30, 50],
+    gpu_error: [15, 35],
+    driver_error: [10, 30],
+    thermal_throttling: [8, 25],
+    storage_io_error: [10, 30],
+    suspend_resume_error: [5, 20],
+    selinux_denial: [2, 15],
+  };
 
   for (const e of kernel.events) {
-    switch (e.type) {
-      case 'kernel_panic': score -= 40; break;
-      case 'thermal_shutdown': score -= 30; break;
-      case 'watchdog_reset': score -= 30; break;
-      case 'gpu_error': score -= 15; break;
-      case 'driver_error': score -= 10; break;
-      case 'thermal_throttling': score -= 8; break;
-      case 'storage_io_error': score -= 10; break;
-      case 'suspend_resume_error': score -= 5; break;
-      case 'selinux_denial': score -= 2; break;
+    const cfg = KERNEL_PENALTIES[e.type];
+    if (cfg) {
+      score -= dampedDeduction(counts, e.type, cfg[0], cfg[1]);
     }
   }
 
