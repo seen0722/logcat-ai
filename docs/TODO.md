@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-22
+> **更新日期**：2026-02-23
 
 ---
 
@@ -49,7 +49,7 @@
 
 ## 2. Phase 1.5 — BSP Analysis Enhancement
 
-### ✅ Completed（10/13）
+### ✅ Completed（11/13）
 
 - [x] #30 **Timeline 重構** — P0
   - 事件聚合：相鄰相同 label+source+severity 事件自動合併，顯示 ×count + 時間範圍
@@ -117,15 +117,16 @@
   - 每個 insight card 自動附帶 `debugCommands[]`
   - 前端 `InsightCard.tsx`：顯示 debug commands + 逐條複製按鈕
 
-### 🔲 Remaining（3/13）
+- [x] #35 **Tombstone Parser（Native Crash 分析）** — P1
+  - 新增 `tombstone-parser.ts`：`parseTombstone()` / `parseTombstones()` 解析 `/data/tombstones/` 下的 native crash 檔案
+  - 提取 backtrace（含 function+offset、BuildId）、signal info（SIGSEGV/SIGABRT/SIGBUS 等）、fault address、registers、abort message
+  - Vendor crash 偵測：top frame 在 `/vendor/` 或 `/odm/` 路徑下自動標記
+  - 自動跳過 `.pb` protobuf 格式檔案
+  - 整合至 `basic-analyzer.ts`：產出 critical severity InsightCard + Timeline 事件 + stability 健康分數扣分（15 分/crash，frequency damping）
+  - 前端 `Timeline.tsx` 新增 tombstone source filter（rose 紅色系配色）
+  - 15 tests（SIGSEGV/SIGABRT/SIGBUS 解析、backtrace frame、vendor crash、registers、.pb skip、容錯）
 
-#### P1 Tasks
-
-- [ ] #35 **Tombstone Parser**
-  - 解析 `/data/tombstones/` 下的 native crash 檔案
-  - 提取 backtrace、signal info、fault address、registers
-  - **涉及檔案**：新增 `tombstone-parser.ts`、`unpacker.ts`、`types.ts`
-  - **驗收標準**：可解析 tombstone 並產出結構化 native crash 資訊
+### 🔲 Remaining（2/13）
 
 #### P2 Tasks
 
@@ -164,6 +165,6 @@
 
 | Package | Tests | 說明 |
 |---------|-------|------|
-| parser | 108 | unpacker(5) + logcat(14) + anr(18) + kernel(24) + basic-analyzer(15) + dumpsys(19) + timeline(8) + integration(5) |
-| backend | 43 | routes + analyzer + parser integration |
-| **Total** | **151** | |
+| parser | 156 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(27) + dumpsys(34) + tombstone(15) + integration(5) |
+| backend | 47 | routes + analyzer + parser integration |
+| **Total** | **203** | |

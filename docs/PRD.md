@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
 > **版本**：v0.2.0
-> **更新日期**：2026-02-22
-> **狀態**：Phase 1 完成，Phase 1.5 進行中（10/13 完成）
+> **更新日期**：2026-02-23
+> **狀態**：Phase 1 完成，Phase 1.5 進行中（11/13 完成）
 
 ---
 
@@ -82,13 +82,13 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
   │   Unpacker   │  解壓 ZIP → 切割段落 → 提取裝置資訊
   └──────┬──────┘
          │
-    ┌────┴────┬──────────┐
-    ▼         ▼          ▼
-┌────────┐┌────────┐┌────────┐
-│ Logcat ││  ANR   ││ Kernel │  三個 Parser 平行解析
-│ Parser ││ Parser ││ Parser │
-└───┬────┘└───┬────┘└───┬────┘
-    └────┬────┴─────────┘
+    ┌────┴────┬──────────┬─────────────┐
+    ▼         ▼          ▼             ▼
+┌────────┐┌────────┐┌────────┐┌───────────┐
+│ Logcat ││  ANR   ││ Kernel ││ Tombstone │  四個 Parser 平行解析
+│ Parser ││ Parser ││ Parser ││  Parser   │
+└───┬────┘└───┬────┘└───┬────┘└─────┬─────┘
+    └────┬────┴─────────┴───────────┘
          ▼
   ┌──────────────┐
   │Basic Analyzer│  純規則分析（不需 LLM）
@@ -278,7 +278,25 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 | Suspend/Resume Error | Warning | `/suspend.*abort\|resume.*fail/` |
 | SELinux Denial | Info | `/avc: denied/` |
 
-### 4.6 Basic Analyzer（純規則引擎）
+### 4.6 Tombstone Parser（Native Crash）
+
+解析 `FS/data/tombstones/` 下的 native crash dump 檔案（文字版，跳過 `.pb` protobuf）：
+
+**解析內容：**
+- Header：Build fingerprint、ABI（arm64/arm/x86_64/x86）、Timestamp
+- Process info：pid、tid、process name、thread name
+- Signal info：signal number + name（SIGSEGV/SIGABRT/SIGBUS/SIGFPE/SIGILL/SIGTRAP）、signal code（SEGV_MAPERR 等）、fault address
+- Abort message（SIGABRT 時）
+- Registers：arm64 x0-x28/lr/sp/pc 或 arm r0-r15
+- Backtrace：frame number、PC、binary path、function name + offset、BuildId
+- Vendor crash 偵測：top frame binary 在 `/vendor/` 或 `/odm/` 路徑下
+
+**整合至 Basic Analyzer：**
+- 產出 critical severity InsightCard（category: crash, source: tombstone）
+- Timeline 新增 tombstone 事件
+- Health Score stability 子分數扣分（15 分/crash，frequency damping，max 40）
+
+### 4.7 Basic Analyzer（純規則引擎）
 
 不需要 LLM 即可完成：
 - 聚合三個 Parser 的結果（含 dumpsys meminfo/cpuinfo）
@@ -398,6 +416,7 @@ logcat-ai/
 │   │   │   ├── anr-parser.ts    # ANR Trace 解析（18-case）
 │   │   │   ├── kernel-parser.ts # Kernel Log 解析（12 種事件偵測）
 │   │   │   ├── dumpsys-parser.ts # Dumpsys meminfo/cpuinfo 解析
+│   │   │   ├── tombstone-parser.ts # Tombstone native crash 解析
 │   │   │   └── basic-analyzer.ts # 規則引擎 + Health Score（frequency damping）
 │   │   └── tests/
 │   ├── backend/                 # API Server
@@ -524,7 +543,6 @@ Week 5: Deep Analysis + 部署
 ### 8.2 Phase 2：進階功能（Phase 1 完成後）
 
 - 對話追問加入 Function Calling（LLM 可主動搜尋 logcat、查線程）
-- Tombstone Parser（Native crash 分析）
 - Embedding + Vector Store（RAG 語意搜尋大型 logcat）
 - 比較模式（兩份 bugreport 差異分析）
 - Lock Graph 視覺化（D3.js 力導向圖）
@@ -614,7 +632,7 @@ GitHub Issues + Project Board：
 | #28 | Enhanced Deep Analysis（context builder + structured output + overview UI） | ✅ 完成 | Build 通過 |
 | #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 43 tests passed |
 
-**累計測試：151 passed（parser 108 + backend 43）**
+**累計測試：203 passed（parser 156 + backend 47）**
 **Frontend Build：215 KB JS + 14.5 KB CSS（production）**
 
 ---
@@ -632,7 +650,7 @@ GitHub Issues + Project Board：
 | **P0** | #32 | 擴充 kernel event detection（thermal throttling, storage I/O, suspend/resume） | Low | High | ✅ 完成 |
 | P1 | #33 | Logcat 新增 Input dispatching timeout / HAL restart patterns | Low | Medium | ✅ 完成 |
 | P1 | #34 | Health score 改善（frequency-based damping） | Medium | Medium | ✅ 完成 |
-| P1 | #35 | Tombstone parser（native crash backtrace） | Medium | Medium | 待開始 |
+| P1 | #35 | Tombstone parser（native crash backtrace + signal info + vendor crash 偵測） | Medium | Medium | ✅ 完成 |
 | P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low | 待開始 |
 
 ### 12.2 新手 BSP 工程師 Debug 輔助
