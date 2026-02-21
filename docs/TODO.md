@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-21
+> **更新日期**：2026-02-22
 
 ---
 
@@ -49,7 +49,7 @@
 
 ## 2. Phase 1.5 — BSP Analysis Enhancement
 
-### ✅ Completed（7/13）
+### ✅ Completed（10/13）
 
 - [x] #30 **Timeline 重構** — P0
   - 事件聚合：相鄰相同 label+source+severity 事件自動合併，顯示 ×count + 時間範圍
@@ -101,27 +101,25 @@
   - generateBootInsights()：incomplete boot / SS restarts / abnormal boot reason
   - 6 tests + 5 integration tests（real bugreport）
 
-### 🔲 Remaining（6/13）
+- [x] #39 **Log Tag 自動分類 + Top Error Tags** — P1
+  - `logcat-parser.ts`：`classifyTag()` 將 tags 分類為 vendor / framework / app
+  - `logcat-parser.ts`：`computeTagStats()` 統計 E/F level top 20 tags
+  - `basic-analyzer.ts`：`generateTagInsights()` 產出 tag 分佈 insight
+  - 前端 `TagStats.tsx`：stacked bar（vendor/framework/app 比例）+ tag 排行榜 + 展開按鈕
+
+- [x] #40 **SELinux Denial → Allow Rule 自動生成** — P1
+  - `kernel-parser.ts`：`generateSELinuxAllowRule()` 從 scontext/tcontext/tclass/permission 生成 allow rule
+  - `basic-analyzer.ts`：SELinux insight 附帶 `suggestedAllowRule`
+  - 前端 `InsightCard.tsx`：顯示 allow rule code block + 複製按鈕
+
+- [x] #41 **Quick Debug Commands 自動生成** — P1
+  - `basic-analyzer.ts`：定義 `LOGCAT_DEBUG_COMMANDS`、`KERNEL_DEBUG_COMMANDS`、`BOOT_DEBUG_COMMANDS` 等對應表
+  - 每個 insight card 自動附帶 `debugCommands[]`
+  - 前端 `InsightCard.tsx`：顯示 debug commands + 逐條複製按鈕
+
+### 🔲 Remaining（3/13）
 
 #### P1 Tasks
-
-- [ ] #39 **Log Tag 自動分類 + Top Error Tags**
-  - 將 log tags 自動分類為 vendor / framework / app
-  - 統計 error level 以上的 top tags（前 20 名）
-  - **涉及檔案**：`logcat-parser.ts`、`basic-analyzer.ts`、前端新增元件
-  - **驗收標準**：前端可顯示 error tag 排行榜
-
-- [ ] #40 **SELinux Denial → Allow Rule 自動生成**
-  - 解析 SELinux denial 中的 scontext、tcontext、tclass、permission
-  - 自動生成對應的 `allow` rule（sepolicy 格式）
-  - **涉及檔案**：`kernel-parser.ts` 或新增 selinux-parser.ts
-  - **驗收標準**：每條 SELinux denial 產出可複製的 allow rule
-
-- [ ] #41 **Quick Debug Commands 自動生成**
-  - 根據偵測到的問題自動產出對應的 adb debug 腳本
-  - ANR → `adb shell dumpsys activity processes`；OOM → `adb shell dumpsys meminfo`
-  - **涉及檔案**：`basic-analyzer.ts` 或新增模組
-  - **驗收標準**：每類問題至少有 2-3 個 debug 指令建議
 
 - [ ] #35 **Tombstone Parser**
   - 解析 `/data/tombstones/` 下的 native crash 檔案

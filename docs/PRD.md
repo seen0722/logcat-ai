@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
 > **版本**：v0.2.0
-> **更新日期**：2026-02-21
-> **狀態**：Phase 1 完成，Phase 1.5 進行中（7/13 完成）
+> **更新日期**：2026-02-22
+> **狀態**：Phase 1 完成，Phase 1.5 進行中（10/13 完成）
 
 ---
 
@@ -641,9 +641,9 @@ GitHub Issues + Project Board：
 |--------|---|------|--------|--------|------|
 | **P0** | #37 | HAL service 存活狀態偵測（lshal/hwservicemanager log） | Low | High | ✅ 完成 |
 | **P0** | #38 | Boot 狀態分析（boot_completed, uptime, bootreason, sysserver restart count） | Low | High | ✅ 完成 |
-| P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High | 待開始 |
-| P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High | 待開始 |
-| P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium | 待開始 |
+| P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High | ✅ 完成 |
+| P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High | ✅ 完成 |
+| P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium | ✅ 完成 |
 | P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium | 待開始 |
 
 ### 12.3 #30 Timeline 重構（P0 最高優先）
