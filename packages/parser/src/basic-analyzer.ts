@@ -27,6 +27,7 @@ export interface BasicAnalyzerInput {
   anrAnalyses: ANRTraceAnalysis[];
   memInfo?: MemInfoSummary;
   cpuInfo?: CpuInfoSummary;
+  systemProperties?: string;
 }
 
 /**
@@ -34,9 +35,9 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, systemProperties } = input;
 
-  const bootStatus = analyzeBootStatus(logcatResult, kernelResult);
+  const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
   const anrInsights = generateANRInsights(anrAnalyses);
   const logcatInsights = generateLogcatInsights(logcatResult);
   const kernelInsights = generateKernelInsights(kernelResult);
@@ -421,16 +422,33 @@ function describeKernelEvent(event: KernelEvent): string {
 export function analyzeBootStatus(
   logcatResult: LogcatParseResult,
   kernelResult: KernelParseResult,
+  systemProperties?: string,
 ): BootStatusSummary {
   let bootCompleted = false;
   let bootReason: string | undefined;
   let systemServerRestarts = 0;
 
-  // Scan logcat for boot_completed and system_server restarts
+  // 1. Check system properties (most reliable source)
+  //    Format: "[sys.boot_completed]: [1]"
+  if (systemProperties) {
+    if (/\[sys\.boot_completed\]:\s*\[1\]/.test(systemProperties)) {
+      bootCompleted = true;
+    }
+    // Boot reason from properties: "[sys.boot.reason]: [reboot]" or "[ro.boot.bootreason]: [watchdog]"
+    const propReason = systemProperties.match(
+      /\[(?:sys\.boot\.reason\.last|sys\.boot\.reason|ro\.boot\.bootreason)\]:\s*\[([^\]]+)\]/
+    );
+    if (propReason) {
+      bootReason = propReason[1];
+    }
+  }
+
+  // 2. Scan logcat for boot_completed and system_server restarts
   for (const entry of logcatResult.entries) {
-    if (entry.message.includes('sys.boot_completed=1') ||
+    if (!bootCompleted && (
+        entry.message.includes('sys.boot_completed=1') ||
         (entry.tag === 'BootReceiver' && /boot.*completed/i.test(entry.message)) ||
-        (entry.tag === 'ActivityManager' && entry.message.includes('Boot completed'))) {
+        (entry.tag === 'ActivityManager' && entry.message.includes('Boot completed')))) {
       bootCompleted = true;
     }
 
@@ -438,18 +456,18 @@ export function analyzeBootStatus(
     if (entry.tag === 'Zygote' && entry.message.includes('System server process')) {
       systemServerRestarts++;
     }
-    if (entry.tag === 'ActivityManager' && entry.message.includes('Force stopping')) {
-      // Additional signal but don't double-count
-    }
   }
 
-  // Look for boot reason in kernel log
-  // Common: "Boot reason: reboot", "androidboot.bootreason=watchdog"
+  // 3. Check kernel log for boot_completed property set and boot reason
   for (const entry of kernelResult.entries) {
-    const reasonMatch = entry.message.match(/(?:Boot reason|androidboot\.bootreason)[=:\s]+(\S+)/i);
-    if (reasonMatch) {
-      bootReason = reasonMatch[1];
-      break;
+    if (!bootCompleted && /sys\.boot_completed=1/.test(entry.message)) {
+      bootCompleted = true;
+    }
+    if (!bootReason) {
+      const reasonMatch = entry.message.match(/(?:Boot reason|androidboot\.bootreason)[=:\s]+(\S+)/i);
+      if (reasonMatch) {
+        bootReason = reasonMatch[1];
+      }
     }
   }
 

@@ -346,6 +346,40 @@ describe('analyzeBootStatus', () => {
     expect(result.systemServerRestarts).toBe(2); // 3 starts - 1 initial = 2 restarts
   });
 
+  it('should detect boot_completed from system properties', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: [],
+      totalLines: 0,
+      parsedLines: 0,
+      parseErrors: 0,
+    };
+    const kernelResult = { entries: [], events: [], totalLines: 0 };
+    const systemProperties = `[sys.boot.reason.last]: [reboot]
+[sys.boot_completed]: [1]
+[sys.bootstat.first_boot_completed]: [1]`;
+
+    const result = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
+    expect(result.bootCompleted).toBe(true);
+    expect(result.bootReason).toBe('reboot');
+  });
+
+  it('should detect boot reason from system properties', () => {
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: [],
+      totalLines: 0,
+      parsedLines: 0,
+      parseErrors: 0,
+    };
+    const kernelResult = { entries: [], events: [], totalLines: 0 };
+    const systemProperties = `[sys.boot.reason.last]: [watchdog]
+[sys.boot_completed]: [1]`;
+
+    const result = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
+    expect(result.bootReason).toBe('watchdog');
+  });
+
   it('should generate insight for abnormal boot reason', () => {
     const input: BasicAnalyzerInput = {
       metadata: {

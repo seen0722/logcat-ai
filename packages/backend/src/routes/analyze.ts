@@ -99,15 +99,19 @@ router.get('/:id', async (req: Request, res: Response) => {
     if (aborted) return;
     sendSSE(res, { stage: 'parsing', progress: 60, message: 'Parsing dumpsys meminfo/cpuinfo...' });
 
-    // Parse dumpsys meminfo
+    // Parse dumpsys meminfo — try dedicated section first, then search in DUMPSYS sections
     const memInfoSection = unpackResult.sections.find(
       (s) => s.command.includes('dumpsys meminfo')
+    ) ?? unpackResult.sections.find(
+      (s) => /^DUMPSYS/i.test(s.name) && /Total RAM:/i.test(s.content)
     );
     const memInfo = memInfoSection ? parseMemInfo(memInfoSection.content) : undefined;
 
-    // Parse dumpsys cpuinfo
+    // Parse dumpsys cpuinfo — try dedicated section first, then search in DUMPSYS sections
     const cpuInfoSection = unpackResult.sections.find(
       (s) => s.command.includes('dumpsys cpuinfo')
+    ) ?? unpackResult.sections.find(
+      (s) => /^DUMPSYS/i.test(s.name) && /TOTAL:.*user.*kernel/i.test(s.content)
     );
     const cpuInfo = cpuInfoSection ? parseCpuInfo(cpuInfoSection.content) : undefined;
 
@@ -117,6 +121,11 @@ router.get('/:id', async (req: Request, res: Response) => {
     // Stage 3: Basic Analysis
     sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
 
+    // Extract system properties section
+    const sysPropSection = unpackResult.sections.find(
+      (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
+    );
+
     const analysisResult: AnalysisResult = analyzeBasic({
       metadata: unpackResult.metadata,
       logcatResult,
@@ -124,6 +133,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       anrAnalyses,
       memInfo,
       cpuInfo,
+      systemProperties: sysPropSection?.content,
     });
 
     // Store result for later use (chat, deep analysis re-run)
