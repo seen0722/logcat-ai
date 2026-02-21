@@ -207,6 +207,9 @@ router.get('/:id', async (req: Request, res: Response) => {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown LLM error';
+        if (err instanceof Error && err.stack) {
+          console.error('[Deep Analysis Error]', err.stack);
+        }
         sendSSE(res, {
           stage: 'deep_analysis',
           progress: 95,
