@@ -1,5 +1,5 @@
 import { AnalysisResult } from '@logcat-ai/parser';
-import { buildInsightContexts, InsightContext } from './context-builder.js';
+import { buildInsightContexts, buildHALCrossReference, InsightContext } from './context-builder.js';
 
 export function buildAnalysisPrompt(
   result: AnalysisResult,
@@ -40,9 +40,13 @@ Rules:
       const binderInfo = primary.binderTarget && primary.binderTarget.interfaceName !== 'Unknown'
         ? `\n  Binder Target: ${primary.binderTarget.interfaceName}${primary.binderTarget.method ? `.${primary.binderTarget.method}()` : ''} (${primary.binderTarget.packageName})`
         : '';
+      const suspectedInfo = primary.suspectedBinderTargets?.length
+        ? `\n  Suspected HAL targets: ${primary.suspectedBinderTargets.map((t: { interfaceName: string; method: string; threadName: string }) =>
+            `${t.interfaceName}.${t.method}() on "${t.threadName}"`).join(', ')}`
+        : '';
       return `Process: ${a.processName} (PID ${a.pid})${a.subject ? `\n  Subject: ${a.subject}` : ''}
   Blocked Thread: "${threadName}" — ${primary.blockReason} (${primary.confidence})
-  Blocking Chain: ${threadName} → ${chain || 'none'}${binderInfo}
+  Blocking Chain: ${threadName} → ${chain || 'none'}${binderInfo}${suspectedInfo}
   Binder Threads: ${a.binderThreads.busy}/${a.binderThreads.total} busy
   Deadlock: ${a.deadlocks.detected ? 'YES' : 'no'}`;
     })
@@ -73,6 +77,40 @@ ${timeline}`;
 
   if (anrSummaries) {
     userPrompt += `\n\n## ANR Trace Analysis\n${anrSummaries}`;
+  }
+
+  // HAL Status section (from lshal)
+  if (result.halStatus && result.halStatus.families.length > 0) {
+    const hal = result.halStatus;
+    const aliveFamilies = hal.families.filter((f) => f.highestStatus === 'alive').length;
+    const truncationWarning = hal.truncated
+      ? '⚠ lshal output was truncated — data may be incomplete\n'
+      : '';
+
+    userPrompt += `\n\n## HAL Status (from lshal)\n${truncationWarning}Families: ${aliveFamilies} alive / ${hal.families.length} total (${hal.vendorIssueCount} vendor issues)`;
+
+    // Cross-reference ANR binder targets with HAL status
+    const crossRefEntries = buildHALCrossReference(result);
+    if (crossRefEntries.length > 0) {
+      userPrompt += `\n\n### ANR Binder Target → HAL Cross-Reference\n${crossRefEntries.join('\n')}`;
+    }
+
+    // OEM vendor HAL issues
+    const oemIssues = hal.families.filter((f) => f.isOem && (f.highestStatus === 'non-responsive' || f.highestStatus === 'declared'));
+    if (oemIssues.length > 0) {
+      const oemLines = oemIssues.map((f) => `- ${f.shortName}@${f.highestVersion} → ${f.highestStatus}`);
+      userPrompt += `\n\n### Vendor HAL Issues (OEM)\n${oemLines.join('\n')}`;
+    }
+
+    // BSP vendor HAL issues (top 10)
+    const bspIssues = hal.families.filter((f) => f.isVendor && !f.isOem && (f.highestStatus === 'non-responsive' || f.highestStatus === 'declared'));
+    if (bspIssues.length > 0) {
+      const bspLines = bspIssues.slice(0, 10).map((f) => `- ${f.shortName}@${f.highestVersion} → ${f.highestStatus}`);
+      userPrompt += `\n\n### Vendor HAL Issues (BSP, ${bspIssues.length})\n${bspLines.join('\n')}`;
+      if (bspIssues.length > 10) {
+        userPrompt += `\n...and ${bspIssues.length - 10} more`;
+      }
+    }
   }
 
   // Detailed context per insight

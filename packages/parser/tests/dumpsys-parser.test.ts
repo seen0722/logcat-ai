@@ -474,6 +474,7 @@ Y       | vendor.example.hal@1.0::IExample/default                         | hwb
     expect(result.declaredServices).toHaveLength(0);
     expect(result.families).toHaveLength(0);
     expect(result.vendorIssueCount).toBe(0);
+    expect(result.truncated).toBe(false);
   });
 
   it('should return zero values for header-only input', () => {
@@ -575,5 +576,102 @@ Y       | vendor.example.display@1.0::IDisplay/default                | hwbinder
     // Only vendor families with issues count: sensor (non-responsive) + radio (declared) = 2
     // android.hardware.audio is non-responsive but NOT vendor, so excluded
     expect(result.vendorIssueCount).toBe(2);
+  });
+
+  // ============================================================
+  // Truncation detection
+  // ============================================================
+
+  it('should detect truncated lshal output (exit code)', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | android.hardware.audio@6.0::IDevicesFactory/default         | hwbinder  | alive
+failed: exit code 136
+`;
+
+    const result = parseLshal(content);
+    expect(result.truncated).toBe(true);
+    expect(result.totalServices).toBe(1);
+  });
+
+  it('should detect truncated lshal output (duration message)', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | android.hardware.audio@6.0::IDevicesFactory/default         | hwbinder  | alive
+10.000s was the duration of 'lshal --all' process.
+`;
+
+    const result = parseLshal(content);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('should not mark truncated when no truncation pattern found', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | android.hardware.audio@6.0::IDevicesFactory/default         | hwbinder  | alive
+`;
+
+    const result = parseLshal(content);
+    expect(result.truncated).toBe(false);
+  });
+
+  // ============================================================
+  // OEM HAL marking
+  // ============================================================
+
+  it('should mark Trimble HALs as OEM when manufacturer is Trimble', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | vendor.trimble.hardware.trmbkeypad@1.0::ITrmbKeypad/default | hwbinder  | non-responsive
+Y       | vendor.trimble.hardware.trmbempower@1.0::ITrmbEmpower/default | hwbinder  | non-responsive
+Y       | vendor.qti.hardware.display.color@1.0::IDisplayColor/default | hwbinder  | non-responsive
+`;
+
+    const result = parseLshal(content, 'Trimble');
+    expect(result.families).toHaveLength(3);
+
+    const trmbKeypad = result.families.find((f) => f.shortName === 'trmbkeypad');
+    expect(trmbKeypad).toBeDefined();
+    expect(trmbKeypad!.isOem).toBe(true);
+
+    const trmbEmpower = result.families.find((f) => f.shortName === 'trmbempower');
+    expect(trmbEmpower).toBeDefined();
+    expect(trmbEmpower!.isOem).toBe(true);
+
+    const color = result.families.find((f) => f.shortName === 'color');
+    expect(color).toBeDefined();
+    expect(color!.isOem).toBe(false); // qti is a known BSP prefix
+  });
+
+  it('should treat unknown vendor HALs as OEM when no BSP prefix matches', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | vendor.acme.widget@1.0::IWidget/default                     | hwbinder  | non-responsive
+Y       | vendor.qualcomm.hardware.radio@1.0::IRadio/default          | hwbinder  | non-responsive
+`;
+
+    const result = parseLshal(content);
+    expect(result.families).toHaveLength(2);
+
+    const widget = result.families.find((f) => f.shortName === 'widget');
+    expect(widget).toBeDefined();
+    expect(widget!.isOem).toBe(true); // acme is not a known BSP vendor
+
+    const radio = result.families.find((f) => f.shortName === 'radio');
+    expect(radio).toBeDefined();
+    expect(radio!.isOem).toBe(false); // qualcomm is known BSP
+  });
+
+  it('should not mark android HALs as OEM', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | android.hardware.gnss@2.0::IGnss/default                    | hwbinder  | alive
+`;
+
+    const result = parseLshal(content, 'Trimble');
+    const gnss = result.families.find((f) => f.shortName === 'gnss');
+    expect(gnss).toBeDefined();
+    expect(gnss!.isOem).toBe(false);
+    expect(gnss!.isVendor).toBe(false);
   });
 });

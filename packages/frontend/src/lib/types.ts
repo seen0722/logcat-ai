@@ -154,6 +154,7 @@ export interface HALFamily {
   highestVersion: string;
   highestStatus: string;
   isVendor: boolean;
+  isOem: boolean;
   versionCount: number;
 }
 
@@ -166,6 +167,7 @@ export interface HALStatusSummary {
   declaredServices: HALService[];
   families: HALFamily[];
   vendorIssueCount: number;
+  truncated: boolean;
 }
 
 export interface DeepAnalysisOverview {

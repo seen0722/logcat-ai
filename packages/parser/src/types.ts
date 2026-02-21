@@ -314,6 +314,7 @@ export interface HALFamily {
   highestVersion: string;   // e.g. "1.4"
   highestStatus: string;    // status of the highest version: "alive" | "non-responsive" | "declared"
   isVendor: boolean;
+  isOem: boolean;           // true if this is an OEM-specific HAL (vs BSP-bundled vendor HAL)
   versionCount: number;     // how many versions exist
 }
 
@@ -326,6 +327,7 @@ export interface HALStatusSummary {
   declaredServices: HALService[];       // declared but not registered
   families: HALFamily[];                // all grouped families
   vendorIssueCount: number;             // families where highest version is non-responsive or declared (vendor only)
+  truncated: boolean;                   // true if lshal output was truncated (killed by system)
 }
 
 // ============================================================

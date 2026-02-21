@@ -120,7 +120,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const halSection = unpackResult.sections.find(
       (s) => s.name === 'HARDWARE HALS' || s.command.includes('lshal')
     );
-    const halStatus = halSection ? parseLshal(halSection.content) : undefined;
+    const halStatus = halSection ? parseLshal(halSection.content, unpackResult.metadata.manufacturer) : undefined;
 
     if (aborted) return;
     sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });

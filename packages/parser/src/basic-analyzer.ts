@@ -603,31 +603,75 @@ function generateHALInsights(halStatus?: HALStatusSummary): InsightCard[] {
 
   const insights: InsightCard[] = [];
 
-  // Use family-level analysis: only flag vendor families whose HIGHEST version is problematic
-  const vendorFamilies = halStatus.families.filter((f) => f.isVendor);
-
-  const nonResponsiveFamilies = vendorFamilies.filter((f) => f.highestStatus === 'non-responsive');
-  if (nonResponsiveFamilies.length > 0) {
-    const names = nonResponsiveFamilies.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+  // Warn if lshal output was truncated
+  if (halStatus.truncated) {
     insights.push({
       id: '',
-      severity: 'warning',
+      severity: 'info',
       category: 'stability',
-      title: `${nonResponsiveFamilies.length} vendor HAL family(s) non-responsive`,
-      description: `The following vendor HAL families have their highest version non-responsive: ${names}. These may cause hardware-related functionality to fail.`,
+      title: 'HAL status may be incomplete (lshal was killed)',
+      description: 'The lshal command was killed before completing (exit code 136 or timeout). HAL status data may be incomplete — some services might not be listed.',
       source: 'cross',
     });
   }
 
-  const declaredFamilies = vendorFamilies.filter((f) => f.highestStatus === 'declared');
-  if (declaredFamilies.length > 0) {
-    const names = declaredFamilies.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+  // Use family-level analysis: only flag vendor families whose HIGHEST version is problematic
+  const vendorFamilies = halStatus.families.filter((f) => f.isVendor);
+
+  // Split into OEM and BSP groups
+  const oemFamilies = vendorFamilies.filter((f) => f.isOem);
+  const bspFamilies = vendorFamilies.filter((f) => !f.isOem);
+
+  // OEM HAL issues → warning severity (more likely to be the root cause)
+  const oemNR = oemFamilies.filter((f) => f.highestStatus === 'non-responsive');
+  if (oemNR.length > 0) {
+    const names = oemNR.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
     insights.push({
       id: '',
       severity: 'warning',
       category: 'stability',
-      title: `${declaredFamilies.length} vendor HAL family(s) declared but not running`,
-      description: `The following vendor HAL families are declared in the VINTF manifest but not registered: ${names}. The corresponding hardware features may be unavailable.`,
+      title: `[OEM] ${oemNR.length} vendor HAL family(s) non-responsive`,
+      description: `The following OEM vendor HAL families have their highest version non-responsive: ${names}. These may cause hardware-related functionality to fail.`,
+      source: 'cross',
+    });
+  }
+
+  const oemDeclared = oemFamilies.filter((f) => f.highestStatus === 'declared');
+  if (oemDeclared.length > 0) {
+    const names = oemDeclared.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'stability',
+      title: `[OEM] ${oemDeclared.length} vendor HAL family(s) declared but not running`,
+      description: `The following OEM vendor HAL families are declared in the VINTF manifest but not registered: ${names}. The corresponding hardware features may be unavailable.`,
+      source: 'cross',
+    });
+  }
+
+  // BSP HAL issues → info severity (less actionable, usually chipset-level)
+  const bspNR = bspFamilies.filter((f) => f.highestStatus === 'non-responsive');
+  if (bspNR.length > 0) {
+    const names = bspNR.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+    insights.push({
+      id: '',
+      severity: 'info',
+      category: 'stability',
+      title: `[BSP] ${bspNR.length} vendor HAL family(s) non-responsive`,
+      description: `The following BSP vendor HAL families have their highest version non-responsive: ${names}. These are typically chipset-bundled HALs.`,
+      source: 'cross',
+    });
+  }
+
+  const bspDeclared = bspFamilies.filter((f) => f.highestStatus === 'declared');
+  if (bspDeclared.length > 0) {
+    const names = bspDeclared.map((f) => `${f.shortName}@${f.highestVersion}`).join(', ');
+    insights.push({
+      id: '',
+      severity: 'info',
+      category: 'stability',
+      title: `[BSP] ${bspDeclared.length} vendor HAL family(s) declared but not running`,
+      description: `The following BSP vendor HAL families are declared in the VINTF manifest but not registered: ${names}. These are typically chipset-bundled HALs.`,
       source: 'cross',
     });
   }

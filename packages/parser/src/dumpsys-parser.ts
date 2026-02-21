@@ -117,7 +117,7 @@ export function parseCpuInfo(content: string): CpuInfoSummary {
  * Status is derived from the Server PID or explicit status columns.
  * Lines with "N/A" PID or "declared;..." are declared-only services.
  */
-export function parseLshal(content: string): HALStatusSummary {
+export function parseLshal(content: string, manufacturer?: string): HALStatusSummary {
   const result: HALStatusSummary = {
     totalServices: 0,
     aliveCount: 0,
@@ -127,9 +127,15 @@ export function parseLshal(content: string): HALStatusSummary {
     declaredServices: [],
     families: [],
     vendorIssueCount: 0,
+    truncated: false,
   };
 
   if (!content) return result;
+
+  // Detect truncated lshal output (system killed the process)
+  if (/failed:\s*exit code/i.test(content) || /was the duration of/i.test(content)) {
+    result.truncated = true;
+  }
 
   const lines = content.split('\n');
 
@@ -223,9 +229,47 @@ export function parseLshal(content: string): HALStatusSummary {
   // Collect alive services too (they're not stored separately, so rebuild from parsing)
   // We need all parsed services for grouping — collect them during parsing
   // Instead, re-derive from the content by grouping all recognized services
-  groupHALFamilies(result, content);
+  groupHALFamilies(result, content, manufacturer);
 
   return result;
+}
+
+/** Known BSP vendor namespace prefixes — HALs from chipset vendors bundled in BSP */
+const KNOWN_BSP_PREFIXES = [
+  'qti', 'qualcomm', 'qcom',        // Qualcomm
+  'display',                          // Qualcomm display subsystem (vendor.display.color, vendor.display.postproc)
+  'mediatek', 'mtk',                 // MediaTek
+  'sprd',                             // Spreadtrum/Unisoc
+  'samsung',                          // Samsung
+  'google',                           // Google
+  'nxp',                              // NXP (NFC, secure element)
+];
+
+/**
+ * Determine if a vendor HAL family is OEM-specific (vs BSP-bundled).
+ * OEM detection: manufacturer name fuzzy-matches a vendor namespace segment.
+ * Fallback: vendor HALs not matching any known BSP prefix are treated as OEM.
+ */
+function isOemFamily(familyKey: string, isVendor: boolean, manufacturer?: string): boolean {
+  if (!isVendor) return false;
+
+  // Extract the vendor namespace: "vendor.trimble.hardware.trmbkeypad::ITrmbKeypad" → "trimble.hardware.trmbkeypad"
+  const afterVendor = familyKey.replace(/^vendor\./, '').split('::')[0];
+  const segments = afterVendor.toLowerCase().split('.');
+
+  // If manufacturer provided, check if any segment matches
+  if (manufacturer) {
+    const mfgLower = manufacturer.toLowerCase();
+    if (segments.some((seg) => seg.includes(mfgLower) || mfgLower.includes(seg))) {
+      return true;
+    }
+  }
+
+  // Fallback: if no segment matches a known BSP prefix, treat as OEM
+  const matchesBsp = segments.some((seg) =>
+    KNOWN_BSP_PREFIXES.some((bsp) => seg.includes(bsp))
+  );
+  return !matchesBsp;
 }
 
 /**
@@ -233,7 +277,7 @@ export function parseLshal(content: string): HALStatusSummary {
  * Same interface at different versions (e.g. color@1.0, color@1.4) are grouped together.
  * Only the highest version's status matters for each family.
  */
-function groupHALFamilies(result: HALStatusSummary, content: string): void {
+function groupHALFamilies(result: HALStatusSummary, content: string, manufacturer?: string): void {
   // Collect all services with their parsed info
   const allServices: HALService[] = [];
   const lines = content.split('\n');
@@ -321,6 +365,7 @@ function groupHALFamilies(result: HALStatusSummary, content: string): void {
       highestVersion,
       highestStatus: highestSvc.status,
       isVendor: highestSvc.isVendor,
+      isOem: isOemFamily(familyKey, highestSvc.isVendor, manufacturer),
       versionCount: versions.size,
     });
   }
@@ -344,11 +389,19 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Higher priority = more concerning status (used when multiple instances share a version) */
+/**
+ * Higher priority = more informative status (used when same version appears
+ * from multiple lshal sources: binderized, passthrough, VINTF manifest).
+ *
+ * Priority: alive > non-responsive > declared
+ * - alive: service is actually running (best)
+ * - non-responsive: registered with hwservicemanager but not responding (real issue)
+ * - declared: only listed in VINTF manifest, never started (least informative)
+ */
 function statusPriority(status: string): number {
-  if (status === 'alive') return 0;
-  if (status === 'declared') return 1;
-  if (status === 'non-responsive') return 2;
+  if (status === 'alive') return 2;
+  if (status === 'non-responsive') return 1;
+  if (status === 'declared') return 0;
   return 0;
 }
 

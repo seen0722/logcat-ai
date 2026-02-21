@@ -5,6 +5,8 @@ import {
   KernelEvent,
   ANRTraceAnalysis,
   ThreadInfo,
+  HALFamily,
+  BinderTargetInfo,
 } from '@logcat-ai/parser';
 
 export interface InsightContext {
@@ -279,4 +281,84 @@ function estimateChars(contexts: InsightContext[]): number {
     total += ctx.temporalContext.join('').length;
   }
   return total;
+}
+
+/**
+ * Build HAL cross-reference entries for ANR binder targets.
+ * Matches ANR binder targets (and suspected targets) against HAL family status.
+ */
+export function buildHALCrossReference(result: AnalysisResult): string[] {
+  if (!result.halStatus || result.halStatus.families.length === 0) return [];
+
+  // Collect all binder targets from all ANR analyses
+  const targets: Array<{ packageName: string; interfaceName: string; source: string }> = [];
+
+  for (const anr of result.anrAnalyses) {
+    const primary = anr.blockedThread ?? anr.mainThread;
+    if (!primary) continue;
+
+    if (primary.binderTarget && primary.binderTarget.interfaceName !== 'Unknown') {
+      targets.push({
+        packageName: primary.binderTarget.packageName,
+        interfaceName: primary.binderTarget.interfaceName,
+        source: 'binder_target',
+      });
+    }
+
+    if (primary.suspectedBinderTargets) {
+      for (const t of primary.suspectedBinderTargets) {
+        targets.push({
+          packageName: t.packageName,
+          interfaceName: t.interfaceName,
+          source: 'suspected',
+        });
+      }
+    }
+  }
+
+  if (targets.length === 0) return [];
+
+  // Deduplicate by packageName
+  const seen = new Set<string>();
+  const uniqueTargets = targets.filter((t) => {
+    if (seen.has(t.packageName)) return false;
+    seen.add(t.packageName);
+    return true;
+  });
+
+  const entries: string[] = [];
+
+  for (const target of uniqueTargets) {
+    const family = matchFamilyByPackage(target.packageName, result.halStatus!.families);
+    if (family) {
+      const oemTag = family.isOem ? ' [OEM]' : '';
+      entries.push(
+        `- ${target.interfaceName} (${target.packageName}) → ${family.highestStatus}, highest=${family.highestVersion}, ${family.versionCount} version(s)${oemTag}`
+      );
+    } else {
+      entries.push(
+        `- ${target.interfaceName} (${target.packageName}) → status unknown (not found in lshal)`
+      );
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Match a binder packageName to a HAL family.
+ * packageName: "vendor.trimble.hardware.trmbkeypad@1.0"
+ * familyName: "vendor.trimble.hardware.trmbkeypad::ITrmbKeypad"
+ * Match rule: take prefix before '@' from packageName, compare to prefix before '::' from familyName.
+ */
+function matchFamilyByPackage(packageName: string, families: HALFamily[]): HALFamily | null {
+  // Extract prefix: everything before @version
+  const pkgPrefix = packageName.replace(/@[\d.]+.*$/, '').toLowerCase();
+
+  for (const family of families) {
+    const familyPrefix = family.familyName.split('::')[0].replace(/@[\d.]+/, '').toLowerCase();
+    if (pkgPrefix === familyPrefix) return family;
+  }
+
+  return null;
 }

@@ -177,41 +177,80 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
           {halStatus && halStatus.families.length > 0 && (() => {
             const aliveFamilies = halStatus.families.filter((f) => f.highestStatus === 'alive').length;
             const totalFamilies = halStatus.families.length;
-            const nonResponsive = halStatus.families.filter((f) => f.isVendor && f.highestStatus === 'non-responsive');
-            const declared = halStatus.families.filter((f) => f.isVendor && f.highestStatus === 'declared');
+            const oemNR = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus === 'non-responsive');
+            const oemDeclared = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus === 'declared');
+            const bspNR = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'non-responsive');
+            const bspDeclared = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'declared');
+            const totalNR = oemNR.length + bspNR.length;
+            const totalDeclared = oemDeclared.length + bspDeclared.length;
             return (
               <div className="bg-surface rounded-lg p-3 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
+                <h3 className="text-sm font-semibold text-gray-400">
+                  HAL Services
+                  {halStatus.truncated && (
+                    <span className="ml-2 text-amber-400" title="lshal output was truncated — data may be incomplete">&#x26A0;</span>
+                  )}
+                </h3>
                 <p className="text-sm">
                   Alive <span className="font-medium text-green-400">{aliveFamilies}</span>
                   {' / '}
                   <span className="font-medium text-gray-200">{totalFamilies} families</span>
-                  {nonResponsive.length > 0 && (
-                    <span className="text-red-400 ml-2">({nonResponsive.length} non-responsive)</span>
+                  {totalNR > 0 && (
+                    <span className="text-red-400 ml-2">({totalNR} non-responsive)</span>
                   )}
-                  {declared.length > 0 && (
-                    <span className="text-amber-400 ml-2">({declared.length} declared)</span>
+                  {totalDeclared > 0 && (
+                    <span className="text-amber-400 ml-2">({totalDeclared} declared)</span>
                   )}
                 </p>
-                {nonResponsive.length > 0 && (
+                {oemNR.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-xs text-gray-500">Non-responsive vendor HALs</span>
-                    {nonResponsive.slice(0, 5).map((f, i) => (
+                    <span className="text-xs text-gray-500">OEM HALs — non-responsive</span>
+                    {oemNR.map((f, i) => (
                       <div key={i} className="text-xs text-red-400 truncate" title={f.familyName}>
                         {f.shortName}@{f.highestVersion}
                       </div>
                     ))}
                   </div>
                 )}
-                {declared.length > 0 && (
+                {oemDeclared.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-xs text-gray-500">Declared vendor HALs (not running)</span>
-                    {declared.slice(0, 5).map((f, i) => (
+                    <span className="text-xs text-gray-500">OEM HALs — declared (not running)</span>
+                    {oemDeclared.map((f, i) => (
                       <div key={i} className="text-xs text-amber-400 truncate" title={f.familyName}>
                         {f.shortName}@{f.highestVersion}
                       </div>
                     ))}
                   </div>
+                )}
+                {bspNR.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="text-gray-500 cursor-pointer">BSP HALs — non-responsive ({bspNR.length})</summary>
+                    <div className="space-y-1 mt-1">
+                      {bspNR.slice(0, 10).map((f, i) => (
+                        <div key={i} className="text-red-400/70 truncate" title={f.familyName}>
+                          {f.shortName}@{f.highestVersion}
+                        </div>
+                      ))}
+                      {bspNR.length > 10 && (
+                        <div className="text-gray-500">...and {bspNR.length - 10} more</div>
+                      )}
+                    </div>
+                  </details>
+                )}
+                {bspDeclared.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="text-gray-500 cursor-pointer">BSP HALs — declared ({bspDeclared.length})</summary>
+                    <div className="space-y-1 mt-1">
+                      {bspDeclared.slice(0, 10).map((f, i) => (
+                        <div key={i} className="text-amber-400/70 truncate" title={f.familyName}>
+                          {f.shortName}@{f.highestVersion}
+                        </div>
+                      ))}
+                      {bspDeclared.length > 10 && (
+                        <div className="text-gray-500">...and {bspDeclared.length - 10} more</div>
+                      )}
+                    </div>
+                  </details>
                 )}
               </div>
             );

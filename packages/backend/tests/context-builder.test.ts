@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildInsightContexts } from '../src/llm-gateway/prompt-templates/context-builder.js';
+import { buildInsightContexts, buildHALCrossReference } from '../src/llm-gateway/prompt-templates/context-builder.js';
 import { AnalysisResult, InsightCard, LogcatAnomaly, KernelEvent } from '@logcat-ai/parser';
 
 function makeBaseResult(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
@@ -241,5 +241,145 @@ describe('buildInsightContexts', () => {
     const contexts = buildInsightContexts(result);
     // Should have logs from both logcat and kernel
     expect(contexts[0].anomalyLogs.length).toBeGreaterThan(0);
+  });
+});
+
+// ============================================================
+// buildHALCrossReference
+// ============================================================
+
+describe('buildHALCrossReference', () => {
+  it('should return empty array when no HAL status', () => {
+    const result = makeBaseResult();
+    const entries = buildHALCrossReference(result);
+    expect(entries).toHaveLength(0);
+  });
+
+  it('should return empty array when no ANR binder targets', () => {
+    const result = makeBaseResult({
+      halStatus: {
+        totalServices: 5,
+        aliveCount: 5,
+        nonResponsiveCount: 0,
+        declaredCount: 0,
+        nonResponsiveServices: [],
+        declaredServices: [],
+        families: [
+          { familyName: 'android.hardware.gnss::IGnss', shortName: 'gnss', highestVersion: '2.0', highestStatus: 'alive', isVendor: false, isOem: false, versionCount: 3 },
+        ],
+        vendorIssueCount: 0,
+        truncated: false,
+      },
+    });
+    const entries = buildHALCrossReference(result);
+    expect(entries).toHaveLength(0);
+  });
+
+  it('should cross-reference binder target with matching HAL family', () => {
+    const result = makeBaseResult({
+      halStatus: {
+        totalServices: 10,
+        aliveCount: 8,
+        nonResponsiveCount: 1,
+        declaredCount: 1,
+        nonResponsiveServices: [],
+        declaredServices: [],
+        families: [
+          { familyName: 'android.hardware.gnss::IGnss', shortName: 'gnss', highestVersion: '2.0', highestStatus: 'alive', isVendor: false, isOem: false, versionCount: 3 },
+          { familyName: 'vendor.trimble.hardware.trmbkeypad::ITrmbKeypad', shortName: 'trmbkeypad', highestVersion: '1.0', highestStatus: 'non-responsive', isVendor: true, isOem: true, versionCount: 1 },
+        ],
+        vendorIssueCount: 1,
+        truncated: false,
+      },
+      anrAnalyses: [{
+        pid: 1234,
+        processName: 'com.test.app',
+        threads: [],
+        mainThread: {
+          thread: {
+            name: 'main', priority: 5, tid: 1, state: 'Native' as const,
+            daemon: false, stackFrames: [], waitingOnLock: null, heldLocks: [], raw: '',
+          },
+          blockReason: 'slow_binder_call' as const,
+          blockingChain: [],
+          confidence: 'high' as const,
+          binderTarget: {
+            interfaceName: 'IGnss',
+            packageName: 'android.hardware.gnss@2.0',
+            method: 'start',
+            callerClass: 'com.test.GnssService',
+            callerMethod: 'startGnss',
+          },
+          suspectedBinderTargets: [{
+            interfaceName: 'ITrmbKeypad',
+            packageName: 'vendor.trimble.hardware.trmbkeypad@1.0',
+            method: 'getService',
+            callerClass: 'com.test.KeypadService',
+            callerMethod: 'init',
+            threadName: 'Binder:1234_3',
+            threadState: 'Native',
+          }],
+        },
+        lockGraph: { nodes: [], edges: [] },
+        deadlocks: { detected: false, cycles: [] },
+        binderThreads: { total: 16, busy: 2, idle: 14, exhausted: false },
+      }],
+    });
+
+    const entries = buildHALCrossReference(result);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toContain('IGnss');
+    expect(entries[0]).toContain('alive');
+    expect(entries[0]).toContain('highest=2.0');
+    expect(entries[1]).toContain('ITrmbKeypad');
+    expect(entries[1]).toContain('non-responsive');
+    expect(entries[1]).toContain('[OEM]');
+  });
+
+  it('should mark binder target as "status unknown" when no matching family', () => {
+    const result = makeBaseResult({
+      halStatus: {
+        totalServices: 5,
+        aliveCount: 5,
+        nonResponsiveCount: 0,
+        declaredCount: 0,
+        nonResponsiveServices: [],
+        declaredServices: [],
+        families: [
+          { familyName: 'android.hardware.audio::IDevicesFactory', shortName: 'audio', highestVersion: '6.0', highestStatus: 'alive', isVendor: false, isOem: false, versionCount: 1 },
+        ],
+        vendorIssueCount: 0,
+        truncated: false,
+      },
+      anrAnalyses: [{
+        pid: 1234,
+        processName: 'com.test.app',
+        threads: [],
+        mainThread: {
+          thread: {
+            name: 'main', priority: 5, tid: 1, state: 'Native' as const,
+            daemon: false, stackFrames: [], waitingOnLock: null, heldLocks: [], raw: '',
+          },
+          blockReason: 'slow_binder_call' as const,
+          blockingChain: [],
+          confidence: 'high' as const,
+          binderTarget: {
+            interfaceName: 'IGnss',
+            packageName: 'android.hardware.gnss@2.0',
+            method: 'start',
+            callerClass: 'com.test.GnssService',
+            callerMethod: 'startGnss',
+          },
+        },
+        lockGraph: { nodes: [], edges: [] },
+        deadlocks: { detected: false, cycles: [] },
+        binderThreads: { total: 16, busy: 2, idle: 14, exhausted: false },
+      }],
+    });
+
+    const entries = buildHALCrossReference(result);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toContain('status unknown');
+    expect(entries[0]).toContain('not found in lshal');
   });
 });
