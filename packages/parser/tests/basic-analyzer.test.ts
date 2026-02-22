@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeBasic, BasicAnalyzerInput, aggregateTimelineEvents } from '../src/basic-analyzer.js';
+import { analyzeBasic, BasicAnalyzerInput, aggregateTimelineEvents, buildTimeline } from '../src/basic-analyzer.js';
 import { BugreportMetadata, LogcatParseResult, KernelParseResult, ANRTraceAnalysis, TimelineEvent } from '../src/types.js';
 
 function makeMetadata(overrides?: Partial<BugreportMetadata>): BugreportMetadata {
@@ -602,5 +602,112 @@ describe('aggregateTimelineEvents', () => {
     const result = aggregateTimelineEvents(events);
     expect(result).toHaveLength(1);
     expect(result[0].details).toBe('first details');
+  });
+});
+
+// ============================================================
+// buildTimeline — kernel timestamp conversion
+// ============================================================
+
+describe('buildTimeline kernel timestamp conversion', () => {
+  it('should convert kernel timestamps to MM-DD HH:mm:ss.SSS when bootEpochMs is provided', () => {
+    // Boot epoch: 2024-01-15 09:00:00.000 UTC
+    const bootEpochMs = new Date('2024-01-15T09:00:00.000Z').getTime();
+
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: [{
+        type: 'oom_kill', severity: 'critical', timestamp: 3600, // 1 hour after boot
+        entries: [], summary: 'OOM kill', details: {},
+      }],
+      totalLines: 1,
+    };
+
+    const timeline = buildTimeline(emptyLogcat(), kernelResult, [], undefined, bootEpochMs);
+    expect(timeline).toHaveLength(1);
+    // 09:00:00 + 3600s = 10:00:00 → "01-15 10:00:00.000" (UTC)
+    expect(timeline[0].timestamp).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/);
+    expect(timeline[0].source).toBe('kernel');
+  });
+
+  it('should fallback to boot+Xs format when bootEpochMs is not provided', () => {
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: [{
+        type: 'oom_kill', severity: 'critical', timestamp: 123.456,
+        entries: [], summary: 'OOM kill', details: {},
+      }],
+      totalLines: 1,
+    };
+
+    const timeline = buildTimeline(emptyLogcat(), kernelResult, []);
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0].timestamp).toBe('boot+123.456s');
+  });
+
+  it('should sort kernel events among logcat events by wall-clock time', () => {
+    // Use local time to match formatEpochToDisplay (which uses getHours/getMinutes etc.)
+    const bootEpoch = new Date(2024, 0, 15, 8, 0, 0, 0); // Jan 15, 08:00 local
+    const bootEpochMs = bootEpoch.getTime();
+
+    const logcatResult: LogcatParseResult = {
+      entries: [],
+      anomalies: [
+        { type: 'anr', severity: 'critical', timestamp: '01-15 09:30:00.000', entries: [], processName: 'app', summary: 'ANR in app' },
+        { type: 'fatal_exception', severity: 'critical', timestamp: '01-15 10:30:00.000', entries: [], summary: 'Fatal exception' },
+      ],
+      totalLines: 2,
+      parsedLines: 2,
+      parseErrors: 0,
+    };
+
+    const kernelResult: KernelParseResult = {
+      entries: [],
+      events: [{
+        type: 'oom_kill', severity: 'critical', timestamp: 7200, // 2 hours after boot = 10:00:00 local
+        entries: [], summary: 'OOM kill', details: {},
+      }],
+      totalLines: 1,
+    };
+
+    const timeline = buildTimeline(logcatResult, kernelResult, [], undefined, bootEpochMs);
+    expect(timeline).toHaveLength(3);
+    // Expected order: ANR (09:30), kernel OOM (10:00), Fatal (10:30)
+    expect(timeline[0].source).toBe('logcat');
+    expect(timeline[0].label).toBe('ANR in app');
+    expect(timeline[1].source).toBe('kernel');
+    expect(timeline[1].label).toBe('OOM kill');
+    expect(timeline[2].source).toBe('logcat');
+    expect(timeline[2].label).toBe('Fatal exception');
+  });
+
+  it('should convert kernel insight timestamps in analyzeBasic when uptime is available', () => {
+    // bugreportTimestamp = 2024-01-15 10:00:00Z, uptimeSeconds = 3600
+    // → bootEpoch = 09:00:00Z, kernel event at 1800s = 09:30:00
+    const kernelResult: KernelParseResult = {
+      entries: [
+        { timestamp: 3600, level: '<3>', facility: '', message: 'last entry', raw: 'last' },
+      ],
+      events: [{
+        type: 'oom_kill', severity: 'critical', timestamp: 1800,
+        entries: [{ timestamp: 1800, level: '<3>', facility: '', message: 'OOM', raw: 'OOM' }],
+        summary: 'OOM kill', details: {},
+      }],
+      totalLines: 1,
+    };
+
+    const result = analyzeBasic(makeInput({ kernelResult }));
+
+    // Timeline kernel event should be in MM-DD format
+    const kernelEvent = result.timeline.find((e) => e.source === 'kernel');
+    expect(kernelEvent).toBeDefined();
+    expect(kernelEvent!.timestamp).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/);
+    expect(kernelEvent!.timestamp).not.toContain('boot+');
+
+    // Kernel insight should also be in MM-DD format
+    const kernelInsight = result.insights.find((i) => i.source === 'kernel');
+    expect(kernelInsight).toBeDefined();
+    expect(kernelInsight!.timestamp).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/);
+    expect(kernelInsight!.timestamp).not.toContain('boot+');
   });
 });

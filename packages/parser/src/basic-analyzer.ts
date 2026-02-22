@@ -46,9 +46,15 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
+
+  // Calculate boot epoch for kernel timestamp conversion
+  const bootEpochMs = bootStatus.uptimeSeconds != null
+    ? metadata.bugreportTimestamp.getTime() - bootStatus.uptimeSeconds * 1000
+    : undefined;
+
   const anrInsights = generateANRInsights(anrAnalyses);
   const logcatInsights = generateLogcatInsights(logcatResult);
-  const kernelInsights = generateKernelInsights(kernelResult);
+  const kernelInsights = generateKernelInsights(kernelResult, bootEpochMs);
   const resourceInsights = generateResourceInsights(memInfo, cpuInfo);
   const bootInsights = generateBootInsights(bootStatus);
   const halInsights = generateHALInsights(halStatus);
@@ -84,7 +90,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     card.id = `insight-${i + 1}`;
   });
 
-  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses);
+  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs);
   const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses);
 
   return {
@@ -446,7 +452,7 @@ function generateANRInsights(analyses: ANRTraceAnalysis[]): InsightCard[] {
       title,
       description,
       stackTrace: stackTrace || undefined,
-      timestamp: analysis.timestamp,
+      timestamp: analysis.timestamp ? formatDisplayTimestamp(analysis.timestamp) : undefined,
       source: 'anr',
     });
 
@@ -461,7 +467,7 @@ function generateANRInsights(analyses: ANRTraceAnalysis[]): InsightCard[] {
           title: `Deadlock: ${cycle.threads.length} threads in circular wait`,
           description: `Deadlock cycle involving: ${threadNames}. Each thread holds a lock needed by another thread in the cycle.`,
           source: 'anr',
-          timestamp: analysis.timestamp,
+          timestamp: analysis.timestamp ? formatDisplayTimestamp(analysis.timestamp) : undefined,
         });
       }
     }
@@ -475,7 +481,7 @@ function generateANRInsights(analyses: ANRTraceAnalysis[]): InsightCard[] {
         title: `Binder Pool Exhausted in ${analysis.processName}`,
         description: `All ${analysis.binderThreads.total} binder threads are busy (0 idle). IPC calls may be queuing or timing out.`,
         source: 'anr',
-        timestamp: analysis.timestamp,
+        timestamp: analysis.timestamp ? formatDisplayTimestamp(analysis.timestamp) : undefined,
       });
     }
   }
@@ -516,12 +522,20 @@ const KERNEL_EVENT_CATEGORY: Record<string, InsightCategory> = {
   suspend_resume_error: 'kernel',
 };
 
-function generateKernelInsights(result: KernelParseResult): InsightCard[] {
-  return result.events.map((event) => kernelEventToInsight(event));
+function generateKernelInsights(result: KernelParseResult, bootEpochMs?: number): InsightCard[] {
+  return result.events.map((event) => kernelEventToInsight(event, bootEpochMs));
 }
 
-function kernelEventToInsight(event: KernelEvent): InsightCard {
+function kernelEventToInsight(event: KernelEvent, bootEpochMs?: number): InsightCard {
   const category = KERNEL_EVENT_CATEGORY[event.type] ?? 'kernel';
+
+  let timestamp: string;
+  if (bootEpochMs != null) {
+    const wallMs = bootEpochMs + event.timestamp * 1000;
+    timestamp = formatEpochToDisplay(wallMs);
+  } else {
+    timestamp = `boot+${event.timestamp.toFixed(3)}s`;
+  }
 
   const card: InsightCard = {
     id: '',
@@ -530,7 +544,7 @@ function kernelEventToInsight(event: KernelEvent): InsightCard {
     title: event.summary,
     description: describeKernelEvent(event),
     relatedLogSnippet: event.entries.map((e) => e.raw).join('\n'),
-    timestamp: `boot+${event.timestamp.toFixed(3)}s`,
+    timestamp,
     source: 'kernel',
   };
 
@@ -907,7 +921,7 @@ function generateTombstoneInsights(analyses?: TombstoneAnalysis[]): InsightCard[
       title,
       description: descParts.join('\n'),
       stackTrace,
-      timestamp: analysis.timestamp,
+      timestamp: analysis.timestamp ? formatDisplayTimestamp(analysis.timestamp) : undefined,
       source: 'tombstone' as const,
       debugCommands: TOMBSTONE_DEBUG_COMMANDS,
     };
@@ -923,6 +937,7 @@ export function buildTimeline(
   kernelResult: KernelParseResult,
   anrAnalyses: ANRTraceAnalysis[],
   tombstoneAnalyses?: TombstoneAnalysis[],
+  bootEpochMs?: number,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -939,8 +954,15 @@ export function buildTimeline(
 
   // Kernel events
   for (const event of kernelResult.events) {
+    let timestamp: string;
+    if (bootEpochMs != null) {
+      const wallMs = bootEpochMs + event.timestamp * 1000;
+      timestamp = formatEpochToDisplay(wallMs);
+    } else {
+      timestamp = `boot+${event.timestamp.toFixed(3)}s`;
+    }
     events.push({
-      timestamp: `boot+${event.timestamp.toFixed(3)}s`,
+      timestamp,
       source: 'kernel',
       severity: event.severity,
       label: event.summary,
@@ -952,7 +974,7 @@ export function buildTimeline(
     if (!analysis.mainThread) continue;
     const reasonLabel = BLOCK_REASON_LABELS[analysis.mainThread.blockReason] ?? 'ANR';
     events.push({
-      timestamp: analysis.timestamp ?? 'unknown',
+      timestamp: formatDisplayTimestamp(analysis.timestamp ?? 'unknown'),
       source: 'anr',
       severity: analysis.mainThread.blockReason === 'idle_main_thread' ? 'info' : 'critical',
       label: `ANR: ${reasonLabel} in ${analysis.processName}`,
@@ -964,7 +986,7 @@ export function buildTimeline(
   if (tombstoneAnalyses) {
     for (const analysis of tombstoneAnalyses) {
       events.push({
-        timestamp: analysis.timestamp ?? 'unknown',
+        timestamp: formatDisplayTimestamp(analysis.timestamp ?? 'unknown'),
         source: 'tombstone',
         severity: 'critical',
         label: analysis.summary,
@@ -1021,19 +1043,44 @@ export function aggregateTimelineEvents(events: TimelineEvent[]): TimelineEvent[
   return result;
 }
 
-function normalizeTimestamp(ts: string): string {
-  // Keep logcat timestamps as-is (they sort lexicographically: "MM-DD HH:mm:ss.SSS")
-  // Prefix kernel boot timestamps with 'Z_' so they sort after logcat
-  if (ts.startsWith('boot+')) return `Z_${ts}`;
-  if (ts === 'unknown') return 'ZZ_unknown';
-  // Convert full date format "YYYY-MM-DD HH:mm:ss..." (from tombstone/ANR) to "MM-DD HH:mm:ss.SSS"
-  // so it sorts correctly alongside logcat timestamps
+/**
+ * Normalize timestamp to a consistent display format: "MM-DD HH:mm:ss.SSS".
+ * - Logcat: already "MM-DD HH:mm:ss.SSS" → no change
+ * - Tombstone/ANR: "YYYY-MM-DD HH:mm:ss.nanos+TZ" → "MM-DD HH:mm:ss.SSS"
+ * - Kernel: "boot+123.456s" → kept as-is (no wall-clock available)
+ * - Unknown: kept as-is
+ *
+ * Used for both display and sorting (kernel prefixed with 'Z_' for sort order).
+ */
+function formatDisplayTimestamp(ts: string): string {
+  // Full date format from tombstone/ANR: "YYYY-MM-DD HH:mm:ss.nanos+TZ"
   const fullDateMatch = ts.match(/^\d{4}-(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\.(\d+))?/);
   if (fullDateMatch) {
     const millis = fullDateMatch[3] ? fullDateMatch[3].slice(0, 3).padEnd(3, '0') : '000';
     return `${fullDateMatch[1]} ${fullDateMatch[2]}.${millis}`;
   }
   return ts;
+}
+
+function normalizeTimestamp(ts: string): string {
+  if (ts.startsWith('boot+')) return `Z_${ts}`;
+  if (ts === 'unknown') return 'ZZ_unknown';
+  return formatDisplayTimestamp(ts);
+}
+
+/**
+ * Convert epoch milliseconds to display format: "MM-DD HH:mm:ss.SSS"
+ * Used to convert kernel boot-relative timestamps to wall-clock time.
+ */
+function formatEpochToDisplay(epochMs: number): string {
+  const d = new Date(epochMs);
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${MM}-${DD} ${hh}:${mm}:${ss}.${ms}`;
 }
 
 // ============================================================
