@@ -2,6 +2,7 @@
 name: android-bsp-expert
 description: Android BSP domain expert for logcat-ai parser development
 model: sonnet
+color: red
 tools:
   - Read
   - Write

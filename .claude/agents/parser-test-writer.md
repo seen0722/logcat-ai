@@ -2,6 +2,7 @@
 name: parser-test-writer
 description: Parser package Vitest test writer for logcat-ai
 model: sonnet
+color: green
 tools:
   - Read
   - Write

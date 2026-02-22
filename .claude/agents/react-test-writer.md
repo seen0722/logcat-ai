@@ -2,6 +2,7 @@
 name: react-test-writer
 description: React frontend test writer for logcat-ai
 model: sonnet
+color: green
 tools:
   - Read
   - Write

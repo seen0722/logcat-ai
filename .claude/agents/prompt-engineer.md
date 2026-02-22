@@ -2,6 +2,7 @@
 name: prompt-engineer
 description: LLM prompt template optimizer for logcat-ai deep analysis
 model: opus
+color: orange
 tools:
   - Read
   - Write

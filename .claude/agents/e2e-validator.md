@@ -2,6 +2,7 @@
 name: e2e-validator
 description: End-to-end validation runner for logcat-ai (read-only)
 model: haiku
+color: cyan
 tools:
   - Read
   - Bash
