@@ -18,6 +18,7 @@ import historyRouter from './routes/history.js';
 import exportRouter from './routes/export.js';
 import compareRouter from './routes/compare.js';
 import batchRouter from './routes/batch.js';
+import searchRouter from './routes/search.js';
 
 // Initialize SQLite database before anything else
 initDatabase();
@@ -42,6 +43,7 @@ app.use('/api/history', historyRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/compare', compareRouter);
 app.use('/api/batch', batchRouter);
+app.use('/api/search', searchRouter);
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

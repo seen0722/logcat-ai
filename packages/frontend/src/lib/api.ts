@@ -147,6 +147,42 @@ export function downloadExport(id: string, format: 'json' | 'html'): void {
   window.open(`${API_BASE}/export/${id}/${format}`, '_blank');
 }
 
+// ---- Search API ----
+
+export interface LogcatSearchResult {
+  totalMatches: number;
+  showing: number;
+  method: 'fts5' | 'keyword';
+  entries: Array<{
+    lineNumber: number;
+    timestamp: string;
+    pid?: number;
+    tid?: number;
+    level: string;
+    tag: string;
+    message: string;
+  }>;
+}
+
+export async function searchLogcat(
+  id: string,
+  params: { q?: string; tag?: string; level?: string; pid?: number; limit?: number },
+): Promise<LogcatSearchResult> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.tag) qs.set('tag', params.tag);
+  if (params.level) qs.set('level', params.level);
+  if (params.pid !== undefined) qs.set('pid', String(params.pid));
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+
+  const res = await fetch(`${API_BASE}/search/${id}?${qs}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Search failed');
+  }
+  return res.json();
+}
+
 // ---- Batch API ----
 
 export async function uploadBatchFiles(files: File[]): Promise<BatchUploadResponse> {

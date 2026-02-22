@@ -1,4 +1,198 @@
-import { AnalysisResult } from '@logcat-ai/parser';
+import { AnalysisResult, InsightCard } from '@logcat-ai/parser';
+
+/**
+ * Prefix-to-color mapping for description lines, mirroring frontend LINE_STYLES.
+ */
+const LINE_COLOR_MAP: Record<string, string> = {
+  'Subject:': '#9ca3af',
+  'ANR in': '#d1d5db',
+  'Target HAL:': '#fcd34d',
+  'Suspected HAL:': '#fdba74',
+  'Blocking chain:': '#fca5a5',
+  'Deadlock': '#f87171',
+  'Binder pool': '#fbbf24',
+  'Occurred': '#6b7280',
+};
+
+function renderDescription(description: string): string {
+  const lines = description.split('\n').filter(Boolean);
+  if (lines.length <= 1) {
+    return `<p class="insight-desc">${escapeHtml(description)}</p>`;
+  }
+  return lines.map(line => {
+    const match = Object.entries(LINE_COLOR_MAP).find(([prefix]) => line.startsWith(prefix));
+    const color = match ? match[1] : '#d1d5db';
+    const extra = match && (match[0] === 'Target HAL:' || match[0] === 'Suspected HAL:' || match[0] === 'Blocking chain:')
+      ? 'font-family:monospace;font-size:12px;' : '';
+    const bold = match && match[0] === 'Deadlock' ? 'font-weight:500;' : '';
+    return `<div class="insight-desc-line" style="color:${color};${extra}${bold}">${escapeHtml(line)}</div>`;
+  }).join('\n');
+}
+
+function renderInsightExtras(insight: InsightCard): string {
+  const parts: string[] = [];
+
+  // Stack trace
+  if (insight.stackTrace) {
+    parts.push(`
+      <div class="detail-section">
+        <div class="detail-label">Stack Trace</div>
+        <pre class="code-block">${escapeHtml(insight.stackTrace)}</pre>
+      </div>
+    `);
+  }
+
+  // Related log snippet
+  if (insight.relatedLogSnippet) {
+    parts.push(`
+      <div class="detail-section">
+        <div class="detail-label">Related Logs</div>
+        <pre class="code-block">${escapeHtml(insight.relatedLogSnippet)}</pre>
+      </div>
+    `);
+  }
+
+  // SELinux allow rule
+  if (insight.suggestedAllowRule) {
+    parts.push(`
+      <div class="detail-section">
+        <div class="detail-label">SELinux Allow Rule</div>
+        <code class="selinux-rule">${escapeHtml(insight.suggestedAllowRule)}</code>
+      </div>
+    `);
+  }
+
+  // Debug commands
+  if (insight.debugCommands && insight.debugCommands.length > 0) {
+    parts.push(`
+      <div class="detail-section">
+        <div class="detail-label">Suggested Debug Commands</div>
+        <div class="debug-commands">
+          ${insight.debugCommands.map(cmd =>
+            `<code class="debug-cmd">$ ${escapeHtml(cmd)}</code>`
+          ).join('\n')}
+        </div>
+      </div>
+    `);
+  }
+
+  return parts.join('\n');
+}
+
+function renderDeepAnalysis(da: NonNullable<InsightCard['deepAnalysis']>): string {
+  const confidenceColor =
+    da.confidence === 'high' ? '#22c55e' :
+    da.confidence === 'medium' ? '#eab308' : '#6b7280';
+
+  const categoryColor =
+    da.category === 'root_cause' ? 'background:rgba(239,68,68,0.2);color:#f87171;' :
+    da.category === 'symptom' ? 'background:rgba(234,179,8,0.2);color:#fbbf24;' :
+    'background:rgba(59,130,246,0.2);color:#60a5fa;';
+
+  const categoryLabel =
+    da.category === 'root_cause' ? 'Root Cause' :
+    da.category === 'symptom' ? 'Symptom' :
+    da.category === 'contributing_factor' ? 'Contributing Factor' : da.category;
+
+  const sections: string[] = [];
+
+  // Header with badges
+  sections.push(`
+    <div class="da-header">
+      <span class="da-title">AI Deep Analysis</span>
+      <span class="badge" style="background:${confidenceColor}33;color:${confidenceColor};">${da.confidence}</span>
+      <span class="badge" style="${categoryColor}">${categoryLabel}</span>
+    </div>
+  `);
+
+  // Root Cause
+  sections.push(`
+    <div class="da-field">
+      <div class="da-field-label">Root Cause</div>
+      <p class="da-field-text">${escapeHtml(da.rootCause)}</p>
+    </div>
+  `);
+
+  // Fix Suggestion
+  sections.push(`
+    <div class="da-field">
+      <div class="da-field-label">Fix Suggestion</div>
+      <p class="da-field-text">${escapeHtml(da.fixSuggestion)}</p>
+    </div>
+  `);
+
+  // Impact Assessment
+  if (da.impactAssessment) {
+    sections.push(`
+      <div class="da-field">
+        <div class="da-field-label">User Impact</div>
+        <p class="da-field-text">${escapeHtml(da.impactAssessment)}</p>
+      </div>
+    `);
+  }
+
+  // Affected Components
+  if (da.affectedComponents && da.affectedComponents.length > 0) {
+    sections.push(`
+      <div class="da-field">
+        <div class="da-field-label">Affected Components</div>
+        <div class="component-tags">
+          ${da.affectedComponents.map(comp =>
+            `<span class="component-tag">${escapeHtml(comp)}</span>`
+          ).join('\n')}
+        </div>
+      </div>
+    `);
+  }
+
+  // Evidence
+  if (da.evidence && da.evidence.length > 0) {
+    sections.push(`
+      <div class="da-field">
+        <div class="da-field-label">Evidence</div>
+        <ul class="da-evidence-list">
+          ${da.evidence.map(e =>
+            `<li>${escapeHtml(e)}</li>`
+          ).join('\n')}
+        </ul>
+      </div>
+    `);
+  }
+
+  // Debugging Steps
+  if (da.debuggingSteps && da.debuggingSteps.length > 0) {
+    sections.push(`
+      <div class="da-field">
+        <div class="da-field-label">Debugging Steps</div>
+        <ol class="da-steps-list">
+          ${da.debuggingSteps.map(step =>
+            `<li>${escapeHtml(step)}</li>`
+          ).join('\n')}
+        </ol>
+      </div>
+    `);
+  }
+
+  // Related Insights
+  if (da.relatedInsights && da.relatedInsights.length > 0) {
+    sections.push(`
+      <div class="da-field">
+        <div class="da-field-label">Related Insights</div>
+        <div class="related-tags">
+          ${da.relatedInsights.map(id =>
+            `<a href="#${escapeHtml(id)}" class="related-link">${escapeHtml(id)}</a>`
+          ).join('\n')}
+        </div>
+      </div>
+    `);
+  }
+
+  return `
+    <div class="deep-analysis">
+      ${sections.join('\n')}
+    </div>
+  `;
+}
 
 export function exportAsHTML(result: AnalysisResult): string {
   const m = result.metadata;
@@ -13,22 +207,21 @@ export function exportAsHTML(result: AnalysisResult): string {
   };
 
   const insightsHTML = result.insights.map(insight => `
-    <div style="border:1px solid #374151;border-radius:8px;padding:16px;margin-bottom:12px;background:#1f2937;">
+    <div id="${escapeHtml(insight.id)}" class="insight-card">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <span style="background:${severityColor(insight.severity)};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">
+        <span class="severity-badge" style="background:${severityColor(insight.severity)};">
           ${insight.severity.toUpperCase()}
         </span>
-        <span style="font-weight:600;">${escapeHtml(insight.title)}</span>
+        <span class="badge" style="background:rgba(99,102,241,0.2);color:#818cf8;">${escapeHtml(insight.category)}</span>
+        <span class="badge" style="background:rgba(107,114,128,0.2);color:#9ca3af;">${escapeHtml(insight.source)}</span>
+        ${insight.timestamp ? `<span style="font-size:12px;color:#6b7280;">${escapeHtml(insight.timestamp)}</span>` : ''}
       </div>
-      <p style="color:#9ca3af;font-size:14px;">${escapeHtml(insight.description)}</p>
-      ${insight.deepAnalysis ? `
-        <div style="margin-top:12px;padding:12px;background:#111827;border-radius:6px;">
-          <p style="font-weight:600;color:#818cf8;margin-bottom:4px;">Root Cause</p>
-          <p style="color:#d1d5db;font-size:14px;">${escapeHtml(insight.deepAnalysis.rootCause)}</p>
-          <p style="font-weight:600;color:#34d399;margin-top:8px;margin-bottom:4px;">Fix Suggestion</p>
-          <p style="color:#d1d5db;font-size:14px;">${escapeHtml(insight.deepAnalysis.fixSuggestion)}</p>
-        </div>
-      ` : ''}
+      <h3 style="font-weight:600;margin-bottom:8px;">${escapeHtml(insight.title)}</h3>
+      <div class="insight-desc-block">
+        ${renderDescription(insight.description)}
+      </div>
+      ${renderInsightExtras(insight)}
+      ${insight.deepAnalysis ? renderDeepAnalysis(insight.deepAnalysis) : ''}
     </div>
   `).join('');
 
@@ -53,6 +246,40 @@ export function exportAsHTML(result: AnalysisResult): string {
   .timeline-item { padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px; }
   .timeline-item .time { color:#6b7280;font-family:monospace; }
   .footer { margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;color:#6b7280;font-size:12px; }
+
+  /* Insight cards */
+  .insight-card { border:1px solid #374151;border-radius:8px;padding:16px;margin-bottom:12px;background:#1f2937; }
+  .severity-badge { color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600; }
+  .badge { padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500; }
+  .insight-desc { color:#9ca3af;font-size:14px; }
+  .insight-desc-block { margin-bottom:8px; }
+  .insight-desc-line { font-size:14px;line-height:1.5; }
+
+  /* Detail sections */
+  .detail-section { margin-top:12px; }
+  .detail-label { font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px; }
+  .code-block { padding:10px 12px;background:#111827;border-radius:6px;font-size:12px;color:#9ca3af;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;margin:0; }
+  .selinux-rule { display:block;padding:8px 12px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.2);border-radius:6px;font-size:12px;color:#fcd34d;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
+  .debug-commands { display:flex;flex-direction:column;gap:4px; }
+  .debug-cmd { display:block;padding:6px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:4px;font-size:12px;color:#86efac;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
+
+  /* Deep Analysis */
+  .deep-analysis { margin-top:12px;padding:12px;background:#111827;border:1px solid rgba(99,102,241,0.3);border-radius:8px; }
+  .da-header { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px; }
+  .da-title { color:#818cf8;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:0.05em; }
+  .da-field { margin-bottom:10px; }
+  .da-field:last-child { margin-bottom:0; }
+  .da-field-label { font-size:11px;color:#6b7280;margin-bottom:2px; }
+  .da-field-text { color:#d1d5db;font-size:14px;line-height:1.5; }
+  .component-tags { display:flex;gap:4px;flex-wrap:wrap;margin-top:4px; }
+  .component-tag { font-size:11px;background:rgba(107,114,128,0.3);color:#d1d5db;padding:2px 8px;border-radius:4px;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
+  .da-evidence-list { padding-left:16px;margin-top:4px; }
+  .da-evidence-list li { font-size:12px;color:#9ca3af;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;line-height:1.6;white-space:pre-wrap; }
+  .da-steps-list { padding-left:20px;margin-top:4px; }
+  .da-steps-list li { font-size:12px;color:#d1d5db;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;line-height:1.6; }
+  .related-tags { display:flex;gap:4px;flex-wrap:wrap;margin-top:4px; }
+  .related-link { font-size:11px;color:#818cf8;background:rgba(99,102,241,0.1);padding:2px 8px;border-radius:4px;text-decoration:none; }
+  .related-link:hover { background:rgba(99,102,241,0.2); }
 </style>
 </head>
 <body>

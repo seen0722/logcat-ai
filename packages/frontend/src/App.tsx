@@ -17,12 +17,15 @@ import ExportMenu from './components/ExportMenu';
 import ComparisonView from './components/ComparisonView';
 import BatchUpload from './components/BatchUpload';
 import BatchResults from './components/BatchResults';
+import SearchModal from './components/SearchModal';
 
 export default function App() {
   const { phase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
   const [showHistory, setShowHistory] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const { comparison, loading: compareLoading, error: compareError, compare, reset: resetComparison } = useComparison();
+
+  const [showSearch, setShowSearch] = useState(false);
 
   // Batch state
   const [showBatchUpload, setShowBatchUpload] = useState(false);
@@ -49,12 +52,20 @@ export default function App() {
           <h1 className="text-xl font-bold">Logcat AI</h1>
           <div className="flex items-center gap-2">
             {uploadId && phase === 'result' && (
-              <button
-                onClick={() => setCompareMode(true)}
-                className="px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
-              >
-                Compare
-              </button>
+              <>
+                <button
+                  onClick={() => setCompareMode(true)}
+                  className="px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                >
+                  Compare
+                </button>
+                <button
+                  onClick={() => setShowSearch(true)}
+                  className="px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                >
+                  Search
+                </button>
+              </>
             )}
             {uploadId && <ExportMenu uploadId={uploadId} />}
             <button
@@ -205,6 +216,11 @@ export default function App() {
           onViewReport={handleBatchViewReport}
           onClose={() => { setBatchAggregation(null); setBatchItems([]); }}
         />
+      )}
+
+      {/* Search Modal */}
+      {showSearch && uploadId && (
+        <SearchModal uploadId={uploadId} onClose={() => setShowSearch(false)} />
       )}
     </div>
   );

@@ -12,7 +12,8 @@ import { OpenAIProvider } from './providers/openai.js';
 import { GeminiProvider } from './providers/gemini.js';
 import { AnthropicProvider } from './providers/anthropic.js';
 import { buildAnalysisPrompt } from './prompt-templates/analysis.js';
-import { buildChatPrompt, ChatMessage } from './prompt-templates/chat.js';
+import { buildChatPrompt } from './prompt-templates/chat.js';
+import type { ChatMessage } from './prompt-templates/chat.js';
 import { buildToolSystemPrompt } from './tool-definitions.js';
 import { executeTool } from './tool-executor.js';
 
