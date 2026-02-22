@@ -49,7 +49,7 @@
 
 ## 2. Phase 1.5 — BSP Analysis Enhancement
 
-### ✅ Completed（11/13）
+### ✅ Completed（13/13）
 
 - [x] #30 **Timeline 重構** — P0
   - 事件聚合：相鄰相同 label+source+severity 事件自動合併，顯示 ×count + 時間範圍
@@ -127,19 +127,16 @@
   - 前端 `Timeline.tsx` 新增 tombstone source filter（rose 紅色系配色）
   - 15 tests（SIGSEGV/SIGABRT/SIGBUS 解析、backtrace frame、vendor crash、registers、.pb skip、容錯）
 
-### 🔲 Remaining（2/13）
+- [x] #36 **BSP-Specific Prompt Tuning** — P2
+  - System prompt 新增 4 條 BSP 層級分類規則（vendor/BSP、framework、app）
+  - User prompt 新增 Error Distribution by Layer 段落（百分比 + top 5 vendor tags）
+  - Chat prompt 新增 error distribution 和 HAL status 上下文 + BSP-specific guidance rule
+  - 7 tests
 
-#### P2 Tasks
-
-- [ ] #36 **BSP-Specific Prompt Tuning**
-  - Deep Analysis prompt 區分 vendor / framework / app 層問題
-  - 針對 BSP 常見問題提供專屬分析模板
-  - **涉及檔案**：`prompt-templates/analysis.ts`
-
-- [ ] #42 **BSP Quick Reference 面板**
-  - 前端新增整合面板：device state + resource snapshot + HAL status
-  - 一頁式總覽
-  - **涉及檔案**：新增 `BSPQuickReference.tsx`
+- [x] #42 **BSP Quick Reference 面板** — P2
+  - 新增 `BSPQuickReference.tsx`：4 個 sub-panel（Boot & Reliability、Resource Pressure、HAL Health、Vendor Error Tags）
+  - 整合至 App.tsx（TagStats 之後、DeepAnalysisOverview 之前）
+  - 所有 props optional，無資料時 return null
 
 ---
 
@@ -167,5 +164,5 @@
 | Package | Tests | 說明 |
 |---------|-------|------|
 | parser | 160 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(34) + tombstone(15) + integration(5) |
-| backend | 47 | routes + analyzer + parser integration |
-| **Total** | **207** | |
+| backend | 53 | routes + analyzer + parser integration + prompt tests |
+| **Total** | **213** | |

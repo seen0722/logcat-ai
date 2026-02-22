@@ -2,7 +2,7 @@
 
 > **版本**：v0.2.0
 > **更新日期**：2026-02-22
-> **狀態**：Phase 1 完成，Phase 1.5 進行中（11/13 完成）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13）
 
 ---
 
@@ -437,6 +437,7 @@ logcat-ai/
 │           ├── DeepAnalysisOverview.tsx
 │           ├── StackTrace.tsx
 │           ├── TagStats.tsx
+│           ├── BSPQuickReference.tsx
 │           └── ChatPanel.tsx
 └── sample-bugreports/
 ```
@@ -636,7 +637,7 @@ GitHub Issues + Project Board：
 
 ---
 
-## 12. Phase 1.5 — BSP 分析能力強化（規劃中）
+## 12. Phase 1.5 — BSP 分析能力強化（✅ 全部完成）
 
 基於 Tech Lead review 與新手 BSP 工程師使用回饋，識別出以下改善方向。
 
@@ -650,7 +651,7 @@ GitHub Issues + Project Board：
 | P1 | #33 | Logcat 新增 Input dispatching timeout / HAL restart patterns | Low | Medium | ✅ 完成 |
 | P1 | #34 | Health score 改善（frequency-based damping） | Medium | Medium | ✅ 完成 |
 | P1 | #35 | Tombstone parser（native crash backtrace + signal info + vendor crash 偵測） | Medium | Medium | ✅ 完成 |
-| P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low | 待開始 |
+| P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low | ✅ 完成 |
 
 ### 12.2 新手 BSP 工程師 Debug 輔助
 
@@ -661,7 +662,7 @@ GitHub Issues + Project Board：
 | P1 | #39 | Log tag vendor/framework 自動分類 + top error tags 統計 | Medium | High | ✅ 完成 |
 | P1 | #40 | SELinux denial → allow rule 自動生成 | Low | High | ✅ 完成 |
 | P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium | ✅ 完成 |
-| P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium | 待開始 |
+| P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium | ✅ 完成 |
 
 ### 12.3 #30 Timeline 重構（P0 最高優先）
 
