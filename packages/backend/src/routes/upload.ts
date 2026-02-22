@@ -4,6 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { getConfig } from '../config.js';
+import { analysisStore } from '../store.js';
 
 const router = Router();
 
@@ -24,12 +25,13 @@ function getUpload() {
     storage,
     limits: { fileSize: config.maxFileSize },
     fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
       if (file.mimetype === 'application/zip' ||
           file.mimetype === 'application/x-zip-compressed' ||
-          file.originalname.endsWith('.zip')) {
+          ext === '.zip' || ext === '.txt' || ext === '.log') {
         cb(null, true);
       } else {
-        cb(new Error('Only .zip files are accepted'));
+        cb(new Error('Only .zip, .txt, and .log files are accepted'));
       }
     },
   });
@@ -55,6 +57,9 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     const id = path.basename(req.file.filename, path.extname(req.file.filename));
+
+    // Store upload metadata for later use by analyze route (SQLite persistence)
+    analysisStore.setUploadMeta(id, req.file.originalname, req.file.size);
 
     res.json({
       id,

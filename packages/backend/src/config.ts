@@ -1,9 +1,14 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LLMProviderType, LLMProviderConfig } from '@logcat-ai/parser';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface AppConfig {
   port: number;
   uploadDir: string;
   maxFileSize: number; // bytes
+  dbPath: string;
   llm: {
     defaultProvider: LLMProviderType;
     providers: Record<LLMProviderType, LLMProviderConfig>;
@@ -19,6 +24,7 @@ export function loadConfig(): AppConfig {
     port: parseInt(env('PORT', '8000'), 10),
     uploadDir: env('UPLOAD_DIR', '/tmp/logcat-ai-uploads'),
     maxFileSize: parseInt(env('MAX_FILE_SIZE', String(200 * 1024 * 1024)), 10), // 200MB
+    dbPath: env('DB_PATH', path.resolve(__dirname, '../../../data/logcat-ai.db')),
 
     llm: {
       defaultProvider: env('LLM_PROVIDER', 'ollama') as LLMProviderType,

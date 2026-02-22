@@ -317,12 +317,12 @@ function buildLockGraph(
 
       if (!nodeSet.has(fromTid)) {
         nodeSet.add(fromTid);
-        nodes.push({ tid: fromTid, threadName: thread.name });
+        nodes.push({ tid: fromTid, threadName: thread.name, state: thread.state });
       }
       if (!nodeSet.has(toTid)) {
         nodeSet.add(toTid);
         const holder = threads.find((t) => t.tid === toTid);
-        nodes.push({ tid: toTid, threadName: holder?.name ?? `thread-${toTid}` });
+        nodes.push({ tid: toTid, threadName: holder?.name ?? `thread-${toTid}`, state: holder?.state ?? 'Unknown' });
       }
 
       edges.push({

@@ -9,10 +9,18 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import express from 'express';
 import cors from 'cors';
 import { getConfig } from './config.js';
+import { initDatabase } from './db.js';
 import uploadRouter from './routes/upload.js';
 import analyzeRouter from './routes/analyze.js';
 import chatRouter from './routes/chat.js';
 import settingsRouter from './routes/settings.js';
+import historyRouter from './routes/history.js';
+import exportRouter from './routes/export.js';
+import compareRouter from './routes/compare.js';
+import batchRouter from './routes/batch.js';
+
+// Initialize SQLite database before anything else
+initDatabase();
 
 const app = express();
 
@@ -30,6 +38,10 @@ app.use('/api/upload', uploadRouter);
 app.use('/api/analyze', analyzeRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/history', historyRouter);
+app.use('/api/export', exportRouter);
+app.use('/api/compare', compareRouter);
+app.use('/api/batch', batchRouter);
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

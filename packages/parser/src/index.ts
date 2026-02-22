@@ -6,3 +6,6 @@ export * from './kernel-parser.js';
 export * from './tombstone-parser.js';
 export * from './basic-analyzer.js';
 export * from './dumpsys-parser.js';
+export * from './format-detector.js';
+export * from './comparison.js';
+export * from './batch-analyzer.js';

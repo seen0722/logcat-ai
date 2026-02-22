@@ -10,6 +10,7 @@ import {
   parseCpuInfo,
   parseLshal,
   parseTombstones,
+  detectLogFormat,
   AnalysisResult,
   DeepAnalysisOverview,
 } from '@logcat-ai/parser';
@@ -17,6 +18,8 @@ import { analyzeBasic } from '@logcat-ai/parser';
 import { getConfig } from '../config.js';
 import { analyzeDeep } from '../llm-gateway/llm-gateway.js';
 import { analysisStore } from '../store.js';
+import { rawDataStore } from '../raw-data-store.js';
+import { indexLogcatEntries } from '../search/fts-indexer.js';
 
 const router = Router();
 
@@ -46,13 +49,28 @@ router.get('/:id', async (req: Request, res: Response) => {
   const mode = String(req.query.mode ?? 'quick');
   const userDescription = req.query.description ? String(req.query.description) : undefined;
 
-  // Find uploaded file
+  // Find uploaded file — support .zip, .txt, .log extensions
   const config = getConfig();
-  const zipPath = path.join(config.uploadDir, `${id}.zip`);
+  const uploadMeta = analysisStore.getUploadMeta(id);
+  const originalFilename = uploadMeta?.filename ?? '';
+  const fileSize = uploadMeta?.fileSize ?? 0;
 
-  if (!fs.existsSync(zipPath)) {
+  // Try to locate the file with known extensions
+  let filePath = '';
+  const possibleExts = ['.zip', '.txt', '.log'];
+  for (const ext of possibleExts) {
+    const candidate = path.join(config.uploadDir, `${id}${ext}`);
+    if (fs.existsSync(candidate)) {
+      filePath = candidate;
+      break;
+    }
+  }
+
+  if (!filePath) {
     return res.status(404).json({ error: `Upload ${id} not found` });
   }
+
+  const fileExt = path.extname(filePath).toLowerCase();
 
   // Set up SSE
   res.writeHead(200, {
@@ -66,91 +84,121 @@ router.get('/:id', async (req: Request, res: Response) => {
   req.on('close', () => { aborted = true; });
 
   try {
-    // Stage 1: Unpack
-    sendSSE(res, { stage: 'unpacking', progress: 10, message: 'Unpacking bugreport.zip...' });
+    let analysisResult: AnalysisResult;
 
-    const unpackResult = await unpackBugreport(zipPath);
+    if (fileExt === '.txt' || fileExt === '.log') {
+      // ── Standalone logcat / dmesg file path ──
+      const standaloneResult = analyzeStandaloneFile(id, res, filePath, aborted);
+      if (!standaloneResult) return; // error or unknown format already sent
+      analysisResult = standaloneResult;
 
-    if (aborted) return;
-    sendSSE(res, { stage: 'unpacking', progress: 25, message: 'Unpack complete' });
+    } else {
+      // ── ZIP bugreport path (existing logic) ──
+      // Stage 1: Unpack
+      sendSSE(res, { stage: 'unpacking', progress: 10, message: 'Unpacking bugreport.zip...' });
 
-    // Stage 2: Parse
-    sendSSE(res, { stage: 'parsing', progress: 30, message: 'Parsing logcat...' });
+      const unpackResult = await unpackBugreport(filePath);
 
-    // Parse all logcat sections
-    const logcatTexts = unpackResult.logcatSections;
-    const combinedLogcat = logcatTexts.join('\n');
-    const logcatResult = parseLogcat(combinedLogcat);
+      if (aborted) return;
+      sendSSE(res, { stage: 'unpacking', progress: 25, message: 'Unpack complete' });
 
-    if (aborted) return;
-    sendSSE(res, { stage: 'parsing', progress: 45, message: 'Parsing ANR traces...' });
+      // Stage 2: Parse
+      sendSSE(res, { stage: 'parsing', progress: 30, message: 'Parsing logcat...' });
 
-    // Parse all ANR trace files
-    const anrAnalyses = [...unpackResult.anrTraceContents.values()]
-      .map((content) => parseANRTrace(content));
+      // Parse all logcat sections
+      const logcatTexts = unpackResult.logcatSections;
+      const combinedLogcat = logcatTexts.join('\n');
+      const logcatResult = parseLogcat(combinedLogcat);
 
-    if (aborted) return;
-    sendSSE(res, { stage: 'parsing', progress: 55, message: 'Parsing kernel log...' });
+      if (aborted) return;
+      sendSSE(res, { stage: 'parsing', progress: 45, message: 'Parsing ANR traces...' });
 
-    // Parse kernel log from sections
-    const kernelSection = unpackResult.sections.find(
-      (s) => s.name === 'KERNEL LOG' || s.command.includes('dmesg')
-    );
-    const kernelResult = parseKernelLog(kernelSection?.content ?? '');
+      // Parse all ANR trace files
+      const anrAnalyses = [...unpackResult.anrTraceContents.values()]
+        .map((content) => parseANRTrace(content));
 
-    if (aborted) return;
-    sendSSE(res, { stage: 'parsing', progress: 60, message: 'Parsing dumpsys meminfo/cpuinfo...' });
+      if (aborted) return;
+      sendSSE(res, { stage: 'parsing', progress: 55, message: 'Parsing kernel log...' });
 
-    // Parse dumpsys meminfo — try dedicated section first, then search in DUMPSYS sections
-    const memInfoSection = unpackResult.sections.find(
-      (s) => s.command.includes('dumpsys meminfo')
-    ) ?? unpackResult.sections.find(
-      (s) => /^DUMPSYS/i.test(s.name) && /Total RAM:/i.test(s.content)
-    );
-    const memInfo = memInfoSection ? parseMemInfo(memInfoSection.content) : undefined;
+      // Parse kernel log from sections
+      const kernelSection = unpackResult.sections.find(
+        (s) => s.name === 'KERNEL LOG' || s.command.includes('dmesg')
+      );
+      const kernelResult = parseKernelLog(kernelSection?.content ?? '');
 
-    // Parse dumpsys cpuinfo — try dedicated section first, then search in DUMPSYS sections
-    const cpuInfoSection = unpackResult.sections.find(
-      (s) => s.command.includes('dumpsys cpuinfo')
-    ) ?? unpackResult.sections.find(
-      (s) => /^DUMPSYS/i.test(s.name) && /TOTAL:.*user.*kernel/i.test(s.content)
-    );
-    const cpuInfo = cpuInfoSection ? parseCpuInfo(cpuInfoSection.content) : undefined;
+      if (aborted) return;
+      sendSSE(res, { stage: 'parsing', progress: 60, message: 'Parsing dumpsys meminfo/cpuinfo...' });
 
-    // Parse HARDWARE HALS (lshal output)
-    const halSection = unpackResult.sections.find(
-      (s) => s.name === 'HARDWARE HALS' || s.command.includes('lshal')
-    );
-    const halStatus = halSection ? parseLshal(halSection.content, unpackResult.metadata.manufacturer) : undefined;
+      // Parse dumpsys meminfo — try dedicated section first, then search in DUMPSYS sections
+      const memInfoSection = unpackResult.sections.find(
+        (s) => s.command.includes('dumpsys meminfo')
+      ) ?? unpackResult.sections.find(
+        (s) => /^DUMPSYS/i.test(s.name) && /Total RAM:/i.test(s.content)
+      );
+      const memInfo = memInfoSection ? parseMemInfo(memInfoSection.content) : undefined;
 
-    // Parse tombstones (native crash dumps)
-    const tombstoneResult = parseTombstones(unpackResult.tombstoneContents);
+      // Parse dumpsys cpuinfo — try dedicated section first, then search in DUMPSYS sections
+      const cpuInfoSection = unpackResult.sections.find(
+        (s) => s.command.includes('dumpsys cpuinfo')
+      ) ?? unpackResult.sections.find(
+        (s) => /^DUMPSYS/i.test(s.name) && /TOTAL:.*user.*kernel/i.test(s.content)
+      );
+      const cpuInfo = cpuInfoSection ? parseCpuInfo(cpuInfoSection.content) : undefined;
 
-    if (aborted) return;
-    sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
+      // Parse HARDWARE HALS (lshal output)
+      const halSection = unpackResult.sections.find(
+        (s) => s.name === 'HARDWARE HALS' || s.command.includes('lshal')
+      );
+      const halStatus = halSection ? parseLshal(halSection.content, unpackResult.metadata.manufacturer) : undefined;
 
-    // Stage 3: Basic Analysis
-    sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
+      // Parse tombstones (native crash dumps)
+      const tombstoneResult = parseTombstones(unpackResult.tombstoneContents);
 
-    // Extract system properties section
-    const sysPropSection = unpackResult.sections.find(
-      (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
-    );
+      if (aborted) return;
+      sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
-    const analysisResult: AnalysisResult = analyzeBasic({
-      metadata: unpackResult.metadata,
-      logcatResult,
-      kernelResult,
-      anrAnalyses,
-      memInfo,
-      cpuInfo,
-      halStatus,
-      tombstoneAnalyses: tombstoneResult.analyses,
-      systemProperties: sysPropSection?.content,
-    });
+      // Store raw parsed data for agentic chat tool access
+      rawDataStore.set(id, {
+        logcatEntries: logcatResult.entries,
+        kernelResult,
+        anrAnalyses,
+        sections: unpackResult.sections,
+      });
+
+      // Index logcat entries in FTS5 for full-text search
+      try {
+        indexLogcatEntries(id, logcatResult.entries);
+      } catch (err) {
+        console.error('[FTS5] Indexing failed:', err instanceof Error ? err.message : err);
+      }
+
+      // Stage 3: Basic Analysis
+      sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
+
+      // Extract system properties section
+      const sysPropSection = unpackResult.sections.find(
+        (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
+      );
+
+      analysisResult = analyzeBasic({
+        metadata: unpackResult.metadata,
+        logcatResult,
+        kernelResult,
+        anrAnalyses,
+        memInfo,
+        cpuInfo,
+        halStatus,
+        tombstoneAnalyses: tombstoneResult.analyses,
+        systemProperties: sysPropSection?.content,
+      });
+    }
 
     // Store result for later use (chat, deep analysis re-run)
-    analysisStore.set(id, analysisResult);
+    if (uploadMeta) {
+      analysisStore.setWithMeta(id, analysisResult, originalFilename, fileSize);
+    } else {
+      analysisStore.set(id, analysisResult);
+    }
 
     if (aborted) return;
     sendSSE(res, {
@@ -208,7 +256,12 @@ router.get('/:id', async (req: Request, res: Response) => {
             };
           }
 
-          analysisStore.set(id, analysisResult);
+          // Persist updated result (with deep analysis) to both cache and SQLite
+          if (uploadMeta) {
+            analysisStore.setWithMeta(id, analysisResult, originalFilename, fileSize);
+          } else {
+            analysisStore.set(id, analysisResult);
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown LLM error';
@@ -243,6 +296,96 @@ router.get('/:id/result', (req: Request, res: Response) => {
   }
   res.json(result);
 });
+
+// ============================================================
+// Standalone File Analysis (logcat / dmesg)
+// ============================================================
+
+const EMPTY_METADATA = {
+  androidVersion: '',
+  sdkLevel: 0,
+  buildFingerprint: '',
+  deviceModel: '',
+  manufacturer: '',
+  buildDate: '',
+  kernelVersion: '',
+  bugreportTimestamp: new Date(),
+};
+
+/**
+ * Analyze a standalone .txt/.log file (logcat or dmesg).
+ * Returns the AnalysisResult, or null if format is unknown (error SSE already sent).
+ */
+function analyzeStandaloneFile(
+  id: string,
+  res: Response,
+  filePath: string,
+  _aborted: boolean,
+): AnalysisResult | null {
+  sendSSE(res, { stage: 'unpacking', progress: 10, message: 'Reading file...' });
+  const content = fs.readFileSync(filePath, 'utf-8');
+
+  sendSSE(res, { stage: 'parsing', progress: 30, message: 'Detecting format...' });
+  const format = detectLogFormat(content);
+
+  if (format === 'unknown') {
+    sendSSE(res, {
+      stage: 'error',
+      progress: 0,
+      message: 'Unable to detect file format. Expected logcat or dmesg output.',
+    });
+    res.end();
+    return null;
+  }
+
+  if (format === 'logcat') {
+    sendSSE(res, { stage: 'parsing', progress: 50, message: 'Parsing logcat...' });
+    const logcatResult = parseLogcat(content);
+
+    // Store raw data for agentic chat tool access
+    rawDataStore.set(id, {
+      logcatEntries: logcatResult.entries,
+      kernelResult: { entries: [], events: [], totalLines: 0 },
+      anrAnalyses: [],
+      sections: [],
+    });
+
+    // Index logcat entries in FTS5 for full-text search
+    try {
+      indexLogcatEntries(id, logcatResult.entries);
+    } catch (err) {
+      console.error('[FTS5] Indexing failed:', err instanceof Error ? err.message : err);
+    }
+
+    sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Analyzing logcat...' });
+    return analyzeBasic({
+      metadata: EMPTY_METADATA,
+      logcatResult,
+      kernelResult: { entries: [], events: [], totalLines: 0 },
+      anrAnalyses: [],
+    });
+  } else {
+    // dmesg
+    sendSSE(res, { stage: 'parsing', progress: 50, message: 'Parsing kernel log...' });
+    const kernelResult = parseKernelLog(content);
+
+    // Store raw data for agentic chat tool access
+    rawDataStore.set(id, {
+      logcatEntries: [],
+      kernelResult,
+      anrAnalyses: [],
+      sections: [],
+    });
+
+    sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Analyzing kernel log...' });
+    return analyzeBasic({
+      metadata: EMPTY_METADATA,
+      logcatResult: { entries: [], anomalies: [], totalLines: 0, parsedLines: 0, parseErrors: 0 },
+      kernelResult,
+      anrAnalyses: [],
+    });
+  }
+}
 
 // ============================================================
 // Helpers

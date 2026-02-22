@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ANRTraceAnalysis, ThreadBlockAnalysis } from '../lib/types';
 import StackTrace from './StackTrace';
+import LockGraphVisualization from './LockGraphVisualization';
 
 interface Props {
   analyses: ANRTraceAnalysis[];
@@ -188,25 +189,12 @@ export default function ANRDetail({ analyses }: Props) {
         </div>
       )}
 
-      {/* Lock Graph Summary */}
+      {/* Lock Graph Visualization */}
       {analysis.lockGraph.edges.length > 0 && (
-        <div>
-          <h3 className="text-sm text-gray-500 mb-2">
-            Lock Graph ({analysis.lockGraph.nodes.length} threads, {analysis.lockGraph.edges.length} edges)
-          </h3>
-          <div className="space-y-1 text-xs text-gray-400">
-            {analysis.lockGraph.edges.map((edge, i) => {
-              const from = analysis.lockGraph.nodes.find((n) => n.tid === edge.from);
-              const to = analysis.lockGraph.nodes.find((n) => n.tid === edge.to);
-              return (
-                <div key={i}>
-                  "{from?.threadName ?? edge.from}" waits for lock {edge.lockAddress}
-                  ({edge.lockClassName}) held by "{to?.threadName ?? edge.to}"
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <LockGraphVisualization
+          lockGraph={analysis.lockGraph}
+          deadlocks={analysis.deadlocks}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { uploadFile, startAnalysis } from '../lib/api';
+import { uploadFile, startAnalysis, fetchHistoryResult } from '../lib/api';
 import {
   AnalysisResult,
   SSEProgress,
@@ -67,6 +67,21 @@ export function useAnalysis() {
     [],
   );
 
+  const loadFromHistory = useCallback(
+    async (id: string) => {
+      setError(null);
+      try {
+        const historyResult = await fetchHistoryResult(id);
+        setUploadId(id);
+        setResult(historyResult);
+        setPhase('result');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load history');
+      }
+    },
+    [],
+  );
+
   const reset = useCallback(() => {
     cleanupRef.current?.();
     setPhase('upload');
@@ -76,5 +91,5 @@ export function useAnalysis() {
     setError(null);
   }, []);
 
-  return { phase, uploadId, progress, result, error, start, reset };
+  return { phase, uploadId, progress, result, error, start, reset, loadFromHistory };
 }

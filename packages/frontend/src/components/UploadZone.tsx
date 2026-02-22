@@ -14,18 +14,25 @@ export default function UploadZone({ onStart, error }: Props) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const ACCEPTED_EXTENSIONS = ['.zip', '.txt', '.log'];
+
+  const isAcceptedFile = (name: string) => {
+    const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+    return ACCEPTED_EXTENSIONS.includes(ext);
+  };
+
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped?.name.endsWith('.zip')) {
+    if (dropped && isAcceptedFile(dropped.name)) {
       setFile(dropped);
     }
   };
 
   const handleSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
-    if (selected && selected.name.endsWith('.zip')) setFile(selected);
+    if (selected && isAcceptedFile(selected.name)) setFile(selected);
   };
 
   const toggleTag = (tag: QuickTag) => {
@@ -63,6 +70,7 @@ export default function UploadZone({ onStart, error }: Props) {
         <input
           ref={inputRef}
           type="file"
+          accept=".zip,.txt,.log"
           className="hidden"
           onChange={handleSelect}
         />
@@ -78,7 +86,7 @@ export default function UploadZone({ onStart, error }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
             </div>
-            <p className="text-gray-300">Drop bugreport.zip here or click to browse</p>
+            <p className="text-gray-300">Drop bugreport.zip, logcat.txt, or dmesg.log here</p>
             <p className="text-xs text-gray-500">Max 200 MB</p>
           </div>
         )}

@@ -1,0 +1,127 @@
+import { AnalysisResult } from '@logcat-ai/parser';
+
+export function exportAsHTML(result: AnalysisResult): string {
+  const m = result.metadata;
+  const h = result.healthScore;
+
+  const severityColor = (s: string) => {
+    switch (s) {
+      case 'critical': return '#ef4444';
+      case 'warning': return '#eab308';
+      default: return '#6b7280';
+    }
+  };
+
+  const insightsHTML = result.insights.map(insight => `
+    <div style="border:1px solid #374151;border-radius:8px;padding:16px;margin-bottom:12px;background:#1f2937;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="background:${severityColor(insight.severity)};color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">
+          ${insight.severity.toUpperCase()}
+        </span>
+        <span style="font-weight:600;">${escapeHtml(insight.title)}</span>
+      </div>
+      <p style="color:#9ca3af;font-size:14px;">${escapeHtml(insight.description)}</p>
+      ${insight.deepAnalysis ? `
+        <div style="margin-top:12px;padding:12px;background:#111827;border-radius:6px;">
+          <p style="font-weight:600;color:#818cf8;margin-bottom:4px;">Root Cause</p>
+          <p style="color:#d1d5db;font-size:14px;">${escapeHtml(insight.deepAnalysis.rootCause)}</p>
+          <p style="font-weight:600;color:#34d399;margin-top:8px;margin-bottom:4px;">Fix Suggestion</p>
+          <p style="color:#d1d5db;font-size:14px;">${escapeHtml(insight.deepAnalysis.fixSuggestion)}</p>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logcat AI Report - ${escapeHtml(m.deviceModel || 'Unknown Device')}</title>
+<style>
+  * { margin:0;padding:0;box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;padding:32px;max-width:900px;margin:0 auto; }
+  .header { margin-bottom:32px;padding-bottom:16px;border-bottom:1px solid #1e293b; }
+  .header h1 { font-size:24px;margin-bottom:8px; }
+  .header .meta { color:#94a3b8;font-size:14px; }
+  .section { margin-bottom:32px; }
+  .section h2 { font-size:18px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #1e293b; }
+  .health-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px; }
+  .health-card { background:#1e293b;border-radius:8px;padding:16px;text-align:center; }
+  .health-card .score { font-size:24px;font-weight:700; }
+  .health-card .label { color:#94a3b8;font-size:12px;margin-top:4px; }
+  .timeline-item { padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px; }
+  .timeline-item .time { color:#6b7280;font-family:monospace; }
+  .footer { margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;color:#6b7280;font-size:12px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Logcat AI Analysis Report</h1>
+    <div class="meta">
+      ${m.deviceModel ? `<div>Device: ${escapeHtml(m.deviceModel)} (${escapeHtml(m.manufacturer || '')})</div>` : ''}
+      ${m.androidVersion ? `<div>Android ${escapeHtml(m.androidVersion)} (SDK ${m.sdkLevel})</div>` : ''}
+      ${m.buildFingerprint ? `<div>Build: ${escapeHtml(m.buildFingerprint)}</div>` : ''}
+      <div>Generated: ${new Date().toISOString()}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Health Score</h2>
+    <div class="health-grid">
+      <div class="health-card">
+        <div class="score" style="color:${h.overall >= 80 ? '#22c55e' : h.overall >= 60 ? '#eab308' : '#ef4444'}">${h.overall}</div>
+        <div class="label">Overall</div>
+      </div>
+      <div class="health-card">
+        <div class="score">${h.breakdown.stability}</div>
+        <div class="label">Stability</div>
+      </div>
+      <div class="health-card">
+        <div class="score">${h.breakdown.memory}</div>
+        <div class="label">Memory</div>
+      </div>
+      <div class="health-card">
+        <div class="score">${h.breakdown.responsiveness}</div>
+        <div class="label">Responsiveness</div>
+      </div>
+    </div>
+  </div>
+
+  ${result.deepAnalysisOverview ? `
+  <div class="section">
+    <h2>Executive Summary</h2>
+    <p style="color:#d1d5db;line-height:1.6;">${escapeHtml(result.deepAnalysisOverview.executiveSummary)}</p>
+  </div>
+  ` : ''}
+
+  <div class="section">
+    <h2>Insights (${result.insights.length})</h2>
+    ${insightsHTML}
+  </div>
+
+  <div class="section">
+    <h2>Timeline (${Math.min(result.timeline.length, 50)} of ${result.timeline.length} events)</h2>
+    ${result.timeline.slice(0, 50).map(e => `
+      <div class="timeline-item">
+        <span class="time">${escapeHtml(e.timestamp || '')}</span>
+        <span style="color:${severityColor(e.severity)};margin:0 8px;">[${e.severity}]</span>
+        <span>${escapeHtml(e.label)}</span>
+      </div>
+    `).join('')}
+  </div>
+
+  <div class="footer">
+    Generated by Logcat AI &middot; ${new Date().toISOString()}
+  </div>
+</body>
+</html>`;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}

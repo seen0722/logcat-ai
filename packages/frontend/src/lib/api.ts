@@ -1,4 +1,4 @@
-import { UploadResponse, SSEProgress } from './types';
+import { UploadResponse, SSEProgress, AnalysisSummary, AnalysisResult, BatchUploadResponse, BatchSSEProgress } from './types';
 
 const API_BASE = '/api';
 
@@ -50,10 +50,21 @@ export function startAnalysis(
   return () => eventSource.close();
 }
 
+/**
+ * Chat SSE event types.
+ * - content: regular text content chunk
+ * - tool_call: the LLM is calling an investigation tool
+ * - tool_result: result preview from a tool call
+ */
+export type ChatSSEEvent =
+  | { type?: undefined; content: string; done: boolean }
+  | { type: 'tool_call'; name: string; args?: string }
+  | { type: 'tool_result'; name: string; preview: string };
+
 export async function* streamChat(
   id: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-): AsyncGenerator<{ content: string; done: boolean }> {
+): AsyncGenerator<ChatSSEEvent> {
   const res = await fetch(`${API_BASE}/chat/${id}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -106,4 +117,76 @@ export async function switchProvider(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, ...opts }),
   });
+}
+
+// ---- History API ----
+
+export async function fetchHistory(
+  limit = 20,
+  offset = 0,
+): Promise<{ items: AnalysisSummary[]; total: number }> {
+  const res = await fetch(`${API_BASE}/history?limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error('Failed to fetch history');
+  return res.json();
+}
+
+export async function fetchHistoryResult(id: string): Promise<AnalysisResult> {
+  const res = await fetch(`${API_BASE}/history/${id}`);
+  if (!res.ok) throw new Error('Analysis not found');
+  return res.json();
+}
+
+export async function deleteHistory(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/history/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to delete');
+}
+
+// ---- Export API ----
+
+export function downloadExport(id: string, format: 'json' | 'html'): void {
+  window.open(`${API_BASE}/export/${id}/${format}`, '_blank');
+}
+
+// ---- Batch API ----
+
+export async function uploadBatchFiles(files: File[]): Promise<BatchUploadResponse> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append('files', file);
+  }
+
+  const res = await fetch(`${API_BASE}/batch`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Batch upload failed');
+  }
+  return res.json();
+}
+
+export function startBatchAnalysis(
+  batchId: string,
+  onProgress?: (event: BatchSSEProgress) => void,
+  onError?: (error: string) => void,
+): () => void {
+  const url = `${API_BASE}/batch/${batchId}/analyze`;
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data: BatchSSEProgress = JSON.parse(event.data);
+      onProgress?.(data);
+      if (data.stage === 'complete' || data.stage === 'error') {
+        eventSource.close();
+      }
+    } catch {
+      // ignore parse errors
+    }
+  };
+
+  eventSource.onerror = () => {
+    onError?.('Connection lost');
+    eventSource.close();
+  };
+
+  return () => eventSource.close();
 }

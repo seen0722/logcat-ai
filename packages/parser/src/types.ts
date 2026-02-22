@@ -165,6 +165,7 @@ export interface DeadlockCycle {
 export interface LockGraphNode {
   tid: number;
   threadName: string;
+  state: ThreadState;
 }
 
 export interface LockGraphEdge {

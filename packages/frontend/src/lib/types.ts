@@ -90,7 +90,7 @@ export interface ANRTraceAnalysis {
   blockedThread?: ThreadBlockAnalysis | null;
   blockedThreadName?: string;
   lockGraph: {
-    nodes: Array<{ tid: number; threadName: string }>;
+    nodes: Array<{ tid: number; threadName: string; state: string }>;
     edges: Array<{ from: number; to: number; lockAddress: string; lockClassName: string }>;
   };
   deadlocks: {
@@ -259,3 +259,76 @@ export type AnalysisMode = 'quick' | 'deep';
 
 export const QUICK_TAGS = ['ANR', 'Crash', 'Reboot', 'Battery', 'Jank', 'OOM'] as const;
 export type QuickTag = typeof QUICK_TAGS[number];
+
+export interface AnalysisSummary {
+  id: string;
+  filename: string;
+  fileSize: number;
+  createdAt: string;
+  deviceModel?: string;
+  manufacturer?: string;
+  androidVer?: string;
+  healthOverall?: number;
+  insightCount: number;
+  criticalCount: number;
+  anrCount: number;
+  notes?: string;
+  tags?: string;
+}
+
+// ---- Batch Analysis Types ----
+
+export interface CommonIssue {
+  title: string;
+  category: string;
+  severity: Severity;
+  count: number;
+  deviceModels: string[];
+}
+
+export interface DeviceDistribution {
+  model: string;
+  manufacturer: string;
+  count: number;
+  avgHealthScore: number;
+}
+
+export interface BatchAggregation {
+  totalReports: number;
+  avgHealthScore: number;
+  healthRange: { min: number; max: number };
+  commonIssues: CommonIssue[];
+  deviceDistribution: DeviceDistribution[];
+  criticalCount: number;
+  warningCount: number;
+  anrProcesses: Array<{ processName: string; count: number }>;
+}
+
+export interface BatchUploadResponse {
+  batchId: string;
+  files: Array<{ id: string; filename: string; size: number }>;
+  count: number;
+}
+
+export interface BatchFileResult {
+  id: string;
+  filename: string;
+  healthScore: number;
+  insightCount: number;
+  criticalCount: number;
+}
+
+export interface BatchSSEProgress {
+  stage: 'analyzing' | 'complete' | 'error';
+  progress: number;
+  message: string;
+  fileIndex?: number;
+  totalFiles?: number;
+  fileResult?: BatchFileResult;
+  fileError?: { filename: string; error: string };
+  data?: {
+    batchId: string;
+    aggregation: BatchAggregation;
+    items: BatchFileResult[];
+  };
+}

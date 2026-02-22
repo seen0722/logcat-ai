@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { analysisStore } from '../store.js';
-import { chat, ChatMessage } from '../llm-gateway/llm-gateway.js';
+import { chatWithTools, ChatMessage } from '../llm-gateway/llm-gateway.js';
 
 const router = Router();
 
@@ -8,7 +8,8 @@ const router = Router();
  * POST /api/chat/:id
  * Send a follow-up question about an analyzed bugreport.
  * Body: { messages: ChatMessage[] }
- * Streams response via SSE.
+ * Streams response via SSE, including tool_call / tool_result events
+ * when the LLM uses investigation tools.
  */
 router.post('/:id', async (req: Request, res: Response) => {
   const id = String(req.params.id);
@@ -35,9 +36,27 @@ router.post('/:id', async (req: Request, res: Response) => {
   res.on('close', () => { aborted = true; });
 
   try {
-    for await (const chunk of chat(analysisResult, messages)) {
+    for await (const chunk of chatWithTools(id, analysisResult, messages)) {
       if (aborted) return;
-      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+
+      if (chunk.toolCall) {
+        // Tool call event — tell the frontend which tool is being invoked
+        res.write(`data: ${JSON.stringify({
+          type: 'tool_call',
+          name: chunk.toolCall.name,
+          args: chunk.toolCall.args,
+        })}\n\n`);
+      } else if (chunk.toolResult) {
+        // Tool result event — send a preview of the result
+        res.write(`data: ${JSON.stringify({
+          type: 'tool_result',
+          name: chunk.toolResult.name,
+          preview: chunk.toolResult.content,
+        })}\n\n`);
+      } else {
+        // Regular content chunk
+        res.write(`data: ${JSON.stringify({ content: chunk.content, done: chunk.done })}\n\n`);
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
