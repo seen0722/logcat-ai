@@ -41,7 +41,7 @@ curl -F "file=@sample-bugreports/bugreport-T70-AQ3A.250408.001-2026-02-04-16-34-
 
 ## Architecture
 
-TypeScript monorepo (npm workspaces) with three packages: `parser`, `backend`, `frontend`.
+TypeScript monorepo (npm workspaces) with four packages: `parser`, `backend`, `frontend`, `mcp-server`.
 
 ### Data Flow
 
@@ -62,26 +62,49 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `anr-parser.ts` — 18 ANR case types, lock graph construction, deadlock detection
 - `kernel-parser.ts` — 12 kernel event types
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
+- `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation
+- `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
+- `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
+- `batch-analyzer.ts` — Aggregate statistics across multiple analyses
 - `types.ts` — All shared type definitions used across packages
 
 ### Backend (`@logcat-ai/backend`)
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat), `settings.ts` (provider management)
-- **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic.
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file)
+- **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
+- **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
-- **Store** (`store.ts`): In-memory cache with 1-hour TTL for analysis results
-- **Config** (`config.ts`): Environment-based, mutable at runtime via settings API
+- **Database** (`db.ts`): SQLite via better-sqlite3, WAL mode. `analyses` table + `logcat_fts` FTS5 virtual table.
+- **Store** (`store.ts`): In-memory cache with 1-hour TTL, auto-syncs to SQLite via `history-store.ts`
+- **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat entries
+- **Raw Data Store** (`raw-data-store.ts`): In-memory store for raw LogEntry[], sections (for agentic tool access)
+- **Config** (`config.ts`): Environment-based, mutable at runtime via settings API. Includes `dbPath` for SQLite.
 
 ### Frontend (`@logcat-ai/frontend`)
 
-React 19 + Vite 6 + Tailwind CSS 3.4. Three-phase UI: upload → analyzing → result.
+React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzing → result.
 
-- `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, results)
-- `lib/api.ts` — API client (upload, SSE analysis, chat, provider switching)
-- `lib/types.ts` — Frontend type definitions (mirrors parser types)
+- `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, results, loadFromHistory)
+- `hooks/useComparison.ts` — Comparison mode state management
+- `hooks/useForceSimulation.ts` — D3 force simulation wrapper
+- `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch)
+- `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
+- `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
+- `components/HistoryPanel.tsx` — Slide-out analysis history browser
+- `components/ExportMenu.tsx` — JSON/HTML export dropdown
+- `components/ComparisonView.tsx` — Side-by-side analysis diff modal
+- `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
+- `components/BatchResults.tsx` — Batch analysis statistics dashboard
+
+### MCP Server (`@logcat-ai/mcp-server`)
+
+Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code integration. Uses `@modelcontextprotocol/sdk` with stdio transport.
+
+- `src/index.ts` — Server entry, McpServer high-level API
+- `src/tools.ts` — 3 MCP tools: `analyze_bugreport` (full pipeline), `search_history` (SQLite query), `ask_about_analysis` (keyword-routed Q&A)
 
 ## Key Conventions
 

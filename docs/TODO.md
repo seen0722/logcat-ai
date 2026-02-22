@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-22
+> **更新日期**：2026-02-22（Phase 2.0 完成）
 
 ---
 
@@ -140,15 +140,70 @@
 
 ---
 
-## 3. Phase 2 — Advanced Features（Phase 1.5 完成後）
+## 3. Phase 2.0 — Advanced Features（✅ 全部完成）
 
-- [ ] Function Calling（LLM 主動搜尋 logcat、查線程）
-- [ ] Embedding + Vector Store（RAG 語意搜尋大型 logcat）
-- [ ] 比較模式（兩份 bugreport 差異分析）
-- [ ] Lock Graph 視覺化（D3.js 力導向圖）
-- [ ] 分析報告匯出（JSON / HTML / PDF）
-- [ ] 歷史分析記錄（SQLite 儲存）
-- [ ] 批次分析（多份 bugreport 統計共同問題）
+### Phase 2.0a — 基礎設施 + 獨立使用功能
+
+- [x] **F1: Analysis History（SQLite 持久化）**
+  - better-sqlite3 + WAL mode，analyses table + FTS5 virtual table
+  - CRUD API：GET/DELETE/PATCH `/api/history`
+  - 前端 HistoryPanel（slide-out 歷史列表、刪除、載入）
+  - `store.ts` 自動同步寫入 SQLite，get() fallback 到 SQLite
+  - 新增：`db.ts`、`history-store.ts`、`routes/history.ts`、`HistoryPanel.tsx`
+
+- [x] **F2: 獨立 logcat / dmesg 檔案支援**
+  - Upload 接受 `.zip`、`.txt`、`.log` 檔案
+  - `format-detector.ts`：`detectLogFormat()` 自動偵測 logcat/dmesg 格式
+  - 根據檔案類型選擇不同解析路徑（logcat-only / dmesg-only / full bugreport）
+  - 修改：`upload.ts`、`analyze.ts`、`UploadZone.tsx`
+
+- [x] **F3: Lock Graph 視覺化（D3.js）**
+  - D3.js force-directed SVG graph（d3-force + d3-drag + d3-zoom + d3-selection）
+  - Nodes = threads（依 state 著色），Edges = lock waits（箭頭）
+  - Deadlock cycles 紅色高亮，支援拖曳、縮放、hover tooltip
+  - 新增：`LockGraphVisualization.tsx`、`useForceSimulation.ts`
+
+- [x] **F4: Report Export（JSON / HTML）**
+  - JSON：格式化輸出完整 AnalysisResult
+  - HTML：自包含 HTML 報告（內嵌 CSS、dark theme）
+  - API：GET `/api/export/:id/:format`
+  - 新增：`json-exporter.ts`、`html-exporter.ts`、`routes/export.ts`、`ExportMenu.tsx`
+
+### Phase 2.0b — LLM 增強（Agentic 能力）
+
+- [x] **F5: Function Calling（Agentic Chat）**
+  - 5 個調查工具：`search_logcat`、`get_thread_info`、`get_kernel_events`、`get_insight_detail`、`search_section`
+  - Prompt-based tool calling loop（max 5 iterations）
+  - Raw data store 暫存 LogEntry[]、sections（for tool access）
+  - ChatPanel 顯示 tool call activity
+  - 新增：`tool-definitions.ts`、`tool-executor.ts`、`raw-data-store.ts`
+
+- [x] **F6: FTS5 全文搜尋**
+  - SQLite FTS5 virtual table + BM25 ranking
+  - `search_logcat` tool 先用 FTS5 搜尋，fallback 到 keyword match
+  - 分析完成後自動觸發 FTS5 indexing
+  - 新增：`search/fts-indexer.ts`
+
+### Phase 2.0c — 多報告分析 + 生態整合
+
+- [x] **F7: Comparison Mode**
+  - `compareAnalyses()`：HealthDiff + InsightDiff + ANRDiff + HALDiff
+  - Signature-based insight matching（跨報告比對）
+  - API：GET `/api/compare?left=:id&right=:id`
+  - 前端 ComparisonView（並排 health diff、insight 變化、ANR/HAL 變化）
+  - 新增：`comparison.ts`、`routes/compare.ts`、`ComparisonView.tsx`、`useComparison.ts`
+
+- [x] **F8: Batch Analysis**
+  - Multi-file upload（POST `/api/batch`）+ SSE 批次分析
+  - `aggregateBatch()`：CommonIssue[]、DeviceDistribution[]、ANR process frequency
+  - 前端 BatchUpload + BatchResults dashboard
+  - 新增：`batch-analyzer.ts`、`routes/batch.ts`、`BatchUpload.tsx`、`BatchResults.tsx`
+
+- [x] **F9: MCP Server**
+  - 獨立 npm package：`packages/mcp-server/`
+  - 3 個 MCP tools：`analyze_bugreport`、`search_history`、`ask_about_analysis`
+  - 使用 `@modelcontextprotocol/sdk`，stdio transport
+  - 可整合 Claude Desktop / VS Code
 
 ---
 
@@ -156,6 +211,10 @@
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
+- [ ] CVE/Security 分析（比對 CVE 資料庫）
+- [ ] Jira/GitHub 整合（從 findings 建 issue）
+- [ ] Embedding + Vector Store（RAG 語意搜尋，FTS5 已覆蓋 80% 場景）
+- [ ] PDF 匯出（需 Puppeteer 或 html2canvas + jsPDF）
 
 ---
 
@@ -165,4 +224,4 @@
 |---------|-------|------|
 | parser | 160 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(34) + tombstone(15) + integration(5) |
 | backend | 53 | routes + analyzer + parser integration + prompt tests |
-| **Total** | **213** | |
+| **Total** | **163** | `npm test` (Vitest) |

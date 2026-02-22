@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.2.0
+> **版本**：v0.3.0
 > **更新日期**：2026-02-22
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9）
 
 ---
 
@@ -109,7 +109,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 
 | 層級 | 內容 | 必填 | 說明 |
 |------|------|------|------|
-| 第一層 | bugreport.zip 上傳 | 必填 | 拖曳或點擊上傳 |
+| 第一層 | bugreport.zip / .txt / .log 上傳 | 必填 | 拖曳或點擊上傳（支援 ZIP bugreport、純 logcat、純 dmesg） |
 | 第二層 | 問題描述 | 選填 | 自由文字，引導 AI 聚焦方向 |
 | 第三層 | 快速標籤 | 選填 | ANR / Crash / Reboot / 耗電 / 卡頓 / 記憶體不足 |
 
@@ -415,30 +415,54 @@ logcat-ai/
 │   │   │   ├── logcat-parser.ts # Logcat 解析（11 種異常偵測）
 │   │   │   ├── anr-parser.ts    # ANR Trace 解析（18-case）
 │   │   │   ├── kernel-parser.ts # Kernel Log 解析（12 種事件偵測）
-│   │   │   ├── dumpsys-parser.ts # Dumpsys meminfo/cpuinfo 解析
+│   │   │   ├── dumpsys-parser.ts # Dumpsys meminfo/cpuinfo/lshal 解析
 │   │   │   ├── tombstone-parser.ts # Tombstone native crash 解析
-│   │   │   └── basic-analyzer.ts # 規則引擎 + Health Score（frequency damping）
+│   │   │   ├── basic-analyzer.ts # 規則引擎 + Health Score（frequency damping）
+│   │   │   ├── format-detector.ts # 獨立檔案格式偵測（logcat/dmesg）
+│   │   │   ├── comparison.ts    # 兩份分析結果差異比對
+│   │   │   └── batch-analyzer.ts # 批次分析統計聚合
 │   │   └── tests/
 │   ├── backend/                 # API Server
 │   │   └── src/
 │   │       ├── server.ts
-│   │       ├── routes/          # upload, analyze, chat, settings
-│   │       ├── llm-gateway/     # LLM Gateway
-│   │       └── config.ts
-│   └── frontend/                # Web UI
-│       └── src/components/
-│           ├── UploadZone.tsx
-│           ├── ProgressView.tsx
-│           ├── InsightsCards.tsx
-│           ├── InsightCard.tsx
-│           ├── SystemOverview.tsx
-│           ├── Timeline.tsx
-│           ├── ANRDetail.tsx
-│           ├── DeepAnalysisOverview.tsx
-│           ├── StackTrace.tsx
-│           ├── TagStats.tsx
-│           ├── BSPQuickReference.tsx
-│           └── ChatPanel.tsx
+│   │       ├── db.ts            # SQLite 初始化 + migration
+│   │       ├── store.ts         # In-memory cache + SQLite 持久化
+│   │       ├── history-store.ts # 歷史分析 CRUD
+│   │       ├── raw-data-store.ts # 原始資料暫存（for tool access）
+│   │       ├── config.ts
+│   │       ├── routes/          # upload, analyze, chat, settings, history, export, compare, batch
+│   │       ├── export/          # JSON/HTML 匯出器
+│   │       ├── search/          # FTS5 全文搜尋索引
+│   │       └── llm-gateway/     # LLM Gateway + Tool Calling
+│   ├── frontend/                # Web UI
+│   │   └── src/
+│   │       ├── components/
+│   │       │   ├── UploadZone.tsx
+│   │       │   ├── ProgressView.tsx
+│   │       │   ├── InsightsCards.tsx
+│   │       │   ├── InsightCard.tsx
+│   │       │   ├── SystemOverview.tsx
+│   │       │   ├── Timeline.tsx
+│   │       │   ├── ANRDetail.tsx
+│   │       │   ├── LockGraphVisualization.tsx  # D3.js 力導向圖
+│   │       │   ├── DeepAnalysisOverview.tsx
+│   │       │   ├── StackTrace.tsx
+│   │       │   ├── TagStats.tsx
+│   │       │   ├── BSPQuickReference.tsx
+│   │       │   ├── ChatPanel.tsx
+│   │       │   ├── HistoryPanel.tsx
+│   │       │   ├── ExportMenu.tsx
+│   │       │   ├── ComparisonView.tsx
+│   │       │   ├── BatchUpload.tsx
+│   │       │   └── BatchResults.tsx
+│   │       └── hooks/
+│   │           ├── useAnalysis.ts
+│   │           ├── useComparison.ts
+│   │           └── useForceSimulation.ts
+│   └── mcp-server/              # MCP Server（Claude Desktop / VS Code 整合）
+│       └── src/
+│           ├── index.ts         # MCP Server 入口（stdio transport）
+│           └── tools.ts         # 3 個 MCP tools
 └── sample-bugreports/
 ```
 
@@ -446,11 +470,22 @@ logcat-ai/
 
 | Method | Endpoint | 說明 |
 |--------|----------|------|
-| POST | `/api/upload` | 上傳 bugreport.zip |
+| POST | `/api/upload` | 上傳 bugreport.zip / .txt / .log |
 | GET | `/api/analyze/:id` | 啟動分析（SSE 串流進度） |
-| POST | `/api/chat/:id` | 對話追問 |
+| GET | `/api/analyze/:id/result` | 取得快取結果（JSON） |
+| POST | `/api/chat/:id` | 對話追問（含 agentic tool calling） |
 | GET | `/api/settings/providers` | 取得 LLM Provider 列表 |
 | PUT | `/api/settings/provider` | 切換 LLM Provider |
+| GET | `/api/history` | 歷史分析列表（分頁） |
+| GET | `/api/history/:id` | 取得歷史分析結果 |
+| DELETE | `/api/history/:id` | 刪除歷史分析 |
+| PATCH | `/api/history/:id` | 更新備註/標籤 |
+| GET | `/api/export/:id/:format` | 匯出報告（json / html） |
+| GET | `/api/compare?left=:id&right=:id` | 兩份分析差異比對 |
+| POST | `/api/batch` | 批次上傳多檔 |
+| GET | `/api/batch/:id/analyze` | 批次分析（SSE） |
+| GET | `/api/batch/:id` | 取得批次分析結果 |
+| GET | `/api/health` | 健康檢查 |
 
 ---
 
@@ -540,15 +575,31 @@ Week 5: Deep Analysis + 部署
   └── 端對端測試
 ```
 
-### 8.2 Phase 2：進階功能（Phase 1 完成後）
+### 8.2 Phase 2.0：進階功能 ✅
 
-- 對話追問加入 Function Calling（LLM 可主動搜尋 logcat、查線程）
+#### Phase 2.0a — 基礎設施
+- ✅ F1: Analysis History（SQLite 持久化 + WAL mode + FTS5）
+- ✅ F2: 獨立 logcat / dmesg 檔案支援（format auto-detection）
+- ✅ F3: Lock Graph 視覺化（D3.js force-directed graph）
+- ✅ F4: Report Export（JSON / HTML self-contained）
+
+#### Phase 2.0b — LLM 增強
+- ✅ F5: Function Calling / Agentic Chat（5 investigation tools + prompt-based tool loop）
+- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat search）
+
+#### Phase 2.0c — 多報告分析 + 生態整合
+- ✅ F7: Comparison Mode（health/insight/ANR/HAL diff）
+- ✅ F8: Batch Analysis（multi-file upload + statistical aggregation）
+- ✅ F9: MCP Server（Claude Desktop / VS Code integration, @modelcontextprotocol/sdk）
+
+### 8.3 Phase 3：Backlog（未排期）
+
+- CVE/Security 分析（比對 CVE 資料庫）
+- Jira/GitHub 整合（從 findings 建 issue）
 - Embedding + Vector Store（RAG 語意搜尋大型 logcat）
-- 比較模式（兩份 bugreport 差異分析）
-- Lock Graph 視覺化（D3.js 力導向圖）
-- 分析報告匯出（JSON / HTML / PDF）
-- 歷史分析記錄（SQLite 儲存）
-- 批次分析（多份 bugreport 統計共同問題）
+- PDF 匯出（需 Puppeteer 或 html2canvas + jsPDF）
+- Docker Compose 部署
+- 端對端測試
 
 ---
 
