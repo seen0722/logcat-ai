@@ -24,3 +24,9 @@ models/
 # Logs
 *.log
 npm-debug.log*
+
+# Worktrees
+.worktrees/
+
+# SQLite
+data/
