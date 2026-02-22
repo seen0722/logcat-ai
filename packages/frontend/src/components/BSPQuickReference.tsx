@@ -16,9 +16,11 @@ function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
   if (d > 0) return `${d}d ${h}h ${m}m`;
   if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
 }
 
 export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halStatus, logTagStats }: Props) {
@@ -147,9 +149,12 @@ export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halSta
                 </div>
               )}
 
-              {bspIssues.length > 0 && !halStatus.truncated && (
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500">BSP HAL issues ({bspIssues.length})</span>
+              {bspIssues.length > 0 && (
+                <div className={`space-y-1 ${halStatus.truncated ? 'opacity-50' : ''}`}>
+                  <span className="text-xs text-gray-500">
+                    BSP HAL issues ({bspIssues.length})
+                    {halStatus.truncated && <span className="italic"> (unreliable — lshal truncated)</span>}
+                  </span>
                   {bspIssues.slice(0, 5).map((f, i) => (
                     <div key={i} className="flex justify-between text-xs">
                       <span className="text-gray-400 truncate mr-2" title={f.familyName}>{f.shortName}@{f.highestVersion}</span>

@@ -45,6 +45,11 @@ ${(() => {
     }
     return '';
   })()}
+${result.tombstoneAnalyses && result.tombstoneAnalyses.length > 0
+    ? `- Native Crashes: ${result.tombstoneAnalyses.map(t =>
+        `${t.signalName} in ${t.processName} (${t.crashedInBinary ?? 'unknown'})`
+      ).join('; ')}`
+    : ''}
 
 Rules:
 - Answer concisely but technically.

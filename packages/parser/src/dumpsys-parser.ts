@@ -237,12 +237,13 @@ export function parseLshal(content: string, manufacturer?: string): HALStatusSum
 /** Known BSP vendor namespace prefixes — HALs from chipset vendors bundled in BSP */
 const KNOWN_BSP_PREFIXES = [
   'qti', 'qualcomm', 'qcom',        // Qualcomm
-  'display',                          // Qualcomm display subsystem (vendor.display.color, vendor.display.postproc)
   'mediatek', 'mtk',                 // MediaTek
-  'sprd',                             // Spreadtrum/Unisoc
+  'sprd', 'unisoc',                  // Spreadtrum/Unisoc
   'samsung',                          // Samsung
   'google',                           // Google
   'nxp',                              // NXP (NFC, secure element)
+  'hisilicon',                        // HiSilicon/Huawei Kirin
+  'broadcom',                         // Broadcom NFC/WiFi
 ];
 
 /**

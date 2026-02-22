@@ -204,6 +204,25 @@ describe('classifyTag', () => {
     expect(classifyTag('MediaTekPower')).toBe('vendor');
   });
 
+  it('should classify real BSP vendor tags (Adreno, FastRPC, gralloc, etc.)', () => {
+    expect(classifyTag('Adreno')).toBe('vendor');
+    expect(classifyTag('FastRPC')).toBe('vendor');
+    expect(classifyTag('adsprpcd')).toBe('vendor');
+    expect(classifyTag('QDGRALLOC')).toBe('vendor');
+    expect(classifyTag('GrallocImpl')).toBe('vendor');
+    expect(classifyTag('HwBinder')).toBe('vendor');
+    expect(classifyTag('gpu_service')).toBe('vendor');
+    expect(classifyTag('egl_platform')).toBe('vendor');
+    expect(classifyTag('ThermalEngine')).toBe('vendor');
+    expect(classifyTag('cnss_driver')).toBe('vendor');
+    expect(classifyTag('perfmgr')).toBe('vendor');
+    expect(classifyTag('subsystem_ramdump')).toBe('vendor');
+  });
+
+  it('should keep hwui as framework despite hw prefix', () => {
+    expect(classifyTag('hwui')).toBe('framework');
+  });
+
   it('should classify app tags as default', () => {
     expect(classifyTag('MyApp')).toBe('app');
     expect(classifyTag('com.example.app')).toBe('app');

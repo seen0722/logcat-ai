@@ -22,8 +22,8 @@ const LOGCAT_LINE_NO_UID_RE =
 // Tag Classification
 // ============================================================
 
-const VENDOR_TAG_PATTERNS = /^(vendor|hal_|hw_|sensor|gnss|nfc|bluetooth|thermal|power|display|camera|audio_hw|gps|modem|ril|radio|wifi_hal)/i;
-const VENDOR_TAG_KEYWORDS = /qti|qcom|mtk|mediatek|sprd|samsung|nxp|exynos|hisilicon|kirin|unisoc/i;
+const VENDOR_TAG_PATTERNS = /^(vendor|hal_|hw|sensor|gnss|nfc|bluetooth|thermal|power|display|camera|audio_hw|gps|modem|ril|radio|wifi_hal|gralloc|egl_|gpu)/i;
+const VENDOR_TAG_KEYWORDS = /qti|qcom|mtk|mediatek|sprd|samsung|nxp|exynos|hisilicon|kirin|unisoc|adreno|FastRPC|adsprpc|perfmgr|ThermalEngine|cnss|wcnss|subsystem_ramdump|gralloc/i;
 
 const FRAMEWORK_TAGS = new Set([
   'ActivityManager', 'WindowManager', 'PackageManager', 'SystemServer',

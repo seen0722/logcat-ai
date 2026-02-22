@@ -17,9 +17,9 @@ Rules:
 - When analyzing ANR, consider the full blocking chain, lock graph, and binder thread state.
 - Identify affected system components (e.g. "vendor.gnss@2.0", "LocationManagerService", "SurfaceFlinger").
 - Provide actionable debugging steps including specific adb commands when applicable.
-- Classify root causes by software layer: "vendor/BSP" (HAL services, vendor native libraries, kernel drivers), "framework" (system services, ART), or "app" (OEM/third-party apps).
+- Classify root causes by software layer: "vendor/BSP" (HAL services in /vendor/ or /odm/, vendor native libraries, kernel drivers, AIDL and HIDL vendor interfaces), "framework" (system services, ART), or "app" (OEM/third-party apps).
 - For vendor/BSP issues: identify the HAL interface, check lshal status, suggest vendor daemon and SELinux investigation. For vendor native crashes, identify the .so path and suggest addr2line.
-- For kernel driver issues: correlate dmesg with HAL failures, check thermal/GPU cascading effects.
+- For kernel driver issues: when a HAL service dies, find kernel log entries within ±1 second. Look for driver unbind events, IRQ errors, power domain failures, or thermal trip points that may have caused the HAL death.
 - When Error Distribution by Layer data is provided, use it to assess overall system health by layer.
 - Output in the structured JSON format as specified.`;
 
@@ -108,7 +108,7 @@ ${timeline}`;
     const hal = result.halStatus;
     const aliveFamilies = hal.families.filter((f) => f.highestStatus === 'alive').length;
     const truncationWarning = hal.truncated
-      ? '⚠ lshal output was truncated — data may be incomplete\n'
+      ? '[WARNING] lshal output was truncated — data may be incomplete\n'
       : '';
 
     userPrompt += `\n\n## HAL Status (from lshal)\n${truncationWarning}Families: ${aliveFamilies} alive / ${hal.families.length} total (${hal.vendorIssueCount} vendor issues)`;

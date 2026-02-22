@@ -662,6 +662,24 @@ Y       | vendor.qualcomm.hardware.radio@1.0::IRadio/default          | hwbinder
     expect(radio!.isOem).toBe(false); // qualcomm is known BSP
   });
 
+  it('should treat vendor.display HALs without BSP prefix as OEM', () => {
+    const content = `
+VINTF R | Interface                                                    | Transport | Status
+Y       | vendor.display.postproc@1.0::IDisplayPostproc/default       | hwbinder  | non-responsive
+Y       | vendor.qti.hardware.display.color@1.0::IDisplayColor/default | hwbinder  | non-responsive
+`;
+
+    const result = parseLshal(content);
+
+    const postproc = result.families.find((f) => f.shortName === 'postproc');
+    expect(postproc).toBeDefined();
+    expect(postproc!.isOem).toBe(true); // 'display' alone is not a BSP prefix
+
+    const color = result.families.find((f) => f.shortName === 'color');
+    expect(color).toBeDefined();
+    expect(color!.isOem).toBe(false); // 'qti' is a known BSP prefix
+  });
+
   it('should not mark android HALs as OEM', () => {
     const content = `
 VINTF R | Interface                                                    | Transport | Status
