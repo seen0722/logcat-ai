@@ -166,7 +166,7 @@ export interface LogcatSearchResult {
 
 export async function searchLogcat(
   id: string,
-  params: { q?: string; tag?: string; level?: string; pid?: number; limit?: number },
+  params: { q?: string; tag?: string; level?: string; pid?: number; limit?: number; offset?: number },
 ): Promise<LogcatSearchResult> {
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
@@ -174,6 +174,7 @@ export async function searchLogcat(
   if (params.level) qs.set('level', params.level);
   if (params.pid !== undefined) qs.set('pid', String(params.pid));
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
 
   const res = await fetch(`${API_BASE}/search/${id}?${qs}`);
   if (!res.ok) {

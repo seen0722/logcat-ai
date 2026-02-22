@@ -13,7 +13,8 @@ router.get('/:id', (req: Request, res: Response) => {
   const tag = req.query.tag ? String(req.query.tag) : undefined;
   const level = req.query.level ? String(req.query.level) : undefined;
   const pid = req.query.pid ? parseInt(String(req.query.pid), 10) : undefined;
-  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '20'), 10) || 20, 1), 100);
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 500);
+  const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
   const rawData = rawDataStore.get(id);
   if (!rawData) {
@@ -27,13 +28,13 @@ router.get('/:id', (req: Request, res: Response) => {
 
   // Try FTS5 first if only keyword search (no other filters)
   if (q && !tag && !level && !pid) {
-    const ftsResults = searchLogcatFTS(id, q, limit);
-    if (ftsResults.length > 0) {
+    const ftsResult = searchLogcatFTS(id, q, limit, offset);
+    if (ftsResult) {
       return res.json({
-        totalMatches: ftsResults.length,
-        showing: ftsResults.length,
+        totalMatches: ftsResult.totalMatches,
+        showing: ftsResult.entries.length,
         method: 'fts5',
-        entries: ftsResults.map(e => ({
+        entries: ftsResult.entries.map(e => ({
           lineNumber: e.lineNumber,
           timestamp: e.timestamp,
           level: e.level,
@@ -70,7 +71,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 
   const totalMatches = filtered.length;
-  const results = filtered.slice(0, limit);
+  const results = filtered.slice(offset, offset + limit);
 
   return res.json({
     totalMatches,

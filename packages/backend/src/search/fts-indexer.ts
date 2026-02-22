@@ -48,31 +48,46 @@ export function indexLogcatEntries(analysisId: string, entries: LogEntry[]): voi
   batchInsert(entries);
 }
 
+export interface FTSPaginatedResult {
+  totalMatches: number;
+  entries: FTSSearchResult[];
+}
+
 /**
  * Search logcat entries using FTS5 BM25 ranking.
- * Returns results ordered by relevance.
+ * Returns results ordered by relevance with pagination support.
  */
 export function searchLogcatFTS(
   analysisId: string,
   query: string,
-  limit = 20,
-): FTSSearchResult[] {
+  limit = 50,
+  offset = 0,
+): FTSPaginatedResult | null {
   const db = getDatabase();
 
   // Sanitize query for FTS5 (escape special characters)
   const safeQuery = sanitizeFTSQuery(query);
-  if (!safeQuery) return [];
+  if (!safeQuery) return null;
 
   try {
+    const countRow = db
+      .prepare(
+        `SELECT COUNT(*) as cnt FROM logcat_fts WHERE analysis_id = ? AND logcat_fts MATCH ?`,
+      )
+      .get(analysisId, safeQuery) as { cnt: number } | undefined;
+
+    const totalMatches = countRow?.cnt ?? 0;
+    if (totalMatches === 0) return null;
+
     const rows = db
       .prepare(
         `SELECT line_number, timestamp, level, tag, message, rank
          FROM logcat_fts
          WHERE analysis_id = ? AND logcat_fts MATCH ?
          ORDER BY rank
-         LIMIT ?`,
+         LIMIT ? OFFSET ?`,
       )
-      .all(analysisId, safeQuery, limit) as Array<{
+      .all(analysisId, safeQuery, limit, offset) as Array<{
       line_number: number;
       timestamp: string;
       level: string;
@@ -81,17 +96,20 @@ export function searchLogcatFTS(
       rank: number;
     }>;
 
-    return rows.map((row) => ({
-      lineNumber: row.line_number,
-      timestamp: row.timestamp,
-      level: row.level,
-      tag: row.tag,
-      message: row.message,
-      rank: row.rank,
-    }));
+    return {
+      totalMatches,
+      entries: rows.map((row) => ({
+        lineNumber: row.line_number,
+        timestamp: row.timestamp,
+        level: row.level,
+        tag: row.tag,
+        message: row.message,
+        rank: row.rank,
+      })),
+    };
   } catch {
-    // FTS5 query syntax error — fallback to empty results
-    return [];
+    // FTS5 query syntax error — fallback to null
+    return null;
   }
 }
 

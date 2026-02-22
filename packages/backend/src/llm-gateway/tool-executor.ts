@@ -87,13 +87,13 @@ function searchLogcatWithFTS(
   // If keyword search is requested, try FTS5 first
   if (args.keyword && !args.tag && !args.level && !args.pid) {
     const limit = Math.min(args.limit ?? 20, 50);
-    const ftsResults = searchLogcatFTS(analysisId, args.keyword, limit);
+    const ftsResult = searchLogcatFTS(analysisId, args.keyword, limit, 0);
 
-    if (ftsResults.length > 0) {
-      const lines = ftsResults.map(
+    if (ftsResult && ftsResult.entries.length > 0) {
+      const lines = ftsResult.entries.map(
         (e) => `${e.timestamp} ${e.level}/${e.tag}: ${e.message}`,
       );
-      return `Found ${ftsResults.length} relevant entries (FTS5 ranked):\n\n${lines.join('\n')}`;
+      return `Found ${ftsResult.totalMatches} relevant entries (FTS5 ranked, showing ${ftsResult.entries.length}):\n\n${lines.join('\n')}`;
     }
   }
 

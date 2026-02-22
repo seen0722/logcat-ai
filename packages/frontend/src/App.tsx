@@ -172,8 +172,8 @@ export default function App() {
 
       {/* Comparison loading indicator */}
       {compareLoading && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="bg-surface border border-border rounded-lg px-8 py-6 text-center">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+          <div className="bg-[#0d1117] border border-gray-700/60 rounded-lg px-8 py-6 text-center">
             <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto mb-3" />
             <p className="text-gray-300">Comparing analyses...</p>
           </div>
@@ -182,8 +182,8 @@ export default function App() {
 
       {/* Comparison error */}
       {compareError && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={resetComparison}>
-          <div className="bg-surface border border-red-900/50 rounded-lg px-8 py-6 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={resetComparison}>
+          <div className="bg-[#0d1117] border border-red-900/50 rounded-lg px-8 py-6 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
             <p className="text-red-400 mb-4">{compareError}</p>
             <button
               onClick={resetComparison}

@@ -87,13 +87,13 @@ export default function ComparisonView({ comparison, onClose }: Props) {
   const hasHALChanges = halDiff.changes.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={onClose}>
       <div
-        className="w-full max-w-4xl bg-background border border-border rounded-xl shadow-2xl mx-4"
+        className="w-full max-w-4xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60">
           <h2 className="text-lg font-semibold text-gray-100">
             Comparison: <span className="font-mono text-indigo-400">{shortId(comparison.leftId)}</span>
             {' '}vs{' '}
@@ -101,7 +101,7 @@ export default function ComparisonView({ comparison, onClose }: Props) {
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white text-xl leading-none"
+            className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
           >
             &times;
           </button>
