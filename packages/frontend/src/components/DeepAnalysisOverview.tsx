@@ -54,9 +54,22 @@ export default function DeepAnalysisOverview({ overview }: Props) {
                   <p className="text-gray-300 text-sm">{finding.description}</p>
                   <div className="flex gap-1 mt-1 flex-wrap">
                     {finding.insightIds.map((id) => (
-                      <span key={id} className="text-xs text-indigo-400/80 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                      <a
+                        key={id}
+                        href={`#${id}`}
+                        className="text-xs text-indigo-400/80 bg-indigo-500/10 px-1.5 py-0.5 rounded hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const el = document.getElementById(id);
+                          if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.classList.add('ring-2', 'ring-indigo-500/50');
+                            setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500/50'), 2000);
+                          }
+                        }}
+                      >
                         {id}
-                      </span>
+                      </a>
                     ))}
                   </div>
                 </div>
