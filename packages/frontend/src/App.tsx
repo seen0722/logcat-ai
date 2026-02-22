@@ -8,6 +8,7 @@ import ANRDetail from './components/ANRDetail';
 import ChatPanel from './components/ChatPanel';
 import DeepAnalysisOverview from './components/DeepAnalysisOverview';
 import TagStats from './components/TagStats';
+import BSPQuickReference from './components/BSPQuickReference';
 
 export default function App() {
   const { phase, uploadId, progress, result, error, start, reset } = useAnalysis();
@@ -55,6 +56,13 @@ export default function App() {
           {result.logTagStats && result.logTagStats.length > 0 && (
             <TagStats tagStats={result.logTagStats} />
           )}
+          <BSPQuickReference
+            bootStatus={result.bootStatus}
+            memInfo={result.memInfo}
+            cpuInfo={result.cpuInfo}
+            halStatus={result.halStatus}
+            logTagStats={result.logTagStats}
+          />
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
           )}

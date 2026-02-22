@@ -17,6 +17,10 @@ Rules:
 - When analyzing ANR, consider the full blocking chain, lock graph, and binder thread state.
 - Identify affected system components (e.g. "vendor.gnss@2.0", "LocationManagerService", "SurfaceFlinger").
 - Provide actionable debugging steps including specific adb commands when applicable.
+- Classify root causes by software layer: "vendor/BSP" (HAL services, vendor native libraries, kernel drivers), "framework" (system services, ART), or "app" (OEM/third-party apps).
+- For vendor/BSP issues: identify the HAL interface, check lshal status, suggest vendor daemon and SELinux investigation. For vendor native crashes, identify the .so path and suggest addr2line.
+- For kernel driver issues: correlate dmesg with HAL failures, check thermal/GPU cascading effects.
+- When Error Distribution by Layer data is provided, use it to assess overall system health by layer.
 - Output in the structured JSON format as specified.`;
 
   // All insights (not capped at 20)
@@ -74,6 +78,26 @@ ${insights}
 
 ## Timeline (${Math.min(50, result.timeline.length)} events)
 ${timeline}`;
+
+  // Error Distribution by Layer (from logTagStats)
+  if (result.logTagStats && result.logTagStats.length > 0) {
+    const layerCounts = { vendor: 0, framework: 0, app: 0 };
+    for (const ts of result.logTagStats) {
+      layerCounts[ts.classification] += ts.count;
+    }
+    const total = layerCounts.vendor + layerCounts.framework + layerCounts.app;
+    if (total > 0) {
+      const pct = (n: number) => ((n / total) * 100).toFixed(0);
+      userPrompt += `\n\n## Error Distribution by Layer (E/F level)\nTotal: ${total} errors — Vendor/BSP: ${layerCounts.vendor} (${pct(layerCounts.vendor)}%) | Framework: ${layerCounts.framework} (${pct(layerCounts.framework)}%) | App: ${layerCounts.app} (${pct(layerCounts.app)}%)`;
+
+      const vendorTags = result.logTagStats
+        .filter(t => t.classification === 'vendor')
+        .slice(0, 5);
+      if (vendorTags.length > 0) {
+        userPrompt += `\nTop vendor tags: ${vendorTags.map(t => `${t.tag}(${t.count})`).join(', ')}`;
+      }
+    }
+  }
 
   if (anrSummaries) {
     userPrompt += `\n\n## ANR Trace Analysis\n${anrSummaries}`;

@@ -134,6 +134,58 @@ describe('buildAnalysisPrompt', () => {
     expect(systemPrompt).toContain('cross-subsystem');
   });
 
+  it('system prompt should include BSP layer classification guidance', () => {
+    const { systemPrompt } = buildAnalysisPrompt(makeResult());
+    expect(systemPrompt).toContain('vendor/BSP');
+    expect(systemPrompt).toContain('framework');
+    expect(systemPrompt).toContain('software layer');
+  });
+
+  it('should include Error Distribution when logTagStats present', () => {
+    const { userPrompt } = buildAnalysisPrompt(makeResult({
+      logTagStats: [
+        { tag: 'HwBinder', count: 10, classification: 'vendor' },
+        { tag: 'ActivityManager', count: 5, classification: 'framework' },
+        { tag: 'MyApp', count: 3, classification: 'app' },
+      ],
+    }));
+    expect(userPrompt).toContain('Error Distribution by Layer');
+    expect(userPrompt).toContain('Vendor/BSP: 10');
+    expect(userPrompt).toContain('Framework: 5');
+    expect(userPrompt).toContain('App: 3');
+  });
+
+  it('should not include Error Distribution when logTagStats absent', () => {
+    const { userPrompt } = buildAnalysisPrompt(makeResult());
+    expect(userPrompt).not.toContain('Error Distribution by Layer');
+  });
+
+  it('should not include Error Distribution when logTagStats empty', () => {
+    const { userPrompt } = buildAnalysisPrompt(makeResult({ logTagStats: [] }));
+    expect(userPrompt).not.toContain('Error Distribution by Layer');
+  });
+
+  it('should show top vendor tags (max 5)', () => {
+    const vendorTags = Array.from({ length: 8 }, (_, i) => ({
+      tag: `VendorTag${i + 1}`, count: 80 - i * 10, classification: 'vendor' as const,
+    }));
+    const { userPrompt } = buildAnalysisPrompt(makeResult({ logTagStats: vendorTags }));
+    expect(userPrompt).toContain('Top vendor tags');
+    expect(userPrompt).toContain('VendorTag1(80)');
+    expect(userPrompt).toContain('VendorTag5(40)');
+    expect(userPrompt).not.toContain('VendorTag6');
+  });
+
+  it('should handle zero-division when all counts are zero', () => {
+    const { userPrompt } = buildAnalysisPrompt(makeResult({
+      logTagStats: [
+        { tag: 'SomeTag', count: 0, classification: 'vendor' },
+        { tag: 'OtherTag', count: 0, classification: 'framework' },
+      ],
+    }));
+    expect(userPrompt).not.toContain('Error Distribution by Layer');
+  });
+
   it('should include detailed context section for critical insights', () => {
     const result = makeResult({
       insights: [{

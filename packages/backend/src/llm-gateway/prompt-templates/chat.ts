@@ -23,12 +23,35 @@ Context from the analysis:
     const target = primary?.binderTarget?.interfaceName;
     return `${a.processName} (thread="${thread}", ${reason}${target ? `, target=${target}` : ''})`;
   }).join('; ') || 'none'}
+${(() => {
+    if (result.logTagStats && result.logTagStats.length > 0) {
+      const layerCounts = { vendor: 0, framework: 0, app: 0 };
+      for (const ts of result.logTagStats) {
+        layerCounts[ts.classification] += ts.count;
+      }
+      const total = layerCounts.vendor + layerCounts.framework + layerCounts.app;
+      if (total > 0) {
+        const pct = (n: number) => ((n / total) * 100).toFixed(0);
+        return `- Error Distribution: vendor ${pct(layerCounts.vendor)}%, framework ${pct(layerCounts.framework)}%, app ${pct(layerCounts.app)}%`;
+      }
+    }
+    return '';
+  })()}
+${(() => {
+    if (result.halStatus && result.halStatus.families.length > 0) {
+      const hal = result.halStatus;
+      const aliveFamilies = hal.families.filter((f) => f.highestStatus === 'alive').length;
+      return `- HAL Status: ${aliveFamilies}/${hal.families.length} families alive, ${hal.vendorIssueCount} vendor issues`;
+    }
+    return '';
+  })()}
 
 Rules:
 - Answer concisely but technically.
 - Reference specific data from the analysis when relevant.
 - If the user asks about something not in the bugreport, say so clearly.
-- You can suggest additional debugging steps if needed.`;
+- You can suggest additional debugging steps if needed.
+- When discussing vendor/HAL/BSP issues, provide BSP-specific guidance including HAL daemon state, dmesg correlation, and SELinux context.`;
 
   // Build conversation history into a single user prompt
   // (keeps compatible with single-turn LLM APIs)
