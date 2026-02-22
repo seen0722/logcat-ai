@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-22（Phase 2.0 完成）
+> **更新日期**：2026-02-22（Phase 2.0 完成 + Search UI + HTML Export 增強）
 
 ---
 
@@ -204,6 +204,30 @@
   - 3 個 MCP tools：`analyze_bugreport`、`search_history`、`ask_about_analysis`
   - 使用 `@modelcontextprotocol/sdk`，stdio transport
   - 可整合 Claude Desktop / VS Code
+
+---
+
+## 3.1 Phase 2.0 追加功能
+
+- [x] **F6a: Search Logcat UI（前端搜尋介面）**
+  - 全寬 Modal（`max-w-4xl`, `max-h-[80vh]`），click outside 或 Escape 關閉
+  - 搜尋表單：關鍵字 `q` 主輸入框 + 篩選列（tag、level select、pid、limit select）
+  - Enter 或按鈕觸發搜尋，呼叫 `searchLogcat()` API
+  - 結果區：狀態列（totalMatches / showing / method badge）+ monospace 逐行顯示
+  - Level 染色：E→紅、W→黃、I→綠、D→藍、V/F→灰
+  - Loading spinner、空狀態、錯誤提示
+  - App.tsx：result phase header 新增 Search 按鈕
+  - 新增：`SearchModal.tsx`，修改：`App.tsx`
+
+- [x] **F4a: HTML Export 增強（詳細 Insight 渲染）**
+  - Insight card 顯示 category、source、timestamp badge
+  - 多行 description 逐行染色（Target HAL → 黃、Blocking chain → 紅 等）
+  - Stack trace、related logs 以 code block 渲染
+  - SELinux allow rule 專屬樣式（黃色 monospace）
+  - Debug commands 逐條顯示（綠色 monospace）
+  - Deep Analysis 完整渲染（root cause、fix suggestion、evidence、debugging steps、affected components、related insights）
+  - 34 個新 CSS class
+  - 修改：`html-exporter.ts`
 
 ---
 

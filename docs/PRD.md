@@ -2,7 +2,7 @@
 
 > **版本**：v0.3.0
 > **更新日期**：2026-02-22
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強）
 
 ---
 
@@ -430,7 +430,7 @@ logcat-ai/
 │   │       ├── history-store.ts # 歷史分析 CRUD
 │   │       ├── raw-data-store.ts # 原始資料暫存（for tool access）
 │   │       ├── config.ts
-│   │       ├── routes/          # upload, analyze, chat, settings, history, export, compare, batch
+│   │       ├── routes/          # upload, analyze, chat, settings, history, export, compare, batch, search
 │   │       ├── export/          # JSON/HTML 匯出器
 │   │       ├── search/          # FTS5 全文搜尋索引
 │   │       └── llm-gateway/     # LLM Gateway + Tool Calling
@@ -454,7 +454,8 @@ logcat-ai/
 │   │       │   ├── ExportMenu.tsx
 │   │       │   ├── ComparisonView.tsx
 │   │       │   ├── BatchUpload.tsx
-│   │       │   └── BatchResults.tsx
+│   │       │   ├── BatchResults.tsx
+│   │       │   └── SearchModal.tsx        # Logcat 全文搜尋 Modal
 │   │       └── hooks/
 │   │           ├── useAnalysis.ts
 │   │           ├── useComparison.ts
@@ -485,6 +486,7 @@ logcat-ai/
 | POST | `/api/batch` | 批次上傳多檔 |
 | GET | `/api/batch/:id/analyze` | 批次分析（SSE） |
 | GET | `/api/batch/:id` | 取得批次分析結果 |
+| GET | `/api/search/:id` | 搜尋 logcat entries（FTS5 / keyword，支援 q/tag/level/pid/limit） |
 | GET | `/api/health` | 健康檢查 |
 
 ---
@@ -585,7 +587,7 @@ Week 5: Deep Analysis + 部署
 
 #### Phase 2.0b — LLM 增強
 - ✅ F5: Function Calling / Agentic Chat（5 investigation tools + prompt-based tool loop）
-- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat search）
+- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat search + Search Modal UI）
 
 #### Phase 2.0c — 多報告分析 + 生態整合
 - ✅ F7: Comparison Mode（health/insight/ANR/HAL diff）

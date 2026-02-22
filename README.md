@@ -9,7 +9,7 @@ AI-powered Android bugreport.zip analyzer. Upload a bugreport, get structured di
 - **Flexible input** — bugreport.zip, standalone logcat (.txt/.log), standalone dmesg files
 - **Deep Analysis** — Evidence-based root cause identification, cross-subsystem correlation, prioritized actions with effort/impact assessment
 - **Agentic chat** — LLM-driven investigation with 5 tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section)
-- **Full-text search** — FTS5 BM25-ranked logcat search for fast keyword lookup
+- **Full-text search** — FTS5 BM25-ranked logcat search with in-app Search Modal (keyword, tag, level, pid filters)
 - **Analysis history** — SQLite-persisted results with browse, search, and reload
 - **Report export** — JSON and self-contained HTML export
 - **Comparison mode** — Side-by-side diff of two bugreports (health, insights, ANR, HAL)
@@ -95,6 +95,7 @@ GET    /api/compare             Compare two analyses (?left=id&right=id)
 POST   /api/batch               Batch upload multiple files
 GET    /api/batch/:id/analyze   Start batch analysis (SSE stream)
 GET    /api/batch/:id           Get batch results
+GET    /api/search/:id          Search logcat entries (FTS5/keyword)
 GET    /api/health              Health check
 ```
 

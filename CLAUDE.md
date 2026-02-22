@@ -73,7 +73,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file), `search.ts` (FTS5/keyword logcat search)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
@@ -90,7 +90,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, results, loadFromHistory)
 - `hooks/useComparison.ts` — Comparison mode state management
 - `hooks/useForceSimulation.ts` — D3 force simulation wrapper
-- `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch)
+- `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch, search)
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
@@ -98,6 +98,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
+- `components/SearchModal.tsx` — Full-width logcat search modal (keyword, tag, level, pid filters)
 
 ### MCP Server (`@logcat-ai/mcp-server`)
 
