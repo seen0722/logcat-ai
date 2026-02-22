@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-23
+> **更新日期**：2026-02-22
 
 ---
 
@@ -57,7 +57,8 @@
   - 預設隱藏 info，只顯示 critical + warning
   - Critical 紅色左邊框，聚合事件 ×count badge
   - Header 顯示 `(X shown / Y total)`
-  - 8 tests（aggregateTimelineEvents）
+  - Kernel ↔ Logcat 時間對齊：利用 `bugreportTimestamp - uptimeSeconds` 算出 boot epoch，將 kernel `boot+Xs` 轉為 `MM-DD HH:mm:ss.SSS` wall-clock 格式，kernel 事件按時間正確穿插在 logcat/ANR 事件之間
+  - 12 tests（aggregateTimelineEvents 8 + kernel timestamp conversion 4）
 
 - [x] #31 **Dumpsys meminfo/cpuinfo Parser** — P0
   - 新增 `dumpsys-parser.ts`：parseMemInfo / parseCpuInfo
@@ -165,6 +166,6 @@
 
 | Package | Tests | 說明 |
 |---------|-------|------|
-| parser | 156 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(27) + dumpsys(34) + tombstone(15) + integration(5) |
+| parser | 160 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(34) + tombstone(15) + integration(5) |
 | backend | 47 | routes + analyzer + parser integration |
-| **Total** | **203** | |
+| **Total** | **207** | |

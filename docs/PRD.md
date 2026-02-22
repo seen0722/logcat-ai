@@ -1,7 +1,7 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
 > **版本**：v0.2.0
-> **更新日期**：2026-02-23
+> **更新日期**：2026-02-22
 > **狀態**：Phase 1 完成，Phase 1.5 進行中（11/13 完成）
 
 ---
@@ -301,7 +301,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 不需要 LLM 即可完成：
 - 聚合三個 Parser 的結果（含 dumpsys meminfo/cpuinfo）
 - 產出 Insights Cards（問題清單，按嚴重性排序，自動合併重複項）
-- 建構跨子系統時間軸（含事件聚合，相鄰重複事件自動合併顯示次數）
+- 建構跨子系統時間軸（含事件聚合，相鄰重複事件自動合併顯示次數；kernel timestamp 自動轉換為 wall-clock 格式，與 logcat 事件正確穿插排序）
 - 計算系統健康分數（0-100，breakdown: stability/memory/responsiveness/kernel）
   - **Frequency-based damping**：同類事件重複出現時遞減扣分（1st=100%, 2nd=50%, 3rd=25%, 4th+=10%）
   - 每種事件類型有最大扣分上限，防止大量重複事件將分數拉到 0
@@ -632,7 +632,7 @@ GitHub Issues + Project Board：
 | #28 | Enhanced Deep Analysis（context builder + structured output + overview UI） | ✅ 完成 | Build 通過 |
 | #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 43 tests passed |
 
-**累計測試：203 passed（parser 156 + backend 47）**
+**累計測試：207 passed（parser 160 + backend 47）**
 **Frontend Build：215 KB JS + 14.5 KB CSS（production）**
 
 ---
@@ -674,7 +674,7 @@ GitHub Issues + Project Board：
 1. **事件聚合**：相同 title + 相同 source 在 30 秒窗口內 → 合併為一條
    - 新增 `TimelineEvent.count?: number` 和 `TimelineEvent.timeRange?: string`
    - 例：`SELinux denial: system_app → vendor_sierra_fw_check_prop (×47)` + `boot+3808s ~ boot+3902s`
-2. **Kernel ↔ Logcat 時間對齊**：用 bugreport metadata 中的 uptime 將 `boot+Ns` 轉成 `MM-DD HH:mm:ss`（best effort）
+2. **Kernel ↔ Logcat 時間對齊** ✅：用 `bugreportTimestamp - uptimeSeconds` 算出 boot epoch，將 `boot+Ns` 轉為 `MM-DD HH:mm:ss.SSS` wall-clock 格式，kernel 事件按時間正確穿插在 logcat/ANR 事件之間
 
 #### B. Types 更新 — `packages/parser/src/types.ts` + `packages/frontend/src/lib/types.ts`
 ```typescript
