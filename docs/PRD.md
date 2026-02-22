@@ -428,7 +428,6 @@ logcat-ai/
 │   └── frontend/                # Web UI
 │       └── src/components/
 │           ├── UploadZone.tsx
-│           ├── AnalysisMode.tsx
 │           ├── ProgressView.tsx
 │           ├── InsightsCards.tsx
 │           ├── InsightCard.tsx
@@ -437,8 +436,8 @@ logcat-ai/
 │           ├── ANRDetail.tsx
 │           ├── DeepAnalysisOverview.tsx
 │           ├── StackTrace.tsx
-│           ├── ChatPanel.tsx
-│           └── ReportExport.tsx
+│           ├── TagStats.tsx
+│           └── ChatPanel.tsx
 └── sample-bugreports/
 ```
 
@@ -590,9 +589,9 @@ GitHub Issues + Project Board：
 | #1 | 專案初始化（monorepo + TypeScript + Vitest） | ✅ 完成 | - |
 | #2 | types.ts 完整型別定義 | ✅ 完成 | 編譯通過 |
 | #3 | unpacker.ts（ZIP 解壓 + 段落切割） | ✅ 完成 | 5 tests passed |
-| #4 | logcat-parser.ts（9 種異常偵測） | ✅ 完成 | 12 tests passed |
+| #4 | logcat-parser.ts（11 種異常偵測） | ✅ 完成 | 12 tests passed |
 | #5 | anr-parser.ts（18-case + Lock Graph + Deadlock） | ✅ 完成 | 18 tests passed |
-| #6 | kernel-parser.ts（9 種 kernel 事件偵測） | ✅ 完成 | 19 tests passed |
+| #6 | kernel-parser.ts（12 種 kernel 事件偵測） | ✅ 完成 | 19 tests passed |
 | #7 | basic-analyzer.ts（規則引擎 + Insights + 健康分數） | ✅ 完成 | 12 tests passed |
 
 ### Week 3: Backend + LLM Gateway ✅
@@ -630,7 +629,7 @@ GitHub Issues + Project Board：
 | #26 | Docker Compose 部署 | 待開始 | - |
 | #27 | 端對端測試 | 待開始 | - |
 | #28 | Enhanced Deep Analysis（context builder + structured output + overview UI） | ✅ 完成 | Build 通過 |
-| #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 43 tests passed |
+| #29 | Backend Tests（parser + analyzer + routes） | ✅ 完成 | 47 tests passed |
 
 **累計測試：207 passed（parser 160 + backend 47）**
 **Frontend Build：215 KB JS + 14.5 KB CSS（production）**

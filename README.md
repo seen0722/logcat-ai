@@ -5,7 +5,7 @@ AI-powered Android bugreport.zip analyzer. Upload a bugreport, get structured di
 ## Features
 
 - **Dual-mode analysis** — Quick (rule-based, < 5s) and Deep (LLM-powered, 30s–2min)
-- **Comprehensive parsing** — Logcat (9 anomaly types), ANR traces (18 case types with lock graph & deadlock detection), Kernel logs (9 event types)
+- **Comprehensive parsing** — Logcat (11 anomaly types), ANR traces (18 case types with lock graph & deadlock detection), Kernel logs (12 event types)
 - **Deep Analysis** — Evidence-based root cause identification, cross-subsystem correlation, prioritized actions with effort/impact assessment
 - **Interactive chat** — Follow-up questions with streaming responses
 - **Multi-LLM support** — Ollama (local), OpenAI, Google Gemini, Anthropic Claude

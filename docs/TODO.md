@@ -11,9 +11,9 @@
 - [x] #1 專案初始化（monorepo + TypeScript + Vitest）
 - [x] #2 types.ts 完整型別定義
 - [x] #3 unpacker.ts（ZIP 解壓 + 段落切割）— 5 tests
-- [x] #4 logcat-parser.ts（9 種異常偵測）— 12 tests
+- [x] #4 logcat-parser.ts（11 種異常偵測）— 12 tests
 - [x] #5 anr-parser.ts（18-case + Lock Graph + Deadlock）— 18 tests
-- [x] #6 kernel-parser.ts（9 種 kernel 事件偵測）— 19 tests
+- [x] #6 kernel-parser.ts（12 種 kernel 事件偵測）— 19 tests
 - [x] #7 basic-analyzer.ts（規則引擎 + Insights + 健康分數）— 12 tests
 
 ### Week 3: Backend + LLM Gateway

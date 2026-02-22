@@ -58,9 +58,9 @@ bugreport.zip → [Upload API] → [Unpacker] → sections & raw files
 Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP extraction. All exports via `src/index.ts`.
 
 - `unpacker.ts` — ZIP extraction, section splitting (logcat, ANR traces, kernel, dumpsys)
-- `logcat-parser.ts` — 9 anomaly types (crash, ANR, watchdog, etc.)
+- `logcat-parser.ts` — 11 anomaly types (crash, ANR, watchdog, etc.)
 - `anr-parser.ts` — 18 ANR case types, lock graph construction, deadlock detection
-- `kernel-parser.ts` — 9 kernel event types
+- `kernel-parser.ts` — 12 kernel event types
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation
 - `types.ts` — All shared type definitions used across packages
