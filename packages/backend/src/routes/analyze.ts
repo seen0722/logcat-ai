@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import {
   unpackBugreport,
   parseLogcat,
+  detectAnomalies,
+  computeTagStats,
   parseANRTrace,
   parseKernelLog,
   parseMemInfo,
@@ -13,6 +15,7 @@ import {
   detectLogFormat,
   AnalysisResult,
   DeepAnalysisOverview,
+  LogEntry,
 } from '@logcat-ai/parser';
 import { analyzeBasic } from '@logcat-ai/parser';
 import { getConfig } from '../config.js';
@@ -105,10 +108,26 @@ router.get('/:id', async (req: Request, res: Response) => {
       // Stage 2: Parse
       sendSSE(res, { stage: 'parsing', progress: 30, message: 'Parsing logcat...' });
 
-      // Parse all logcat sections
-      const logcatTexts = unpackResult.logcatSections;
-      const combinedLogcat = logcatTexts.join('\n');
-      const logcatResult = parseLogcat(combinedLogcat);
+      // Parse all logcat sections individually to preserve buffer info
+      const allEntries: LogEntry[] = [];
+      let totalParseErrors = 0;
+      let totalLines = 0;
+      let parsedLines = 0;
+      for (const section of unpackResult.logcatSections) {
+        const result = parseLogcat(section.content, section.buffer);
+        allEntries.push(...result.entries);
+        totalParseErrors += result.parseErrors;
+        totalLines += result.totalLines;
+        parsedLines += result.parsedLines;
+      }
+      const logcatResult = {
+        entries: allEntries,
+        anomalies: detectAnomalies(allEntries),
+        totalLines,
+        parsedLines,
+        parseErrors: totalParseErrors,
+        tagStats: computeTagStats(allEntries),
+      };
 
       if (aborted) return;
       sendSSE(res, { stage: 'parsing', progress: 45, message: 'Parsing ANR traces...' });

@@ -1,5 +1,5 @@
 import { open, Entry, ZipFile } from 'yauzl-promise';
-import { BugreportMetadata, BugreportSection, UnpackResult } from './types.js';
+import { BugreportMetadata, BugreportSection, LogcatBuffer, LogcatSection, UnpackResult } from './types.js';
 
 // Section header pattern: ------ SECTION_NAME (command) ------
 const SECTION_HEADER_RE = /^------\s+(.+?)\s+\((.+?)\)\s+------$/;
@@ -199,14 +199,30 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
 }
 
 /**
- * Extract logcat section contents (main, system, events, crash).
+ * Extract logcat section contents with buffer type info (main, system, events, crash, radio).
  */
-function extractLogcatSections(sections: BugreportSection[]): string[] {
+function extractLogcatSections(sections: BugreportSection[]): LogcatSection[] {
   const logcatKeywords = ['SYSTEM LOG', 'EVENT LOG', 'MAIN LOG', 'CRASH LOG', 'RADIO LOG', 'LOGCAT'];
+
+  const bufferMap: Array<[string, LogcatBuffer]> = [
+    ['MAIN LOG', 'main'],
+    ['SYSTEM LOG', 'system'],
+    ['EVENT LOG', 'events'],
+    ['CRASH LOG', 'crash'],
+    ['RADIO LOG', 'radio'],
+  ];
+
   return sections
     .filter((s) => logcatKeywords.some((kw) => s.name.toUpperCase().includes(kw)) ||
       s.command.includes('logcat'))
-    .map((s) => s.content);
+    .map((s) => {
+      const nameUpper = s.name.toUpperCase();
+      const matched = bufferMap.find(([kw]) => nameUpper.includes(kw));
+      return {
+        buffer: matched ? matched[1] : 'main',
+        content: s.content,
+      };
+    });
 }
 
 function matchFirst(text: string, re: RegExp): string | null {

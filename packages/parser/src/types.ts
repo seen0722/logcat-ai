@@ -25,15 +25,20 @@ export interface BugreportSection {
   endLine: number;
 }
 
+export interface LogcatSection {
+  buffer: LogcatBuffer;
+  content: string;
+}
+
 export interface UnpackResult {
   metadata: BugreportMetadata;
   sections: BugreportSection[];
-  logcatSections: string[];       // main, system, events, crash logcat
-  anrTraceFiles: string[];        // paths under FS/data/anr/
-  tombstoneFiles: string[];       // paths under FS/data/tombstones/
+  logcatSections: LogcatSection[];  // main, system, events, crash logcat with buffer info
+  anrTraceFiles: string[];          // paths under FS/data/anr/
+  tombstoneFiles: string[];         // paths under FS/data/tombstones/
   anrTraceContents: Map<string, string>;
   tombstoneContents: Map<string, string>;
-  rawFiles: Map<string, Buffer>;  // all files in the zip
+  rawFiles: Map<string, Buffer>;    // all files in the zip
 }
 
 // ============================================================
@@ -41,6 +46,8 @@ export interface UnpackResult {
 // ============================================================
 
 export type LogLevel = 'V' | 'D' | 'I' | 'W' | 'E' | 'F';
+
+export type LogcatBuffer = 'main' | 'system' | 'events' | 'crash' | 'radio' | 'kernel';
 
 export interface LogEntry {
   timestamp: string;   // "MM-DD HH:mm:ss.SSS"
@@ -51,6 +58,7 @@ export interface LogEntry {
   message: string;
   raw: string;
   lineNumber: number;
+  buffer?: LogcatBuffer;
 }
 
 export type LogcatAnomalyType =

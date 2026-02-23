@@ -62,6 +62,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
   // Logcat-only filters
   const [tag, setTag] = useState('');
   const [pid, setPid] = useState('');
+  const [buffer, setBuffer] = useState('');
   // Shared filters
   const [level, setLevel] = useState('');
   const [limit, setLimit] = useState(50);
@@ -78,6 +79,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     tag?: string;
     level?: string;
     pid?: number;
+    buffer?: string;
     limit: number;
   } | null>(null);
 
@@ -103,6 +105,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     setQ('');
     setTag('');
     setPid('');
+    setBuffer('');
     setLevel('');
     setPage(0);
     setLogcatResult(null);
@@ -133,6 +136,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
           tag: params.tag,
           level: params.level,
           pid: params.pid,
+          buffer: params.buffer,
           limit: params.limit,
           offset,
         });
@@ -150,7 +154,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
 
   const doSearch = async () => {
     if (source === 'logcat') {
-      if (!q.trim() && !tag.trim() && !level && !pid.trim()) return;
+      if (!q.trim() && !tag.trim() && !level && !pid.trim() && !buffer) return;
     } else {
       if (!q.trim() && !level) return;
     }
@@ -161,6 +165,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
       tag: source === 'logcat' ? (tag.trim() || undefined) : undefined,
       level: level || undefined,
       pid: source === 'logcat' && pid ? Number(pid) : undefined,
+      buffer: source === 'logcat' && buffer ? buffer : undefined,
       limit,
     };
     lastSearchRef.current = params;
@@ -184,6 +189,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
           tag: params.tag,
           level: params.level,
           pid: params.pid,
+          buffer: params.buffer,
           limit: params.limit,
           offset: 0,
         });
@@ -322,19 +328,34 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                   />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <label className="text-xs text-gray-500">Level</label>
+                  <label className="text-xs text-gray-500">Buffer</label>
+                  <select
+                    value={buffer}
+                    onChange={(e) => setBuffer(e.target.value)}
+                    className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">All</option>
+                    <option value="main">main</option>
+                    <option value="system">system</option>
+                    <option value="events">events</option>
+                    <option value="crash">crash</option>
+                    <option value="radio">radio</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-500">Min Level</label>
                   <select
                     value={level}
                     onChange={(e) => setLevel(e.target.value)}
                     className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">All</option>
-                    <option value="V">V - Verbose</option>
-                    <option value="D">D - Debug</option>
-                    <option value="I">I - Info</option>
-                    <option value="W">W - Warning</option>
-                    <option value="E">E - Error</option>
-                    <option value="F">F - Fatal</option>
+                    <option value="V">V+ (Verbose &amp; above)</option>
+                    <option value="D">D+ (Debug &amp; above)</option>
+                    <option value="I">I+ (Info &amp; above)</option>
+                    <option value="W">W+ (Warning &amp; above)</option>
+                    <option value="E">E+ (Error &amp; above)</option>
+                    <option value="F">F (Fatal only)</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -353,21 +374,21 @@ export default function SearchModal({ uploadId, onClose }: Props) {
 
             {source === 'kernel' && (
               <div className="flex items-center gap-1.5">
-                <label className="text-xs text-gray-500">Level</label>
+                <label className="text-xs text-gray-500">Min Level</label>
                 <select
                   value={level}
                   onChange={(e) => setLevel(e.target.value)}
                   className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">All</option>
-                  <option value="<0>">&lt;0&gt; EMERG</option>
-                  <option value="<1>">&lt;1&gt; ALERT</option>
-                  <option value="<2>">&lt;2&gt; CRIT</option>
-                  <option value="<3>">&lt;3&gt; ERR</option>
-                  <option value="<4>">&lt;4&gt; WARN</option>
-                  <option value="<5>">&lt;5&gt; NOTICE</option>
-                  <option value="<6>">&lt;6&gt; INFO</option>
-                  <option value="<7>">&lt;7&gt; DEBUG</option>
+                  <option value="<0>">&lt;0&gt; EMERG only</option>
+                  <option value="<1>">&lt;1&gt;+ ALERT &amp; above</option>
+                  <option value="<2>">&lt;2&gt;+ CRIT &amp; above</option>
+                  <option value="<3>">&lt;3&gt;+ ERR &amp; above</option>
+                  <option value="<4>">&lt;4&gt;+ WARN &amp; above</option>
+                  <option value="<5>">&lt;5&gt;+ NOTICE &amp; above</option>
+                  <option value="<6>">&lt;6&gt;+ INFO &amp; above</option>
+                  <option value="<7>">&lt;7&gt;+ DEBUG (all)</option>
                 </select>
               </div>
             )}

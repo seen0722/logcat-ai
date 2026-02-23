@@ -45,6 +45,7 @@ export function initDatabase(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_analyses_created ON analyses(created_at DESC);
 
+    DROP TABLE IF EXISTS logcat_fts;
     CREATE VIRTUAL TABLE IF NOT EXISTS logcat_fts USING fts5(
       analysis_id,
       line_number,
@@ -52,6 +53,7 @@ export function initDatabase(): void {
       level,
       tag,
       message,
+      buffer,
       tokenize='porter unicode61'
     );
 

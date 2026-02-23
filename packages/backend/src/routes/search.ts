@@ -17,6 +17,7 @@ router.get('/:id', (req: Request, res: Response) => {
   const tag = req.query.tag ? String(req.query.tag) : undefined;
   const level = req.query.level ? String(req.query.level) : undefined;
   const pid = req.query.pid ? parseInt(String(req.query.pid), 10) : undefined;
+  const buffer = req.query.buffer ? String(req.query.buffer) : undefined;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 500);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
@@ -35,9 +36,9 @@ router.get('/:id', (req: Request, res: Response) => {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
   }
 
-  // Try FTS5 first if only keyword search (no other filters)
+  // Try FTS5 first if only keyword search (no tag/level/pid filters)
   if (q && !tag && !level && !pid) {
-    const ftsResult = searchLogcatFTS(id, q, limit, offset);
+    const ftsResult = searchLogcatFTS(id, q, limit, offset, buffer);
     if (ftsResult) {
       return res.json({
         totalMatches: ftsResult.totalMatches,
@@ -49,6 +50,7 @@ router.get('/:id', (req: Request, res: Response) => {
           level: e.level,
           tag: e.tag,
           message: e.message,
+          buffer: e.buffer,
         })),
       });
     }
@@ -56,6 +58,10 @@ router.get('/:id', (req: Request, res: Response) => {
 
   // Fallback: in-memory filtering
   let filtered: LogEntry[] = entries;
+
+  if (buffer) {
+    filtered = filtered.filter(e => e.buffer === buffer);
+  }
 
   if (tag) {
     filtered = filtered.filter(e => e.tag === tag);
@@ -94,6 +100,7 @@ router.get('/:id', (req: Request, res: Response) => {
       level: e.level,
       tag: e.tag,
       message: e.message,
+      buffer: e.buffer,
     })),
   });
 });

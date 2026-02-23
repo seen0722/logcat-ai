@@ -6,6 +6,8 @@ import multer from 'multer';
 import {
   unpackBugreport,
   parseLogcat,
+  detectAnomalies,
+  computeTagStats,
   parseANRTrace,
   parseKernelLog,
   parseMemInfo,
@@ -17,6 +19,7 @@ import {
   BatchItem,
   AnalysisResult,
   InsightCard,
+  LogEntry,
 } from '@logcat-ai/parser';
 import { getConfig } from '../config.js';
 import { analysisStore } from '../store.js';
@@ -256,9 +259,26 @@ async function analyzeFile(filePath: string): Promise<AnalysisResult> {
   // Stage 1: Unpack
   const unpackResult = await unpackBugreport(filePath);
 
-  // Stage 2: Parse
-  const combinedLogcat = unpackResult.logcatSections.join('\n');
-  const logcatResult = parseLogcat(combinedLogcat);
+  // Stage 2: Parse — per-section to preserve buffer info
+  const allEntries: LogEntry[] = [];
+  let totalParseErrors = 0;
+  let totalLines = 0;
+  let parsedLines = 0;
+  for (const section of unpackResult.logcatSections) {
+    const result = parseLogcat(section.content, section.buffer);
+    allEntries.push(...result.entries);
+    totalParseErrors += result.parseErrors;
+    totalLines += result.totalLines;
+    parsedLines += result.parsedLines;
+  }
+  const logcatResult = {
+    entries: allEntries,
+    anomalies: detectAnomalies(allEntries),
+    totalLines,
+    parsedLines,
+    parseErrors: totalParseErrors,
+    tagStats: computeTagStats(allEntries),
+  };
 
   const anrAnalyses = [...unpackResult.anrTraceContents.values()]
     .map((content) => parseANRTrace(content));

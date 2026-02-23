@@ -12,6 +12,7 @@ export interface FTSSearchResult {
   level: string;
   tag: string;
   message: string;
+  buffer?: string;
   rank: number;
 }
 
@@ -29,7 +30,7 @@ export function indexLogcatEntries(analysisId: string, entries: LogEntry[]): voi
 
   // Batch insert for performance
   const insert = db.prepare(
-    'INSERT INTO logcat_fts (analysis_id, line_number, timestamp, level, tag, message) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO logcat_fts (analysis_id, line_number, timestamp, level, tag, message, buffer) VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
 
   const batchInsert = db.transaction((entries: LogEntry[]) => {
@@ -41,6 +42,7 @@ export function indexLogcatEntries(analysisId: string, entries: LogEntry[]): voi
         entry.level,
         entry.tag,
         entry.message,
+        entry.buffer ?? '',
       );
     }
   });
@@ -56,12 +58,14 @@ export interface FTSPaginatedResult {
 /**
  * Search logcat entries using FTS5 BM25 ranking.
  * Returns results ordered by relevance with pagination support.
+ * Optional buffer filter to restrict search to a specific logcat buffer.
  */
 export function searchLogcatFTS(
   analysisId: string,
   query: string,
   limit = 50,
   offset = 0,
+  buffer?: string,
 ): FTSPaginatedResult | null {
   const db = getDatabase();
 
@@ -69,30 +73,34 @@ export function searchLogcatFTS(
   const safeQuery = sanitizeFTSQuery(query);
   if (!safeQuery) return null;
 
+  // If buffer filter is specified, add it to the FTS5 MATCH query
+  const matchQuery = buffer ? `${safeQuery} AND buffer:"${buffer}"` : safeQuery;
+
   try {
     const countRow = db
       .prepare(
         `SELECT COUNT(*) as cnt FROM logcat_fts WHERE analysis_id = ? AND logcat_fts MATCH ?`,
       )
-      .get(analysisId, safeQuery) as { cnt: number } | undefined;
+      .get(analysisId, matchQuery) as { cnt: number } | undefined;
 
     const totalMatches = countRow?.cnt ?? 0;
     if (totalMatches === 0) return null;
 
     const rows = db
       .prepare(
-        `SELECT line_number, timestamp, level, tag, message, rank
+        `SELECT line_number, timestamp, level, tag, message, buffer, rank
          FROM logcat_fts
          WHERE analysis_id = ? AND logcat_fts MATCH ?
          ORDER BY rank
          LIMIT ? OFFSET ?`,
       )
-      .all(analysisId, safeQuery, limit, offset) as Array<{
+      .all(analysisId, matchQuery, limit, offset) as Array<{
       line_number: number;
       timestamp: string;
       level: string;
       tag: string;
       message: string;
+      buffer: string;
       rank: number;
     }>;
 
@@ -104,6 +112,7 @@ export function searchLogcatFTS(
         level: row.level,
         tag: row.tag,
         message: row.message,
+        buffer: row.buffer || undefined,
         rank: row.rank,
       })),
     };

@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   unpackBugreport,
   parseLogcat,
+  detectAnomalies,
+  computeTagStats,
   parseANRTrace,
   parseKernelLog,
   parseMemInfo,
@@ -14,7 +16,7 @@ import {
   analyzeBasic,
   detectLogFormat,
 } from '@logcat-ai/parser';
-import type { AnalysisResult } from '@logcat-ai/parser';
+import type { AnalysisResult, LogEntry } from '@logcat-ai/parser';
 
 // Store last analysis result for follow-up queries
 let lastAnalysisResult: AnalysisResult | null = null;
@@ -140,8 +142,26 @@ async function analyzeFile(
 async function analyzeZipFile(filePath: string): Promise<AnalysisResult> {
   const unpackResult = await unpackBugreport(filePath);
 
-  const combinedLogcat = unpackResult.logcatSections.join('\n');
-  const logcatResult = parseLogcat(combinedLogcat);
+  // Parse logcat per-section to preserve buffer info
+  const allEntries: LogEntry[] = [];
+  let totalParseErrors = 0;
+  let totalLines = 0;
+  let parsedLines = 0;
+  for (const section of unpackResult.logcatSections) {
+    const result = parseLogcat(section.content, section.buffer);
+    allEntries.push(...result.entries);
+    totalParseErrors += result.parseErrors;
+    totalLines += result.totalLines;
+    parsedLines += result.parsedLines;
+  }
+  const logcatResult = {
+    entries: allEntries,
+    anomalies: detectAnomalies(allEntries),
+    totalLines,
+    parsedLines,
+    parseErrors: totalParseErrors,
+    tagStats: computeTagStats(allEntries),
+  };
 
   const anrAnalyses = [...unpackResult.anrTraceContents.values()].map((content) =>
     parseANRTrace(content),

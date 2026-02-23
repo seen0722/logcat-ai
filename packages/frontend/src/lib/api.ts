@@ -161,18 +161,20 @@ export interface LogcatSearchResult {
     level: string;
     tag: string;
     message: string;
+    buffer?: string;
   }>;
 }
 
 export async function searchLogcat(
   id: string,
-  params: { q?: string; tag?: string; level?: string; pid?: number; limit?: number; offset?: number },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; limit?: number; offset?: number },
 ): Promise<LogcatSearchResult> {
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
   if (params.tag) qs.set('tag', params.tag);
   if (params.level) qs.set('level', params.level);
   if (params.pid !== undefined) qs.set('pid', String(params.pid));
+  if (params.buffer) qs.set('buffer', params.buffer);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset !== undefined) qs.set('offset', String(params.offset));
 

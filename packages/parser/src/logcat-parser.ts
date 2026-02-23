@@ -1,4 +1,5 @@
 import {
+  LogcatBuffer,
   LogEntry,
   LogLevel,
   LogcatAnomaly,
@@ -75,7 +76,7 @@ export function computeTagStats(entries: LogEntry[]): TagStat[] {
 /**
  * Parse logcat text into structured entries and detect anomalies.
  */
-export function parseLogcat(content: string): LogcatParseResult {
+export function parseLogcat(content: string, buffer?: LogcatBuffer): LogcatParseResult {
   const lines = content.split('\n');
   const entries: LogEntry[] = [];
   let parseErrors = 0;
@@ -100,6 +101,7 @@ export function parseLogcat(content: string): LogcatParseResult {
           message: match[7],
           raw: line,
           lineNumber: i + 1,
+          buffer,
         });
       } else {
         // Non-UID format: timestamp, pid, tid, level, tag, message
@@ -112,6 +114,7 @@ export function parseLogcat(content: string): LogcatParseResult {
           message: match[6],
           raw: line,
           lineNumber: i + 1,
+          buffer,
         });
       }
     } else {
@@ -272,7 +275,7 @@ const ANOMALY_RULES: AnomalyRule[] = [
   },
 ];
 
-function detectAnomalies(entries: LogEntry[]): LogcatAnomaly[] {
+export function detectAnomalies(entries: LogEntry[]): LogcatAnomaly[] {
   const anomalies: LogcatAnomaly[] = [];
 
   for (const entry of entries) {
