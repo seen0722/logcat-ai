@@ -131,6 +131,7 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - Backend runs with `--max-old-space-size=4096` (4GB heap) to handle large bugreports (400K+ logcat entries)
 - **Large array pattern**: Never use `push(...arr)` or `concat` for merging large arrays — use per-element `for (const e of arr) { target.push(e); }` to avoid stack overflow and memory spikes
 - **Large string pattern**: Never use `content.split('\n')` on large strings (100MB+) — use regex exec + `content.slice()` or char-by-char iteration to avoid millions of intermediate string objects and GC pressure
+- **Event bubbling in expandable cards**: `InsightCard` 的整個 div 有 `onClick` 控制展開/收合。內部互動元素（`<details>`、`<a>`、`<button>`）必須加 `e.stopPropagation()` 防止事件冒泡導致 card 意外收合
 - Documentation and PRD are written in Traditional Chinese
 
 ## Android BSP Domain Knowledge
@@ -198,6 +199,10 @@ HAL 按照介面家族分組（同一介面不同版本歸同一家族），只�
 
 解析 dmesg 輸出，偵測 12 種事件：`kernel_panic`、`oom_kill`、`lowmemory_killer`、`kswapd_active`、`driver_error`、`gpu_error`、`thermal_shutdown`、`thermal_throttling`、`watchdog_reset`、`storage_io_error`、`suspend_resume_error`、`selinux_denial`。其中 `thermal_*` 和 `driver_error` 對 BSP 除錯特別重要。
 
+### KERNEL LOG 段落格式差異
+
+KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timestamp] message`）或 `logcat -b kernel -v threadtime`（logcat 格式）。`kernel-parser.ts` 僅支援 dmesg 格式，logcat 格式會導致 0 entries、0 events。此時 `uptimeSeconds` 改由 `UPTIME (uptime)` 段落的 `uptime` 指令輸出解析（支援 `up N days, HH:MM` / `up HH:MM` / `up N min` 三種格式）。
+
 ### 健康評分（basic-analyzer.ts）
 
 四維加權評分：stability(30%) + memory(25%) + responsiveness(25%) + kernel(20%)。使用頻率遞減扣分：同類型事件第 1 次扣全額、第 2 次扣 50%、第 3 次扣 25%、第 4 次起扣 10%，每類型有最大扣分上限，防止大量 SELinux denial 等重複事件將分數打到 0。
@@ -205,3 +210,7 @@ HAL 按照介面家族分組（同一介面不同版本歸同一家族），只�
 ### Deep Analysis Prompt 結構
 
 `context-builder.ts` 為每個 critical/warning insight 組建詳細上下文（原始 log、完整堆疊、blocking chain、±2 秒內的 W/E/F 日誌），並以 60K token 為上限進行裁剪。`analysis.ts` 將此上下文與裝置資訊、健康分數、HAL 交叉比對結果組合成 prompt，要求 LLM 輸出結構化 JSON（含 executiveSummary、correlationFindings、prioritizedActions、per-insight rootCause）。
+
+### Deep Analysis Insight 篩選規則
+
+`context-builder.ts` 的 `buildInsightContexts()` **只處理 `critical` 和 `warning` severity 的 insight**。新增的 insight card 若要被 Deep Analysis LLM 分析，severity 必須 ≥ `warning`；`info` 等級的 insight 不會送 LLM，也不會產生 `deepAnalysis` 欄位（rootCause、fixSuggestion 等）。若 insight source 不是標準 anomaly 類型（如 tag-based insights），需在 `context-builder.ts` 新增專屬的 context 收集函式。
