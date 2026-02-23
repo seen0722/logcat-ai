@@ -75,15 +75,35 @@ export function computeTagStats(entries: LogEntry[]): TagStat[] {
 
 /**
  * Parse logcat text into structured entries and detect anomalies.
+ *
+ * Performance: Iterates through content char-by-char instead of split('\n')
+ * to avoid creating millions of intermediate string objects for large inputs.
  */
 export function parseLogcat(content: string, buffer?: LogcatBuffer): LogcatParseResult {
-  const lines = content.split('\n');
   const entries: LogEntry[] = [];
   let parseErrors = 0;
+  let totalLines = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
+  // Iterate lines without split('\n') — avoids creating 600K+ intermediate strings
+  let lineStart = 0;
+  const len = content.length;
+
+  for (let pos = 0; pos <= len; pos++) {
+    if (pos < len && content.charCodeAt(pos) !== 10) continue; // not \n and not end
+
+    totalLines++;
+    // Skip empty/whitespace-only lines efficiently
+    let empty = true;
+    for (let j = lineStart; j < pos; j++) {
+      const c = content.charCodeAt(j);
+      if (c !== 32 && c !== 9 && c !== 13) { empty = false; break; } // space, tab, \r
+    }
+    if (empty) {
+      lineStart = pos + 1;
+      continue;
+    }
+
+    const line = content.substring(lineStart, pos);
 
     // Try UID format first (4 numeric groups), then fallback to non-UID (3 numeric groups)
     const matchUid = line.match(LOGCAT_LINE_RE);
@@ -100,7 +120,7 @@ export function parseLogcat(content: string, buffer?: LogcatBuffer): LogcatParse
           tag: match[6].trim(),
           message: match[7],
           raw: line,
-          lineNumber: i + 1,
+          lineNumber: totalLines,
           buffer,
         });
       } else {
@@ -113,20 +133,23 @@ export function parseLogcat(content: string, buffer?: LogcatBuffer): LogcatParse
           tag: match[5].trim(),
           message: match[6],
           raw: line,
-          lineNumber: i + 1,
+          lineNumber: totalLines,
           buffer,
         });
       }
     } else {
       // Could be a continuation line or non-logcat line
-      if (entries.length > 0 && (line.startsWith('\t') || line.startsWith('  '))) {
-        // Append to previous entry's message
+      const firstChar = content.charCodeAt(lineStart);
+      if (entries.length > 0 && (firstChar === 9 || (firstChar === 32 && lineStart + 1 < pos && content.charCodeAt(lineStart + 1) === 32))) {
+        // Tab or double-space indent → continuation line
         entries[entries.length - 1].message += '\n' + line;
         entries[entries.length - 1].raw += '\n' + line;
       } else {
         parseErrors++;
       }
     }
+
+    lineStart = pos + 1;
   }
 
   const anomalies = detectAnomalies(entries);
@@ -135,7 +158,7 @@ export function parseLogcat(content: string, buffer?: LogcatBuffer): LogcatParse
   return {
     entries,
     anomalies,
-    totalLines: lines.length,
+    totalLines,
     parsedLines: entries.length,
     parseErrors,
     tagStats,

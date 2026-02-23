@@ -317,6 +317,13 @@ async function analyzeFile(filePath: string): Promise<AnalysisResult> {
   const sysPropSection = unpackResult.sections.find(
     (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
   );
+  const systemProperties = sysPropSection?.content;
+
+  // Free unpackResult memory — no longer needed after parsing
+  (unpackResult as { sections: unknown }).sections = [];
+  (unpackResult as { rawFiles: unknown }).rawFiles = new Map();
+  (unpackResult as { anrTraceContents: unknown }).anrTraceContents = new Map();
+  (unpackResult as { tombstoneContents: unknown }).tombstoneContents = new Map();
 
   // Stage 3: Basic Analysis
   return analyzeBasic({
@@ -328,7 +335,7 @@ async function analyzeFile(filePath: string): Promise<AnalysisResult> {
     cpuInfo,
     halStatus,
     tombstoneAnalyses: tombstoneResult.analyses,
-    systemProperties: sysPropSection?.content,
+    systemProperties,
   });
 }
 

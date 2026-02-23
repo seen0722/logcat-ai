@@ -181,13 +181,33 @@ router.get('/:id', async (req: Request, res: Response) => {
       if (aborted) return;
       sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
+      // Extract system properties section (before freeing section content)
+      const sysPropSection = unpackResult.sections.find(
+        (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
+      );
+      const systemProperties = sysPropSection?.content;
+
+      // Filter sections for rawDataStore: exclude logcat sections (already in logcatEntries)
+      // and free large section content strings to reduce memory
+      const logcatSectionNames = ['SYSTEM LOG', 'EVENT LOG', 'MAIN LOG', 'CRASH LOG', 'RADIO LOG', 'LOGCAT'];
+      const storedSections = unpackResult.sections.filter(
+        (s) => !logcatSectionNames.some((kw) => s.name.toUpperCase().includes(kw)) &&
+          !s.command.includes('logcat'),
+      );
+
       // Store raw parsed data for agentic chat tool access
       rawDataStore.set(id, {
         logcatEntries: logcatResult.entries,
         kernelResult,
         anrAnalyses,
-        sections: unpackResult.sections,
+        sections: storedSections,
       });
+
+      // Free unpackResult memory — sections and rawFiles are no longer needed
+      (unpackResult as { sections: unknown }).sections = [];
+      (unpackResult as { rawFiles: unknown }).rawFiles = new Map();
+      (unpackResult as { anrTraceContents: unknown }).anrTraceContents = new Map();
+      (unpackResult as { tombstoneContents: unknown }).tombstoneContents = new Map();
 
       // Index logcat entries in FTS5 for full-text search
       try {
@@ -206,11 +226,6 @@ router.get('/:id', async (req: Request, res: Response) => {
       // Stage 3: Basic Analysis
       sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
 
-      // Extract system properties section
-      const sysPropSection = unpackResult.sections.find(
-        (s) => s.name === 'SYSTEM PROPERTIES' || s.command.includes('getprop')
-      );
-
       analysisResult = analyzeBasic({
         metadata: unpackResult.metadata,
         logcatResult,
@@ -220,7 +235,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         cpuInfo,
         halStatus,
         tombstoneAnalyses: tombstoneResult.analyses,
-        systemProperties: sysPropSection?.content,
+        systemProperties,
       });
     }
 

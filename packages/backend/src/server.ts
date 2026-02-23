@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
+import v8 from 'node:v8';
 import { fileURLToPath } from 'node:url';
 
 // Load .env from project root (../../.env relative to this file)
@@ -54,9 +55,12 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 // Start
 const config = getConfig();
 app.listen(config.port, () => {
+  const heapStats = v8.getHeapStatistics();
+  const heapLimitMB = Math.round(heapStats.heap_size_limit / 1024 / 1024);
   console.log(`[logcat-ai] Backend running on http://localhost:${config.port}`);
   console.log(`[logcat-ai] LLM Provider: ${config.llm.defaultProvider} (${config.llm.providers[config.llm.defaultProvider].model})`);
   console.log(`[logcat-ai] Upload dir: ${config.uploadDir}`);
+  console.log(`[logcat-ai] V8 heap limit: ${heapLimitMB}MB`);
 });
 
 export default app;

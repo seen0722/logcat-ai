@@ -15,6 +15,7 @@ const KERNEL_VERSION_RE = /Linux version\s+(\S+)/;
 
 /**
  * Unpack a bugreport.zip and parse its contents into structured data.
+ * Performance: Only reads files needed for analysis (bugreport, ANR, tombstones).
  */
 export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
   const zipFile = await open(zipPath);
@@ -34,26 +35,24 @@ export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
       // Skip directories
       if (fileName.endsWith('/')) continue;
 
-      const buffer = await readEntry(zipFile, entry);
-      rawFiles.set(fileName, buffer);
-
-      // Identify main bugreport text file
+      // Only read files we actually need for analysis — skip screenshots, misc logs, etc.
       if (isMainBugreportFile(fileName)) {
+        const buffer = await readEntry(zipFile, entry);
+        rawFiles.set(fileName, buffer);
         mainBugreportContent = buffer.toString('utf-8');
         mainBugreportName = fileName;
-      }
-
-      // Collect ANR trace files
-      if (isAnrTraceFile(fileName)) {
+      } else if (isAnrTraceFile(fileName)) {
+        const buffer = await readEntry(zipFile, entry);
+        rawFiles.set(fileName, buffer);
         anrTraceFiles.push(fileName);
         anrTraceContents.set(fileName, buffer.toString('utf-8'));
-      }
-
-      // Collect tombstone files
-      if (isTombstoneFile(fileName)) {
+      } else if (isTombstoneFile(fileName)) {
+        const buffer = await readEntry(zipFile, entry);
+        rawFiles.set(fileName, buffer);
         tombstoneFiles.push(fileName);
         tombstoneContents.set(fileName, buffer.toString('utf-8'));
       }
+      // All other files are skipped — not read into memory
     }
   } finally {
     await zipFile.close();
@@ -68,6 +67,9 @@ export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
   const sections = parseSections(mainBugreportContent);
   const metadata = extractMetadata(mainBugreportContent, sections);
   const logcatSections = extractLogcatSections(sections);
+
+  // Release the main bugreport string — sections already hold their own content
+  mainBugreportContent = '';
 
   return {
     metadata,
@@ -110,47 +112,73 @@ function isTombstoneFile(fileName: string): boolean {
   return /(?:FS\/)?data\/tombstones\//i.test(fileName);
 }
 
+// Global+multiline regex for finding section headers without splitting content into lines
+const SECTION_HEADER_GM = /^------\s+(.+?)\s+\((.+?)\)\s+------$/gm;
+
 /**
  * Parse the main bugreport text into sections delimited by
  * `------ SECTION_NAME (command) ------`
+ *
+ * Performance: Uses regex exec + slice instead of split('\n') + join('\n').
+ * For a 300MB file, this avoids creating ~3 million intermediate string objects,
+ * dramatically reducing GC pressure and memory usage.
  */
 export function parseSections(content: string): BugreportSection[] {
-  const lines = content.split('\n');
   const sections: BugreportSection[] = [];
-  let currentSection: { name: string; command: string; startLine: number; lines: string[] } | null = null;
 
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(SECTION_HEADER_RE);
-    if (match) {
-      // Close previous section
-      if (currentSection) {
-        sections.push({
-          name: currentSection.name,
-          command: currentSection.command,
-          content: currentSection.lines.join('\n'),
-          startLine: currentSection.startLine,
-          endLine: i - 1,
-        });
-      }
-      currentSection = {
-        name: match[1],
-        command: match[2],
-        startLine: i,
-        lines: [],
-      };
-    } else if (currentSection) {
-      currentSection.lines.push(lines[i]);
-    }
+  // Find all section header positions using global multiline regex
+  const headers: Array<{ name: string; command: string; start: number; end: number }> = [];
+  SECTION_HEADER_GM.lastIndex = 0; // reset state
+  let m: RegExpExecArray | null;
+  while ((m = SECTION_HEADER_GM.exec(content)) !== null) {
+    headers.push({
+      name: m[1],
+      command: m[2],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
   }
 
-  // Close last section
-  if (currentSection) {
+  if (headers.length === 0) return [];
+
+  // Compute line numbers with a single incremental pass through content.
+  // Count newlines up to each header position to derive 0-based line numbers.
+  let lineNum = 0;
+  let scanPos = 0;
+  const headerLineNums: number[] = [];
+
+  for (const h of headers) {
+    for (let i = scanPos; i < h.start; i++) {
+      if (content.charCodeAt(i) === 10) lineNum++;
+    }
+    headerLineNums.push(lineNum);
+    scanPos = h.start;
+  }
+  // Count remaining newlines for the last section's endLine
+  for (let i = scanPos; i < content.length; i++) {
+    if (content.charCodeAt(i) === 10) lineNum++;
+  }
+  const totalLineCount = lineNum;
+
+  // Build sections using slice() — avoids creating millions of intermediate strings
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    const contentStart = Math.min(h.end + 1, content.length); // skip \n after header
+    const contentEnd = i + 1 < headers.length ? headers[i + 1].start : content.length;
+    const endLine = i + 1 < headers.length ? headerLineNums[i + 1] - 1 : totalLineCount;
+
+    // Extract section content; strip one trailing \n (the newline before the next header)
+    let sectionContent = content.slice(contentStart, contentEnd);
+    if (sectionContent.endsWith('\n')) {
+      sectionContent = sectionContent.slice(0, -1);
+    }
+
     sections.push({
-      name: currentSection.name,
-      command: currentSection.command,
-      content: currentSection.lines.join('\n'),
-      startLine: currentSection.startLine,
-      endLine: lines.length - 1,
+      name: h.name,
+      command: h.command,
+      content: sectionContent,
+      startLine: headerLineNums[i],
+      endLine,
     });
   }
 
