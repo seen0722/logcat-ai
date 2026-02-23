@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-23（Phase 2.2 完成：Kernel Message Search）
+> **更新日期**：2026-02-23（Phase 2.3 完成：Logcat Buffer Field & Search Filter）
 
 ---
 
@@ -277,6 +277,30 @@
   - `export-utils.ts`：新增 `kernelEntriesToCSV()`（columns: timestamp, level, facility, message）
   - `export-utils.ts`：新增 `kernelEntriesToDmesgText()`（模擬 dmesg 輸出格式）
   - 匯出檔名：`kernel-search-{keyword}-{ts}.csv` / `.txt`
+
+---
+
+## 5.1 Phase 2.3 — Logcat Buffer Field & Search Filter（✅ 完成）
+
+- [x] **LogEntry buffer 欄位**
+  - `types.ts`：新增 `LogcatBuffer` type（`'main' | 'system' | 'events' | 'crash' | 'radio' | 'kernel'`）、`LogcatSection` interface、`LogEntry.buffer?` optional 欄位
+  - `unpacker.ts`：`extractLogcatSections()` 改回傳 `LogcatSection[]`，依 section name 對應 buffer type（MAIN LOG→main、SYSTEM LOG→system、EVENT LOG→events、CRASH LOG→crash、RADIO LOG→radio）
+  - `logcat-parser.ts`：`parseLogcat(content, buffer?)` 接受 optional buffer 參數寫入每個 entry；`detectAnomalies()` 改為 export
+
+- [x] **Backend per-section 解析**
+  - `analyze.ts`、`batch.ts`：逐 section 呼叫 `parseLogcat(content, buffer)` 再合併 entries，重新呼叫 `detectAnomalies()` + `computeTagStats()`
+  - `mcp-server/tools.ts`：同步改為逐 section 解析
+
+- [x] **FTS5 buffer column**
+  - `db.ts`：`logcat_fts` FTS5 table 新增 `buffer` column（DROP+CREATE migration）
+  - `fts-indexer.ts`：`indexLogcatEntries` 插入 buffer；`searchLogcatFTS` 支援 optional buffer 過濾（FTS5 column filter 語法）
+
+- [x] **Search API buffer 過濾**
+  - `routes/search.ts`：新增 `buffer` query param，FTS5 與 in-memory 兩路都支援；response 加 buffer field
+
+- [x] **Frontend buffer dropdown**
+  - `api.ts`：`searchLogcat` params 加 `buffer`，response entry 加 `buffer`
+  - `SearchModal.tsx`：logcat filter row 新增 Buffer dropdown（All/main/system/events/crash/radio），切換 tab 時重置
 
 ---
 

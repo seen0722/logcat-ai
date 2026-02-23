@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.3.2
+> **版本**：v0.3.3
 > **更新日期**：2026-02-23
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter）
 
 ---
 
@@ -188,8 +188,10 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 解析每行為結構化資料：
 
 ```
-{timestamp, pid, tid, level, tag, message}
+{timestamp, pid, tid, level, tag, message, buffer?}
 ```
+
+`buffer` 欄位記錄 entry 來自哪個 logcat buffer（main/system/events/crash/radio），從 bugreport section name 自動辨識。Standalone `.txt/.log` 上傳時 buffer 為 undefined。
 
 異常偵測規則（11 種）：
 | 類型 | 比對方式 | 嚴重性 |
@@ -486,7 +488,7 @@ logcat-ai/
 | POST | `/api/batch` | 批次上傳多檔 |
 | GET | `/api/batch/:id/analyze` | 批次分析（SSE） |
 | GET | `/api/batch/:id` | 取得批次分析結果 |
-| GET | `/api/search/:id` | 搜尋 logcat/kernel entries（FTS5 / keyword，支援 source/q/tag/level/pid/limit） |
+| GET | `/api/search/:id` | 搜尋 logcat/kernel entries（FTS5 / keyword，支援 source/q/tag/level/pid/buffer/limit） |
 | GET | `/api/health` | 健康檢查 |
 
 ---
@@ -587,7 +589,7 @@ Week 5: Deep Analysis + 部署
 
 #### Phase 2.0b — LLM 增強
 - ✅ F5: Function Calling / Agentic Chat（5 investigation tools + prompt-based tool loop）
-- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat + kernel search + Search Modal UI with tab switcher）
+- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat + kernel search + Search Modal UI with tab switcher + buffer filter）
 
 #### Phase 2.0c — 多報告分析 + 生態整合
 - ✅ F7: Comparison Mode（health/insight/ANR/HAL diff）
@@ -606,7 +608,15 @@ Week 5: Deep Analysis + 部署
 - ✅ SearchModal Logcat/Kernel tab 切換：自適應 filters（logcat: tag/level/pid、kernel: severity level）、自適應結果表格、level 顏色
 - ✅ Kernel 匯出支援：`kernelEntriesToCSV()` / `kernelEntriesToDmesgText()`
 
-### 8.5 Phase 3：Backlog（未排期）
+### 8.5 Phase 2.3：Logcat Buffer Field & Search Filter ✅
+
+- ✅ `LogEntry.buffer?` 欄位：從 bugreport section name 自動辨識 buffer type（main/system/events/crash/radio）
+- ✅ Per-section 解析：analyze/batch/mcp-server 逐 section 呼叫 `parseLogcat(content, buffer)` 保留 buffer 資訊
+- ✅ FTS5 buffer column：`logcat_fts` 新增 buffer column，支援 FTS5 column filter 語法
+- ✅ Search API `buffer` param：FTS5 + in-memory 兩路都支援 buffer 過濾
+- ✅ SearchModal Buffer dropdown：logcat filter row 新增 Buffer 下拉選單（All/main/system/events/crash/radio）
+
+### 8.6 Phase 3：Backlog（未排期）
 
 - CVE/Security 分析（比對 CVE 資料庫）
 - Jira/GitHub 整合（從 findings 建 issue）
