@@ -109,16 +109,21 @@ router.get('/:id', async (req: Request, res: Response) => {
       sendSSE(res, { stage: 'parsing', progress: 30, message: 'Parsing logcat...' });
 
       // Parse all logcat sections individually to preserve buffer info
+      // NOTE: Use per-element push (not push(...) or concat) to avoid stack overflow and reduce memory with large arrays (400K+ entries)
       const allEntries: LogEntry[] = [];
       let totalParseErrors = 0;
       let totalLines = 0;
       let parsedLines = 0;
       for (const section of unpackResult.logcatSections) {
         const result = parseLogcat(section.content, section.buffer);
-        allEntries.push(...result.entries);
+        for (const entry of result.entries) {
+          allEntries.push(entry);
+        }
         totalParseErrors += result.parseErrors;
         totalLines += result.totalLines;
         parsedLines += result.parsedLines;
+        // Free the large content string after parsing to reduce memory pressure
+        (section as { content: string }).content = '';
       }
       const logcatResult = {
         entries: allEntries,

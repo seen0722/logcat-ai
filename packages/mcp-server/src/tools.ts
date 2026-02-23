@@ -143,16 +143,20 @@ async function analyzeZipFile(filePath: string): Promise<AnalysisResult> {
   const unpackResult = await unpackBugreport(filePath);
 
   // Parse logcat per-section to preserve buffer info
+  // NOTE: Use per-element push (not push(...) or concat) to avoid stack overflow and reduce memory with large arrays (400K+ entries)
   const allEntries: LogEntry[] = [];
   let totalParseErrors = 0;
   let totalLines = 0;
   let parsedLines = 0;
   for (const section of unpackResult.logcatSections) {
     const result = parseLogcat(section.content, section.buffer);
-    allEntries.push(...result.entries);
+    for (const entry of result.entries) {
+      allEntries.push(entry);
+    }
     totalParseErrors += result.parseErrors;
     totalLines += result.totalLines;
     parsedLines += result.parsedLines;
+    (section as { content: string }).content = '';
   }
   const logcatResult = {
     entries: allEntries,
