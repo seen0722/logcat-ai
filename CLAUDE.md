@@ -63,7 +63,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `kernel-parser.ts` — 12 kernel event types
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
-- `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation
+- `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation, timeline↔insight linking
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
@@ -92,13 +92,14 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `hooks/useForceSimulation.ts` — D3 force simulation wrapper
 - `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch, search)
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
+- `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
 - `components/ExportMenu.tsx` — JSON/HTML export dropdown
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
-- `components/SearchModal.tsx` — Full-width logcat search modal (keyword, tag, level, pid filters)
+- `components/SearchModal.tsx` — Full-width logcat search modal (keyword, tag, level, pid filters, CSV/Text export)
 
 ### MCP Server (`@logcat-ai/mcp-server`)
 

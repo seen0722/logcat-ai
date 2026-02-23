@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-22（Phase 2.0 完成 + Search UI + HTML Export 增強）
+> **更新日期**：2026-02-23（Phase 2.1 完成：Search Export + Timeline-Insight 連結）
 
 ---
 
@@ -231,7 +231,30 @@
 
 ---
 
-## 4. Backlog（未排期）
+## 4. Phase 2.1 — Search Export + Timeline-Insight 連結（✅ 全部完成）
+
+- [x] **Search Result Export（CSV / Text）**
+  - 新增 `export-utils.ts`：`entriesToCSV()`、`entriesToLogcatText()`、`downloadBlob()` 純前端匯出工具
+  - CSV columns：timestamp, pid, tid, level, tag, message（含 comma/quote/newline 跳脫）
+  - Logcat text：模擬 `adb logcat` 原始輸出格式
+  - `SearchModal.tsx`：狀態列新增 Export 下拉按鈕（CSV / Text 兩種格式）
+  - 檔名格式：`logcat-search-{keyword}-{timestamp}.csv` / `.txt`
+  - 匯出目前頁面顯示的結果，無需後端改動
+
+- [x] **Timeline → Insight 連結導航**
+  - `TimelineEvent` 新增 `insightId?: string` 欄位（parser types + frontend types 同步更新）
+  - `basic-analyzer.ts`：新增 `linkTimelineToInsights()` 函式，三層匹配策略：
+    1. Label 子字串匹配（event.label vs insight.title）
+    2. Process name + 事件類型關鍵字匹配
+    3. `TIMELINE_SOURCE_MAP` type keyword mapping
+  - 在 `analyzeBasic()` 的 return 之前自動呼叫連結
+  - `Timeline.tsx`：有 insightId 的事件顯示 ↗ 箭頭圖示、indigo 底線裝飾、hover 效果
+  - 點擊後 `scrollIntoView({ behavior: 'smooth', block: 'center' })` 到對應 InsightCard
+  - 目標 InsightCard 短暫閃爍 indigo ring 2 秒作為視覺回饋
+
+---
+
+## 5. Backlog（未排期）
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
@@ -242,10 +265,10 @@
 
 ---
 
-## 5. Test Summary
+## 6. Test Summary
 
 | Package | Tests | 說明 |
 |---------|-------|------|
-| parser | 160 | unpacker(5) + logcat(21) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(34) + tombstone(15) + integration(5) |
+| parser | 163 | unpacker(5) + logcat(23) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(35) + tombstone(15) + integration(5) |
 | backend | 53 | routes + analyzer + parser integration + prompt tests |
-| **Total** | **163** | `npm test` (Vitest) |
+| **Total** | **216** | `npm test` (Vitest) |

@@ -9,7 +9,7 @@ AI-powered Android bugreport.zip analyzer. Upload a bugreport, get structured di
 - **Flexible input** — bugreport.zip, standalone logcat (.txt/.log), standalone dmesg files
 - **Deep Analysis** — Evidence-based root cause identification, cross-subsystem correlation, prioritized actions with effort/impact assessment
 - **Agentic chat** — LLM-driven investigation with 5 tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section)
-- **Full-text search** — FTS5 BM25-ranked logcat search with in-app Search Modal (keyword, tag, level, pid filters)
+- **Full-text search** — FTS5 BM25-ranked logcat search with in-app Search Modal (keyword, tag, level, pid filters) and CSV/Text export
 - **Analysis history** — SQLite-persisted results with browse, search, and reload
 - **Report export** — JSON and self-contained HTML export
 - **Comparison mode** — Side-by-side diff of two bugreports (health, insights, ANR, HAL)
@@ -106,7 +106,7 @@ GET    /api/health              Health check
 Rule-based parsing and pattern matching. No LLM required. Returns:
 - System health score (stability, memory, responsiveness, kernel)
 - Severity-ranked insight cards
-- Cross-subsystem timeline
+- Cross-subsystem timeline with clickable insight navigation
 - ANR blocking chain & lock graph analysis
 
 ### Deep Analysis

@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.3.0
-> **更新日期**：2026-02-22
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強）
+> **版本**：v0.3.1
+> **更新日期**：2026-02-23
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結）
 
 ---
 
@@ -166,7 +166,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 
 #### 其他輸出元件
 - **四階段進度條**：上傳 → 解壓解析 → 規則分析 → AI 深度分析
-- **跨子系統時間軸**：Logcat + ANR + Kernel 事件整合視覺化
+- **跨子系統時間軸**：Logcat + ANR + Kernel 事件整合視覺化，事件可點擊跳轉至對應 Insight Card
 - **ANR 詳情面板**：主線程 stack、Lock Dependency Graph、阻塞鏈
 - **系統概覽卡**：裝置型號、Android 版本、build fingerprint、系統健康分數
 - **對話追問面板**：Deep Analysis 完成後，可用自然語言追問
@@ -301,7 +301,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 不需要 LLM 即可完成：
 - 聚合三個 Parser 的結果（含 dumpsys meminfo/cpuinfo）
 - 產出 Insights Cards（問題清單，按嚴重性排序，自動合併重複項）
-- 建構跨子系統時間軸（含事件聚合，相鄰重複事件自動合併顯示次數；kernel timestamp 自動轉換為 wall-clock 格式，與 logcat 事件正確穿插排序）
+- 建構跨子系統時間軸（含事件聚合，相鄰重複事件自動合併顯示次數；kernel timestamp 自動轉換為 wall-clock 格式，與 logcat 事件正確穿插排序；自動連結 Timeline 事件至對應 InsightCard）
 - 計算系統健康分數（0-100，breakdown: stability/memory/responsiveness/kernel）
   - **Frequency-based damping**：同類事件重複出現時遞減扣分（1st=100%, 2nd=50%, 3rd=25%, 4th+=10%）
   - 每種事件類型有最大扣分上限，防止大量重複事件將分數拉到 0
@@ -455,7 +455,7 @@ logcat-ai/
 │   │       │   ├── ComparisonView.tsx
 │   │       │   ├── BatchUpload.tsx
 │   │       │   ├── BatchResults.tsx
-│   │       │   └── SearchModal.tsx        # Logcat 全文搜尋 Modal
+│   │       │   └── SearchModal.tsx        # Logcat 全文搜尋 Modal（含 CSV/Text 匯出）
 │   │       └── hooks/
 │   │           ├── useAnalysis.ts
 │   │           ├── useComparison.ts
@@ -594,7 +594,12 @@ Week 5: Deep Analysis + 部署
 - ✅ F8: Batch Analysis（multi-file upload + statistical aggregation）
 - ✅ F9: MCP Server（Claude Desktop / VS Code integration, @modelcontextprotocol/sdk）
 
-### 8.3 Phase 3：Backlog（未排期）
+### 8.3 Phase 2.1：Search Export + Timeline-Insight 連結 ✅
+
+- ✅ Search Result Export：前端 CSV/Text 匯出（`export-utils.ts`），SearchModal 新增 Export 下拉按鈕
+- ✅ Timeline → Insight 連結：`linkTimelineToInsights()` 三層匹配策略，點擊 Timeline 事件跳轉到對應 InsightCard
+
+### 8.4 Phase 3：Backlog（未排期）
 
 - CVE/Security 分析（比對 CVE 資料庫）
 - Jira/GitHub 整合（從 findings 建 issue）
