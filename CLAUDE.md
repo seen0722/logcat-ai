@@ -56,8 +56,12 @@ TypeScript monorepo (npm workspaces) with four packages: `parser`, `backend`, `f
 bugreport.zip → [Upload API] → [Unpacker] → sections & raw files
   → [Parsers: logcat, ANR, kernel, dumpsys] → structured anomalies
   → [BasicAnalyzer] → AnalysisResult (health scores, insight cards)
+  → [FTS5 indexer] → SQLite full-text search index
+  → [rawDataStore] → in-memory store for chat tool access
   → [LLM Gateway] → DeepAnalysisOverview (root cause, fix suggestions)
-  → [SSE stream] → Frontend UI → [Chat API] → follow-up Q&A
+  → [SSE stream (lightweight)] → Frontend notified → [REST fetch slim result] → UI
+  → [Chat API] → follow-up Q&A (uses rawDataStore + FTS5)
+  → [Search API] → on-demand logcat/kernel entry queries (FTS5)
 ```
 
 ### Parser (`@logcat-ai/parser`)
@@ -80,7 +84,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
@@ -94,10 +98,10 @@ Express.js API server. Loads `.env` from repo root (`../../.env` relative to pac
 
 React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzing → result.
 
-- `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, results, loadFromHistory)
+- `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, fetch result via REST, loadFromHistory)
 - `hooks/useComparison.ts` — Comparison mode state management
 - `hooks/useForceSimulation.ts` — D3 force simulation wrapper
-- `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch, search)
+- `lib/api.ts` — API client (upload, SSE via fetch+ReadableStream, chat, history, export, compare, batch, search)
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
 - `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
@@ -121,9 +125,12 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - Backend imports parser as workspace dependency (`@logcat-ai/parser`)
 - All parser module imports use `.js` extension (Node16 ESM convention)
 - LLM providers use raw HTTP `fetch()` calls — no vendor SDKs
-- SSE (Server-Sent Events) for real-time analysis progress streaming
+- SSE (Server-Sent Events) for real-time analysis progress streaming; frontend uses `fetch()` + `ReadableStream` (not `EventSource`) for reliable SSE through Vite proxy
+- **SSE payload pattern**: Never send large objects (e.g. `AnalysisResult`) inline in SSE events — send a lightweight notification `{ id }` and let the frontend fetch full data via REST API. For large bugreports, `AnalysisResult` can exceed 200MB due to `logcatResult.entries`.
+- **API response stripping**: `analyze/:id/result` and `history/:id` endpoints strip `logcatResult.entries` and `kernelResult.entries` from responses (raw entries remain in FTS5 index and `rawDataStore` for search API and chat tool access)
 - Backend runs with `--max-old-space-size=4096` (4GB heap) to handle large bugreports (400K+ logcat entries)
 - **Large array pattern**: Never use `push(...arr)` or `concat` for merging large arrays — use per-element `for (const e of arr) { target.push(e); }` to avoid stack overflow and memory spikes
+- **Large string pattern**: Never use `content.split('\n')` on large strings (100MB+) — use regex exec + `content.slice()` or char-by-char iteration to avoid millions of intermediate string objects and GC pressure
 - Documentation and PRD are written in Traditional Chinese
 
 ## Android BSP Domain Knowledge
