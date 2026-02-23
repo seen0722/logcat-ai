@@ -3,6 +3,7 @@ import { TagStat, TagClassification } from '../lib/types';
 
 interface Props {
   tagStats: TagStat[];
+  onTagClick?: (tag: string) => void;
 }
 
 const classificationConfig: Record<TagClassification, { label: string; text: string; bg: string; bar: string }> = {
@@ -11,7 +12,7 @@ const classificationConfig: Record<TagClassification, { label: string; text: str
   app: { label: 'App', text: 'text-green-400', bg: 'bg-green-500/15', bar: 'bg-green-500' },
 };
 
-export default function TagStats({ tagStats }: Props) {
+export default function TagStats({ tagStats, onTagClick }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   const maxCount = tagStats[0]?.count ?? 1;
@@ -69,12 +70,17 @@ export default function TagStats({ tagStats }: Props) {
           const cfg = classificationConfig[t.classification];
           const barWidth = (t.count / maxCount) * 100;
           return (
-            <div key={t.tag} className="flex items-center gap-2 text-sm">
+            <div
+              key={t.tag}
+              className={`flex items-center gap-2 text-sm${onTagClick ? ' cursor-pointer hover:bg-surface-hover rounded-md px-1 -mx-1 transition-colors' : ''}`}
+              onClick={onTagClick ? () => onTagClick(t.tag) : undefined}
+              title={onTagClick ? `Click to search "${t.tag}" logs` : t.tag}
+            >
               <span className="text-gray-600 w-5 text-right text-xs shrink-0">{i + 1}</span>
               <span className={`${cfg.bg} ${cfg.text} text-xs font-medium px-1.5 py-0.5 rounded shrink-0 w-20 text-center`}>
                 {cfg.label}
               </span>
-              <span className="truncate text-gray-300 min-w-0 w-56 shrink-0" title={t.tag}>{t.tag}</span>
+              <span className="truncate text-gray-300 min-w-0 w-56 shrink-0">{t.tag}</span>
               <div className="flex-1 flex items-center gap-2">
                 <div className="flex-1 bg-surface rounded-full h-1.5 overflow-hidden">
                   <div

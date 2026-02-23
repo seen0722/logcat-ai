@@ -326,6 +326,7 @@ function generateTagInsights(tagStats?: TagStat[]): InsightCard[] {
   const vendorCount = vendorTags.reduce((s, t) => s + t.count, 0);
   const frameworkCount = frameworkTags.reduce((s, t) => s + t.count, 0);
   const appCount = appTags.reduce((s, t) => s + t.count, 0);
+  const totalEF = vendorCount + frameworkCount + appCount;
 
   const lines: string[] = [];
   lines.push(`Error/Fatal log distribution: vendor=${vendorCount}, framework=${frameworkCount}, app=${appCount}`);
@@ -335,7 +336,7 @@ function generateTagInsights(tagStats?: TagStat[]): InsightCard[] {
     lines.push(`  [${stat.classification}] ${stat.tag}: ${stat.count} errors`);
   }
 
-  return [{
+  const insights: InsightCard[] = [{
     id: '',
     severity: 'info',
     category: 'stability',
@@ -343,6 +344,31 @@ function generateTagInsights(tagStats?: TagStat[]): InsightCard[] {
     description: lines.join('\n'),
     source: 'logcat',
   }];
+
+  // Generate individual insight cards for tags exceeding 20% of E/F total
+  if (totalEF > 0) {
+    let individualCount = 0;
+    for (const stat of tagStats) {
+      if (individualCount >= 5) break;
+      const pct = (stat.count / totalEF) * 100;
+      if (pct < 20) break; // tagStats is sorted descending, so we can break early
+
+      const severity: Severity = stat.classification === 'vendor' ? 'warning' : 'info';
+      const classLabel = stat.classification.charAt(0).toUpperCase() + stat.classification.slice(1);
+
+      insights.push({
+        id: '',
+        severity,
+        category: 'stability',
+        title: `Excessive Error Logs: ${stat.tag} (${pct.toFixed(0)}% of E/F)`,
+        description: `Tag "${stat.tag}" (${classLabel}) generated ${stat.count.toLocaleString()} Error/Fatal log entries, accounting for ${pct.toFixed(1)}% of all E/F logs. This high volume may indicate a persistent issue. Use the Search feature to investigate related log entries, or run Deep Analysis for root cause identification.`,
+        source: 'logcat',
+      });
+      individualCount++;
+    }
+  }
+
+  return insights;
 }
 
 // ============================================================

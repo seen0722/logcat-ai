@@ -5,6 +5,7 @@ import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToD
 interface Props {
   uploadId: string;
   onClose: () => void;
+  initialTag?: string;
 }
 
 type SearchSource = 'logcat' | 'kernel';
@@ -56,15 +57,15 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
-export default function SearchModal({ uploadId, onClose }: Props) {
+export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
   const [source, setSource] = useState<SearchSource>('logcat');
   const [q, setQ] = useState('');
   // Logcat-only filters
-  const [tag, setTag] = useState('');
+  const [tag, setTag] = useState(initialTag ?? '');
   const [pid, setPid] = useState('');
   const [buffer, setBuffer] = useState('');
   // Shared filters
-  const [level, setLevel] = useState('');
+  const [level, setLevel] = useState(initialTag ? 'E' : '');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(0);
 
@@ -86,8 +87,35 @@ export default function SearchModal({ uploadId, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  const initialSearchDone = useRef(false);
+
   useEffect(() => {
-    inputRef.current?.focus();
+    if (initialTag && !initialSearchDone.current) {
+      initialSearchDone.current = true;
+      // Auto-trigger search with the pre-filled tag
+      const params = {
+        source: 'logcat' as SearchSource,
+        tag: initialTag,
+        level: 'E' as string | undefined,
+        limit,
+      };
+      lastSearchRef.current = params;
+      setLoading(true);
+      searchLogcat(uploadId, {
+        tag: initialTag,
+        level: 'E',
+        limit,
+        offset: 0,
+      }).then((res) => {
+        setLogcatResult(res);
+        setLoading(false);
+      }).catch((err) => {
+        setError(err instanceof Error ? err.message : 'Search failed');
+        setLoading(false);
+      });
+    } else {
+      inputRef.current?.focus();
+    }
   }, []);
 
   useEffect(() => {

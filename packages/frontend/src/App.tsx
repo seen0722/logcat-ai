@@ -26,6 +26,7 @@ export default function App() {
   const { comparison, loading: compareLoading, error: compareError, compare, reset: resetComparison } = useComparison();
 
   const [showSearch, setShowSearch] = useState(false);
+  const [searchTag, setSearchTag] = useState<string | null>(null);
 
   // Batch state
   const [showBatchUpload, setShowBatchUpload] = useState(false);
@@ -125,7 +126,10 @@ export default function App() {
             halStatus={result.halStatus}
           />
           {result.logTagStats && result.logTagStats.length > 0 && (
-            <TagStats tagStats={result.logTagStats} />
+            <TagStats
+              tagStats={result.logTagStats}
+              onTagClick={(tag) => { setSearchTag(tag); setShowSearch(true); }}
+            />
           )}
           <BSPQuickReference
             bootStatus={result.bootStatus}
@@ -220,7 +224,11 @@ export default function App() {
 
       {/* Search Modal */}
       {showSearch && uploadId && (
-        <SearchModal uploadId={uploadId} onClose={() => setShowSearch(false)} />
+        <SearchModal
+          uploadId={uploadId}
+          initialTag={searchTag ?? undefined}
+          onClose={() => { setShowSearch(false); setSearchTag(null); }}
+        />
       )}
     </div>
   );
