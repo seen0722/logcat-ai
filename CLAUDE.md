@@ -73,13 +73,13 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file), `search.ts` (FTS5/keyword logcat search)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
-- **Database** (`db.ts`): SQLite via better-sqlite3, WAL mode. `analyses` table + `logcat_fts` FTS5 virtual table.
+- **Database** (`db.ts`): SQLite via better-sqlite3, WAL mode. `analyses` table + `logcat_fts` FTS5 virtual table + `kernel_fts` FTS5 virtual table.
 - **Store** (`store.ts`): In-memory cache with 1-hour TTL, auto-syncs to SQLite via `history-store.ts`
-- **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat entries
+- **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat and kernel entries
 - **Raw Data Store** (`raw-data-store.ts`): In-memory store for raw LogEntry[], sections (for agentic tool access)
 - **Config** (`config.ts`): Environment-based, mutable at runtime via settings API. Includes `dbPath` for SQLite.
 
@@ -92,14 +92,14 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `hooks/useForceSimulation.ts` — D3 force simulation wrapper
 - `lib/api.ts` — API client (upload, SSE analysis, chat, history, export, compare, batch, search)
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
-- `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, blob download)
+- `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
 - `components/ExportMenu.tsx` — JSON/HTML export dropdown
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
-- `components/SearchModal.tsx` — Full-width logcat search modal (keyword, tag, level, pid filters, CSV/Text export)
+- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, level, pid filters; kernel: keyword, severity level filter), CSV/Text export
 
 ### MCP Server (`@logcat-ai/mcp-server`)
 

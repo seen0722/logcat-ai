@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.3.1
+> **版本**：v0.3.2
 > **更新日期**：2026-02-23
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search）
 
 ---
 
@@ -455,7 +455,7 @@ logcat-ai/
 │   │       │   ├── ComparisonView.tsx
 │   │       │   ├── BatchUpload.tsx
 │   │       │   ├── BatchResults.tsx
-│   │       │   └── SearchModal.tsx        # Logcat 全文搜尋 Modal（含 CSV/Text 匯出）
+│   │       │   └── SearchModal.tsx        # Logcat/Kernel 全文搜尋 Modal（Logcat/Kernel tab、含 CSV/Text 匯出）
 │   │       └── hooks/
 │   │           ├── useAnalysis.ts
 │   │           ├── useComparison.ts
@@ -486,7 +486,7 @@ logcat-ai/
 | POST | `/api/batch` | 批次上傳多檔 |
 | GET | `/api/batch/:id/analyze` | 批次分析（SSE） |
 | GET | `/api/batch/:id` | 取得批次分析結果 |
-| GET | `/api/search/:id` | 搜尋 logcat entries（FTS5 / keyword，支援 q/tag/level/pid/limit） |
+| GET | `/api/search/:id` | 搜尋 logcat/kernel entries（FTS5 / keyword，支援 source/q/tag/level/pid/limit） |
 | GET | `/api/health` | 健康檢查 |
 
 ---
@@ -587,7 +587,7 @@ Week 5: Deep Analysis + 部署
 
 #### Phase 2.0b — LLM 增強
 - ✅ F5: Function Calling / Agentic Chat（5 investigation tools + prompt-based tool loop）
-- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat search + Search Modal UI）
+- ✅ F6: FTS5 全文搜尋（BM25 ranked logcat + kernel search + Search Modal UI with tab switcher）
 
 #### Phase 2.0c — 多報告分析 + 生態整合
 - ✅ F7: Comparison Mode（health/insight/ANR/HAL diff）
@@ -599,7 +599,14 @@ Week 5: Deep Analysis + 部署
 - ✅ Search Result Export：前端 CSV/Text 匯出（`export-utils.ts`），SearchModal 新增 Export 下拉按鈕
 - ✅ Timeline → Insight 連結：`linkTimelineToInsights()` 三層匹配策略，點擊 Timeline 事件跳轉到對應 InsightCard
 
-### 8.4 Phase 3：Backlog（未排期）
+### 8.4 Phase 2.2：Kernel Message Search ✅
+
+- ✅ Kernel FTS5 全文搜尋：`kernel_fts` FTS5 virtual table + `indexKernelEntries()` / `searchKernelFTS()` / `deleteKernelIndex()`
+- ✅ Search API `source=kernel` 分支：FTS5 優先、fallback in-memory filtering、kernel level severity filter
+- ✅ SearchModal Logcat/Kernel tab 切換：自適應 filters（logcat: tag/level/pid、kernel: severity level）、自適應結果表格、level 顏色
+- ✅ Kernel 匯出支援：`kernelEntriesToCSV()` / `kernelEntriesToDmesgText()`
+
+### 8.5 Phase 3：Backlog（未排期）
 
 - CVE/Security 分析（比對 CVE 資料庫）
 - Jira/GitHub 整合（從 findings 建 issue）

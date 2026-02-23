@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-23（Phase 2.1 完成：Search Export + Timeline-Insight 連結）
+> **更新日期**：2026-02-23（Phase 2.2 完成：Kernel Message Search）
 
 ---
 
@@ -254,7 +254,33 @@
 
 ---
 
-## 5. Backlog（未排期）
+## 5. Phase 2.2 — Kernel Message Search（✅ 完成）
+
+- [x] **Kernel FTS5 全文搜尋**
+  - 新增 `kernel_fts` FTS5 virtual table（analysis_id, entry_index, timestamp_sec, level, facility, message）
+  - `fts-indexer.ts`：新增 `indexKernelEntries()`、`searchKernelFTS()`、`deleteKernelIndex()` 三函式
+  - 分析完成後自動觸發 kernel FTS5 indexing（ZIP bugreport、standalone logcat、standalone dmesg 三條路徑）
+
+- [x] **Search API `source=kernel` 分支**
+  - `routes/search.ts`：新增 `source` query param（預設 `logcat`）
+  - `source=kernel` 時從 rawDataStore 取 kernel entries
+  - FTS5 優先搜尋、fallback in-memory filtering
+  - Kernel level filter：`<0>`~`<7>`，數字越小越嚴重，選定 level 顯示該 level 及更嚴重的
+
+- [x] **SearchModal Logcat/Kernel Tab 切換**
+  - Header 新增 Logcat/Kernel tab switcher，切換時清空結果和 filters
+  - Filters 自適應：logcat 顯示 Tag/Level/PID，kernel 只顯示 Level（EMERG~DEBUG）
+  - 結果表格自適應：logcat 顯示 timestamp/pid-tid/level-tag/message，kernel 顯示 [timestamp]/level-label/message
+  - Kernel level 顏色：`<0>`~`<3>` 紅色、`<4>` 黃色、`<5>` 藍色、`<6>` 綠色、`<7>` 灰色
+
+- [x] **Kernel 匯出支援**
+  - `export-utils.ts`：新增 `kernelEntriesToCSV()`（columns: timestamp, level, facility, message）
+  - `export-utils.ts`：新增 `kernelEntriesToDmesgText()`（模擬 dmesg 輸出格式）
+  - 匯出檔名：`kernel-search-{keyword}-{ts}.csv` / `.txt`
+
+---
+
+## 6. Backlog（未排期）
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
@@ -265,7 +291,7 @@
 
 ---
 
-## 6. Test Summary
+## 7. Test Summary
 
 | Package | Tests | 說明 |
 |---------|-------|------|
