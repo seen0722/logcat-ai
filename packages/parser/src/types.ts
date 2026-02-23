@@ -423,6 +423,7 @@ export interface TimelineEvent {
   details?: string;
   count?: number;                   // aggregated event count
   timeRange?: string;               // aggregated time range, e.g. "boot+3808s ~ boot+3902s"
+  insightId?: string;               // linked InsightCard.id for navigation
 }
 
 export interface SystemHealthScore {

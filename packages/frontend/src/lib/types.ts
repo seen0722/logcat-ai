@@ -37,6 +37,7 @@ export interface TimelineEvent {
   details?: string;
   count?: number;
   timeRange?: string;
+  insightId?: string;
 }
 
 export interface SystemHealthScore {

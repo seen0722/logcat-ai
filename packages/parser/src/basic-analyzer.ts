@@ -93,6 +93,9 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs);
   const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses);
 
+  // Link timeline events to their corresponding insights
+  linkTimelineToInsights(timeline, insights);
+
   return {
     metadata,
     insights,
@@ -926,6 +929,127 @@ function generateTombstoneInsights(analyses?: TombstoneAnalysis[]): InsightCard[
       debugCommands: TOMBSTONE_DEBUG_COMMANDS,
     };
   });
+}
+
+// ============================================================
+// Timeline ↔ Insight Linking
+// ============================================================
+
+/** Map of TimelineEvent source+label keywords to InsightCard source+category. */
+const TIMELINE_SOURCE_MAP: Record<string, { insightSource: string; insightCategory?: string }> = {
+  // logcat anomaly types → insight source/category
+  'fatal_exception': { insightSource: 'logcat', insightCategory: 'crash' },
+  'native_crash': { insightSource: 'logcat', insightCategory: 'crash' },
+  'system_server_crash': { insightSource: 'logcat', insightCategory: 'stability' },
+  'oom': { insightSource: 'logcat', insightCategory: 'memory' },
+  'watchdog': { insightSource: 'logcat', insightCategory: 'stability' },
+  'binder_timeout': { insightSource: 'logcat', insightCategory: 'performance' },
+  'hal_service_death': { insightSource: 'logcat', insightCategory: 'stability' },
+  'input_dispatching_timeout': { insightSource: 'logcat', insightCategory: 'anr' },
+  // ANR trace
+  'anr': { insightSource: 'anr' },
+  // kernel
+  'kernel_panic': { insightSource: 'kernel', insightCategory: 'kernel' },
+  'oom_kill': { insightSource: 'kernel', insightCategory: 'memory' },
+  'lowmemory_killer': { insightSource: 'kernel', insightCategory: 'memory' },
+  'thermal_shutdown': { insightSource: 'kernel', insightCategory: 'kernel' },
+  'thermal_throttling': { insightSource: 'kernel', insightCategory: 'performance' },
+  'watchdog_reset': { insightSource: 'kernel', insightCategory: 'stability' },
+  'selinux_denial': { insightSource: 'kernel', insightCategory: 'kernel' },
+  'driver_error': { insightSource: 'kernel', insightCategory: 'kernel' },
+  'gpu_error': { insightSource: 'kernel', insightCategory: 'kernel' },
+  // tombstone
+  'tombstone': { insightSource: 'tombstone', insightCategory: 'crash' },
+};
+
+/**
+ * Link timeline events to their corresponding insight cards.
+ * Mutates events in place by setting `insightId`.
+ *
+ * Matching strategy (by priority):
+ * 1. Label substring match — event.label appears in insight.title or vice versa
+ * 2. Source + keyword match — event source maps to insight source, and shared keywords match
+ */
+export function linkTimelineToInsights(events: TimelineEvent[], insights: InsightCard[]): void {
+  if (insights.length === 0) return;
+
+  for (const event of events) {
+    if (event.insightId) continue; // already linked (e.g. from aggregation)
+
+    // Strategy 1: Direct label match — event label is a substring of insight title or vice versa
+    let bestMatch: InsightCard | undefined;
+
+    for (const insight of insights) {
+      // Same source type check
+      if (event.source === 'logcat' && insight.source !== 'logcat') continue;
+      if (event.source === 'anr' && insight.source !== 'anr') continue;
+      if (event.source === 'kernel' && insight.source !== 'kernel') continue;
+      if (event.source === 'tombstone' && insight.source !== 'tombstone') continue;
+
+      // Label ↔ title match
+      if (insight.title.includes(event.label) || event.label.includes(insight.title.replace(/ \(×\d+\)$/, ''))) {
+        bestMatch = insight;
+        break;
+      }
+    }
+
+    if (bestMatch) {
+      event.insightId = bestMatch.id;
+      continue;
+    }
+
+    // Strategy 2: Extract key identifiers from event label and match against insights
+    // Extract process name or key phrase from event label
+    const processMatch = event.label.match(/in\s+(\S+)/);
+    const processName = processMatch?.[1];
+    const eventLabelLower = event.label.toLowerCase();
+
+    for (const insight of insights) {
+      // Source compatibility
+      if (event.source !== insight.source && insight.source !== 'cross') continue;
+
+      const titleLower = insight.title.toLowerCase();
+
+      // Check if they share a process name
+      if (processName && insight.title.includes(processName)) {
+        // Further check: same event type keyword
+        const isTypeMatch =
+          (eventLabelLower.includes('anr') && titleLower.includes('anr')) ||
+          (eventLabelLower.includes('crash') && (titleLower.includes('crash') || titleLower.includes('fatal'))) ||
+          (eventLabelLower.includes('oom') && titleLower.includes('oom')) ||
+          (eventLabelLower.includes('watchdog') && titleLower.includes('watchdog')) ||
+          (eventLabelLower.includes('selinux') && titleLower.includes('selinux')) ||
+          (eventLabelLower.includes('thermal') && titleLower.includes('thermal')) ||
+          (eventLabelLower.includes('binder') && titleLower.includes('binder')) ||
+          (eventLabelLower.includes('native crash') && titleLower.includes('native crash'));
+
+        if (isTypeMatch) {
+          bestMatch = insight;
+          break;
+        }
+      }
+
+      // Strategy 3: Type keyword mapping — for events that don't have process names
+      for (const [keyword, mapping] of Object.entries(TIMELINE_SOURCE_MAP)) {
+        if (!eventLabelLower.includes(keyword.replace(/_/g, ' ')) &&
+            !eventLabelLower.includes(keyword)) continue;
+        if (insight.source !== mapping.insightSource) continue;
+        if (mapping.insightCategory && insight.category !== mapping.insightCategory) continue;
+
+        // Check keyword overlap in title
+        if (titleLower.includes(keyword.replace(/_/g, ' ')) ||
+            titleLower.includes(keyword)) {
+          bestMatch = insight;
+          break;
+        }
+      }
+      if (bestMatch) break;
+    }
+
+    if (bestMatch) {
+      event.insightId = bestMatch.id;
+    }
+  }
 }
 
 // ============================================================

@@ -105,45 +105,65 @@ export default function Timeline({ events }: Props) {
         {filteredEvents.length === 0 && (
           <p className="text-sm text-gray-500 py-4 text-center">No events match current filters.</p>
         )}
-        {filteredEvents.map((event, i) => (
-          <div
-            key={i}
-            className={`flex items-start gap-3 py-2 group ${
-              event.severity === 'critical' ? 'border-l-2 border-red-500 pl-2' : ''
-            }`}
-          >
-            {/* Dot + line */}
-            <div className="flex flex-col items-center">
-              <div className={`w-2.5 h-2.5 rounded-full ${SEVERITY_DOT[event.severity]} shrink-0 mt-1.5`} />
-              {i < filteredEvents.length - 1 && (
-                <div className="w-px flex-1 bg-border min-h-[20px]" />
-              )}
-            </div>
+        {filteredEvents.map((event, i) => {
+          const hasLink = !!event.insightId;
+          const handleClick = hasLink
+            ? () => {
+                const el = document.getElementById(event.insightId!);
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.classList.add('ring-2', 'ring-indigo-500/70');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500/70'), 2000);
+                }
+              }
+            : undefined;
 
-            {/* Content */}
-            <div className="flex-1 min-w-0 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
-                  {event.timeRange ?? event.timestamp}
-                </span>
-                <span className={`text-xs font-medium uppercase ${SOURCE_COLOR[event.source] ?? 'text-gray-400'}`}>
-                  {event.source}
-                </span>
-                {event.count && event.count > 1 && (
-                  <span className="text-xs font-semibold bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded-full">
-                    &times;{event.count}
-                  </span>
+          return (
+            <div
+              key={i}
+              onClick={handleClick}
+              className={`flex items-start gap-3 py-2 group ${
+                event.severity === 'critical' ? 'border-l-2 border-red-500 pl-2' : ''
+              } ${hasLink ? 'cursor-pointer hover:bg-indigo-500/5 rounded-r transition-colors' : ''}`}
+            >
+              {/* Dot + line */}
+              <div className="flex flex-col items-center">
+                <div className={`w-2.5 h-2.5 rounded-full ${SEVERITY_DOT[event.severity]} shrink-0 mt-1.5`} />
+                {i < filteredEvents.length - 1 && (
+                  <div className="w-px flex-1 bg-border min-h-[20px]" />
                 )}
               </div>
-              <p className="text-gray-300 group-hover:text-white transition-colors">
-                {event.label}
-              </p>
-              {event.details && (
-                <p className="text-xs text-gray-500">{event.details}</p>
-              )}
+
+              {/* Content */}
+              <div className="flex-1 min-w-0 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
+                    {event.timeRange ?? event.timestamp}
+                  </span>
+                  <span className={`text-xs font-medium uppercase ${SOURCE_COLOR[event.source] ?? 'text-gray-400'}`}>
+                    {event.source}
+                  </span>
+                  {event.count && event.count > 1 && (
+                    <span className="text-xs font-semibold bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded-full">
+                      &times;{event.count}
+                    </span>
+                  )}
+                  {hasLink && (
+                    <span className="text-[10px] text-indigo-400/70 font-medium" title="Click to jump to related insight">
+                      &#x2197;
+                    </span>
+                  )}
+                </div>
+                <p className={`transition-colors ${hasLink ? 'text-gray-300 group-hover:text-indigo-300 underline decoration-indigo-500/30 underline-offset-2' : 'text-gray-300 group-hover:text-white'}`}>
+                  {event.label}
+                </p>
+                {event.details && (
+                  <p className="text-xs text-gray-500">{event.details}</p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
