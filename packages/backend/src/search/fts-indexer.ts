@@ -9,6 +9,8 @@ import type { LogEntry, KernelLogEntry } from '@logcat-ai/parser';
 export interface FTSSearchResult {
   lineNumber: number;
   timestamp: string;
+  pid: number;
+  tid: number;
   level: string;
   tag: string;
   message: string;
@@ -30,7 +32,7 @@ export function indexLogcatEntries(analysisId: string, entries: LogEntry[]): voi
 
   // Batch insert for performance
   const insert = db.prepare(
-    'INSERT INTO logcat_fts (analysis_id, line_number, timestamp, level, tag, message, buffer) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO logcat_fts (analysis_id, line_number, timestamp, pid, tid, level, tag, message, buffer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );
 
   const batchInsert = db.transaction((entries: LogEntry[]) => {
@@ -39,6 +41,8 @@ export function indexLogcatEntries(analysisId: string, entries: LogEntry[]): voi
         analysisId,
         entry.lineNumber,
         entry.timestamp,
+        entry.pid,
+        entry.tid,
         entry.level,
         entry.tag,
         entry.message,
@@ -88,7 +92,7 @@ export function searchLogcatFTS(
 
     const rows = db
       .prepare(
-        `SELECT line_number, timestamp, level, tag, message, buffer, rank
+        `SELECT line_number, timestamp, pid, tid, level, tag, message, buffer, rank
          FROM logcat_fts
          WHERE analysis_id = ? AND logcat_fts MATCH ?
          ORDER BY rank
@@ -97,6 +101,8 @@ export function searchLogcatFTS(
       .all(analysisId, matchQuery, limit, offset) as Array<{
       line_number: number;
       timestamp: string;
+      pid: string;
+      tid: string;
       level: string;
       tag: string;
       message: string;
@@ -109,6 +115,8 @@ export function searchLogcatFTS(
       entries: rows.map((row) => ({
         lineNumber: row.line_number,
         timestamp: row.timestamp,
+        pid: parseInt(row.pid, 10),
+        tid: parseInt(row.tid, 10),
         level: row.level,
         tag: row.tag,
         message: row.message,

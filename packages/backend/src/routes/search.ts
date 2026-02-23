@@ -47,6 +47,8 @@ router.get('/:id', (req: Request, res: Response) => {
         entries: ftsResult.entries.map(e => ({
           lineNumber: e.lineNumber,
           timestamp: e.timestamp,
+          pid: e.pid,
+          tid: e.tid,
           level: e.level,
           tag: e.tag,
           message: e.message,

@@ -153,11 +153,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
   }, [uploadId]);
 
   const doSearch = async () => {
-    if (source === 'logcat') {
-      if (!q.trim() && !tag.trim() && !level && !pid.trim() && !buffer) return;
-    } else {
-      if (!q.trim() && !level) return;
-    }
+    // Allow empty search to browse all entries
 
     const params = {
       source,
@@ -388,7 +384,6 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                   <option value="<4>">&lt;4&gt;+ WARN &amp; above</option>
                   <option value="<5>">&lt;5&gt;+ NOTICE &amp; above</option>
                   <option value="<6>">&lt;6&gt;+ INFO &amp; above</option>
-                  <option value="<7>">&lt;7&gt;+ DEBUG (all)</option>
                 </select>
               </div>
             )}
@@ -424,8 +419,8 @@ export default function SearchModal({ uploadId, onClose }: Props) {
             <div className="text-center py-16">
               <p className="text-gray-500 text-sm">
                 {source === 'kernel'
-                  ? 'Enter a keyword or select a level to search kernel messages.'
-                  : 'Enter a keyword or filter to search logcat entries.'}
+                  ? 'Click Search to browse all kernel messages, or enter a keyword to filter.'
+                  : 'Click Search to browse all logcat entries, or enter a keyword to filter.'}
               </p>
               <p className="text-gray-600 text-xs mt-1">Supports FTS5 full-text search with BM25 ranking.</p>
             </div>
@@ -510,6 +505,13 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                 /* Kernel results table */
                 <div className="px-4 py-2 overflow-x-auto">
                   <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
+                        <th className="py-1.5 px-2 text-left font-medium">Timestamp</th>
+                        <th className="py-1.5 px-1 text-left font-medium">Level</th>
+                        <th className="py-1.5 px-2 text-left font-medium">Message</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {kernelResult.entries.map((entry, i) => (
                         <tr
@@ -534,6 +536,14 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                 /* Logcat results table */
                 <div className="px-4 py-2 overflow-x-auto">
                   <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
+                        <th className="py-1.5 px-2 text-left font-medium">Timestamp</th>
+                        <th className="py-1.5 px-1 text-left font-medium">PID/TID</th>
+                        <th className="py-1.5 px-1 text-left font-medium">Level/Tag</th>
+                        <th className="py-1.5 px-2 text-left font-medium">Message</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {logcatResult.entries.map((entry, i) => (
                         <tr

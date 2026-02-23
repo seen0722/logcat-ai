@@ -50,6 +50,8 @@ export function initDatabase(): void {
       analysis_id,
       line_number,
       timestamp,
+      pid,
+      tid,
       level,
       tag,
       message,
