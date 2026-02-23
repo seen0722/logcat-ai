@@ -118,6 +118,8 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - All parser module imports use `.js` extension (Node16 ESM convention)
 - LLM providers use raw HTTP `fetch()` calls — no vendor SDKs
 - SSE (Server-Sent Events) for real-time analysis progress streaming
+- Backend runs with `--max-old-space-size=4096` (4GB heap) to handle large bugreports (400K+ logcat entries)
+- **Large array pattern**: Never use `push(...arr)` or `concat` for merging large arrays — use per-element `for (const e of arr) { target.push(e); }` to avoid stack overflow and memory spikes
 - Documentation and PRD are written in Traditional Chinese
 
 ## Android BSP Domain Knowledge

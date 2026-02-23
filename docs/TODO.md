@@ -308,6 +308,13 @@
   - Logcat 和 Kernel 結果表格新增 `<thead>` 欄位標題（Timestamp、PID/TID、Level/Tag、Message / Timestamp、Level、Message）
   - 移除冗餘的 `<7>+ DEBUG (all)` kernel level 選項（與 "All" 功能重複）
 
+- [x] **大型 bugreport 記憶體/堆疊修正**
+  - `push(...arr)` 改為逐個 `push(entry)` 避免 V8 call stack overflow（400K+ entries 的 spread 會超過 argument limit）
+  - `concat` 改為逐個 push 避免建立臨時陣列造成記憶體峰值
+  - 解析後釋放 logcat section content 字串（88MB+ 的 system log section）減少記憶體壓力
+  - Node.js heap 增加到 4GB（`--max-old-space-size=4096`）支援大型 bugreport（30MB+ ZIP, 695K entries）
+  - 影響檔案：`analyze.ts`、`batch.ts`、`mcp-server/tools.ts`、`backend/package.json`
+
 ---
 
 ## 6. Backlog（未排期）
