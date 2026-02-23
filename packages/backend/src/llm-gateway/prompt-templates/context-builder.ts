@@ -42,7 +42,9 @@ export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
       temporalContext: [],
     };
 
-    if (insight.source === 'logcat') {
+    if (insight.source === 'logcat' && insight.title.startsWith('Excessive Error Logs:')) {
+      collectTagContext(ctx, insight, result);
+    } else if (insight.source === 'logcat') {
       collectLogcatContext(ctx, insight, result);
     } else if (insight.source === 'anr') {
       collectANRContext(ctx, insight, result);
@@ -157,6 +159,43 @@ function collectANRContext(
 
   // Also collect matching logcat anomalies for ANR
   collectLogcatContext(ctx, insight, result);
+}
+
+/**
+ * Collect sample E/F log entries for a specific high-frequency tag.
+ * Extracts the tag name from the insight title and samples entries.
+ */
+function collectTagContext(
+  ctx: InsightContext,
+  insight: InsightCard,
+  result: AnalysisResult
+): void {
+  // Extract tag name: "Excessive Error Logs: ipa_pm_notify (72% of E/F)"
+  const tagMatch = insight.title.match(/^Excessive Error Logs:\s+(.+?)\s+\(/);
+  if (!tagMatch) return;
+  const tagName = tagMatch[1];
+
+  // Sample up to 30 E/F entries from this tag (spread across the timeline)
+  const tagEntries = [];
+  for (const e of result.logcatResult.entries) {
+    if (e.tag === tagName && (e.level === 'E' || e.level === 'F')) {
+      tagEntries.push(e);
+      if (tagEntries.length >= 200) break; // cap scan to prevent slow iteration
+    }
+  }
+
+  // Sample evenly: pick first 10, last 10, and 10 from middle
+  const sampled: typeof tagEntries = [];
+  if (tagEntries.length <= 30) {
+    sampled.push(...tagEntries);
+  } else {
+    sampled.push(...tagEntries.slice(0, 10));
+    const mid = Math.floor(tagEntries.length / 2);
+    sampled.push(...tagEntries.slice(mid - 5, mid + 5));
+    sampled.push(...tagEntries.slice(-10));
+  }
+
+  ctx.anomalyLogs = sampled.map((e) => e.raw);
 }
 
 function collectKernelContext(

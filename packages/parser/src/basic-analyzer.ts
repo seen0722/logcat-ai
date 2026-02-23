@@ -353,7 +353,9 @@ function generateTagInsights(tagStats?: TagStat[]): InsightCard[] {
       const pct = (stat.count / totalEF) * 100;
       if (pct < 20) break; // tagStats is sorted descending, so we can break early
 
-      const severity: Severity = stat.classification === 'vendor' ? 'warning' : 'info';
+      // Always warning: a tag dominating >20% of E/F is significant regardless of classification,
+      // and warning severity ensures inclusion in Deep Analysis LLM context
+      const severity: Severity = 'warning';
       const classLabel = stat.classification.charAt(0).toUpperCase() + stat.classification.slice(1);
 
       insights.push({
