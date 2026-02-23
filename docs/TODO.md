@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-23（Phase 2.3 完成：Logcat Buffer Field & Search Filter）
+> **更新日期**：2026-02-23（Phase 2.3 完成：Logcat Buffer Field & Search Filter + UX 改善）
 
 ---
 
@@ -301,6 +301,12 @@
 - [x] **Frontend buffer dropdown**
   - `api.ts`：`searchLogcat` params 加 `buffer`，response entry 加 `buffer`
   - `SearchModal.tsx`：logcat filter row 新增 Buffer dropdown（All/main/system/events/crash/radio），切換 tab 時重置
+
+- [x] **Search Modal UX 改善**
+  - FTS5 `logcat_fts` 新增 `pid`、`tid` columns，修正 FTS5 搜尋結果顯示 `?/?` 的問題
+  - 允許空搜尋瀏覽所有 entries（移除 empty-field guard）
+  - Logcat 和 Kernel 結果表格新增 `<thead>` 欄位標題（Timestamp、PID/TID、Level/Tag、Message / Timestamp、Level、Message）
+  - 移除冗餘的 `<7>+ DEBUG (all)` kernel level 選項（與 "All" 功能重複）
 
 ---
 

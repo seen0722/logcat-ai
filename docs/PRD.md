@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.3.3
+> **版本**：v0.3.4
 > **更新日期**：2026-02-23
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter）
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter + UX 改善）
 
 ---
 
@@ -615,6 +615,7 @@ Week 5: Deep Analysis + 部署
 - ✅ FTS5 buffer column：`logcat_fts` 新增 buffer column，支援 FTS5 column filter 語法
 - ✅ Search API `buffer` param：FTS5 + in-memory 兩路都支援 buffer 過濾
 - ✅ SearchModal Buffer dropdown：logcat filter row 新增 Buffer 下拉選單（All/main/system/events/crash/radio）
+- ✅ Search Modal UX 改善：FTS5 pid/tid columns（修正 ?/? 顯示）、空搜尋瀏覽所有 entries、Logcat/Kernel 結果表格欄位標題、移除冗餘 kernel level 選項
 
 ### 8.6 Phase 3：Backlog（未排期）
 
