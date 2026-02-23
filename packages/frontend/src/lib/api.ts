@@ -25,29 +25,56 @@ export function startAnalysis(
   if (description) params.set('description', description);
 
   const url = `${API_BASE}/analyze/${id}?${params}`;
-  const eventSource = new EventSource(url);
+  let aborted = false;
+  const controller = new AbortController();
 
-  // EventSource receives unnamed events via `onmessage`
-  // Our backend sends `data: {...}\n\n` which is the default message event
-  eventSource.onmessage = (event) => {
+  // Use fetch + ReadableStream instead of EventSource for reliable SSE through proxies
+  (async () => {
     try {
-      const data: SSEProgress = JSON.parse(event.data);
-      onProgress?.(data);
-      if (data.stage === 'complete' || data.stage === 'error') {
-        eventSource.close();
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok || !res.body) {
+        onError?.(`Analysis failed: ${res.statusText}`);
+        return;
       }
-    } catch {
-      // ignore parse errors
-    }
-  };
 
-  eventSource.onerror = () => {
-    onError?.('Connection lost');
-    eventSource.close();
-  };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (!aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          try {
+            const data: SSEProgress = JSON.parse(trimmed.slice(6));
+            onProgress?.(data);
+            if (data.stage === 'complete' || data.stage === 'error') {
+              aborted = true;
+            }
+          } catch {
+            // skip parse errors
+          }
+        }
+      }
+    } catch (err) {
+      if (!aborted) {
+        onError?.(err instanceof Error ? err.message : 'Connection lost');
+      }
+    }
+  })();
 
   // Return cleanup function
-  return () => eventSource.close();
+  return () => {
+    aborted = true;
+    controller.abort();
+  };
 }
 
 /**
@@ -117,6 +144,14 @@ export async function switchProvider(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, ...opts }),
   });
+}
+
+// ---- Analysis Result API ----
+
+export async function fetchAnalysisResult(id: string): Promise<AnalysisResult> {
+  const res = await fetch(`${API_BASE}/analyze/${id}/result`);
+  if (!res.ok) throw new Error('Analysis result not found');
+  return res.json();
 }
 
 // ---- History API ----

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { uploadFile, startAnalysis, fetchHistoryResult } from '../lib/api';
+import { uploadFile, startAnalysis, fetchHistoryResult, fetchAnalysisResult } from '../lib/api';
 import {
   AnalysisResult,
   SSEProgress,
@@ -34,20 +34,25 @@ export function useAnalysis() {
         setUploadId(uploaded.id);
 
         // Step 2: Start analysis via SSE
+        const analysisId = uploaded.id;
         cleanupRef.current = startAnalysis(
-          uploaded.id,
+          analysisId,
           mode,
           description,
-          (event) => {
+          async (event) => {
             setProgress(event);
 
-            if (event.stage === 'complete' && event.data) {
-              setResult(event.data as AnalysisResult);
-              setPhase('result');
-            }
-            if (event.stage === 'analyzing' && event.data) {
-              // Quick analysis partial result
-              setResult(event.data as AnalysisResult);
+            if (event.stage === 'complete') {
+              // Fetch full result via REST API instead of reading from SSE
+              // (SSE payload would be 200MB+ for large bugreports)
+              try {
+                const fullResult = await fetchAnalysisResult(analysisId);
+                setResult(fullResult);
+                setPhase('result');
+              } catch {
+                setError('Failed to fetch analysis result');
+                setPhase('upload');
+              }
             }
             if (event.stage === 'error') {
               setError(event.message);

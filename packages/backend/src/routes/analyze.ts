@@ -82,6 +82,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
+  res.flushHeaders();
 
   let aborted = false;
   req.on('close', () => { aborted = true; });
@@ -98,9 +99,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     } else {
       // ── ZIP bugreport path (existing logic) ──
       // Stage 1: Unpack
+      const t0 = Date.now();
       sendSSE(res, { stage: 'unpacking', progress: 10, message: 'Unpacking bugreport.zip...' });
 
       const unpackResult = await unpackBugreport(filePath);
+
+      const t1 = Date.now();
+      console.log(`[perf] Unpack: ${((t1 - t0) / 1000).toFixed(1)}s — ${unpackResult.logcatSections.length} logcat sections, ${unpackResult.sections.length} total sections`);
 
       if (aborted) return;
       sendSSE(res, { stage: 'unpacking', progress: 25, message: 'Unpack complete' });
@@ -133,6 +138,9 @@ router.get('/:id', async (req: Request, res: Response) => {
         parseErrors: totalParseErrors,
         tagStats: computeTagStats(allEntries),
       };
+
+      const t2 = Date.now();
+      console.log(`[perf] Parse logcat: ${((t2 - t1) / 1000).toFixed(1)}s — ${allEntries.length} entries`);
 
       if (aborted) return;
       sendSSE(res, { stage: 'parsing', progress: 45, message: 'Parsing ANR traces...' });
@@ -210,6 +218,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       (unpackResult as { tombstoneContents: unknown }).tombstoneContents = new Map();
 
       // Index logcat entries in FTS5 for full-text search
+      const t3 = Date.now();
       try {
         indexLogcatEntries(id, logcatResult.entries);
       } catch (err) {
@@ -222,6 +231,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       } catch (err) {
         console.error('[FTS5] Kernel indexing failed:', err instanceof Error ? err.message : err);
       }
+      const t4 = Date.now();
+      console.log(`[perf] FTS5 indexing: ${((t4 - t3) / 1000).toFixed(1)}s`);
 
       // Stage 3: Basic Analysis
       sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
@@ -237,6 +248,9 @@ router.get('/:id', async (req: Request, res: Response) => {
         tombstoneAnalyses: tombstoneResult.analyses,
         systemProperties,
       });
+      const t5 = Date.now();
+      console.log(`[perf] Basic analysis: ${((t5 - t4) / 1000).toFixed(1)}s`);
+      console.log(`[perf] TOTAL: ${((t5 - t0) / 1000).toFixed(1)}s`);
     }
 
     // Store result for later use (chat, deep analysis re-run)
@@ -247,11 +261,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 
     if (aborted) return;
+    // NOTE: Do NOT send analysisResult inline — it can be 200MB+ for large bugreports.
+    // Frontend fetches the full result via GET /api/analyze/:id/result instead.
     sendSSE(res, {
       stage: 'analyzing',
       progress: 80,
       message: 'Quick Analysis complete',
-      data: analysisResult,
+      data: { id },
     });
 
     // Stage 4: Deep Analysis (optional)
@@ -322,7 +338,9 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    sendSSE(res, { stage: 'complete', progress: 100, message: 'Analysis complete', data: analysisResult });
+    // NOTE: Do NOT send analysisResult inline — it can be 200MB+ for large bugreports.
+    // Frontend fetches the full result via GET /api/analyze/:id/result instead.
+    sendSSE(res, { stage: 'complete', progress: 100, message: 'Analysis complete', data: { id } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     sendSSE(res, { stage: 'error', progress: 0, message: msg });
@@ -334,13 +352,34 @@ router.get('/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/analyze/:id/result
  * Get the cached analysis result (non-SSE, JSON).
+ * Strips logcatResult.entries and kernelResult.entries to avoid sending 200MB+
+ * of raw log data to the frontend — those are queryable via the search API.
  */
 router.get('/:id/result', (req: Request, res: Response) => {
   const result = analysisStore.get(String(req.params.id));
   if (!result) {
     return res.status(404).json({ error: 'Analysis not found. Run /api/analyze/:id first.' });
   }
-  res.json(result);
+  // Strip raw entries to keep response size reasonable
+  const slim = {
+    ...result,
+    logcatResult: result.logcatResult
+      ? {
+          anomalies: result.logcatResult.anomalies,
+          totalLines: result.logcatResult.totalLines,
+          parsedLines: result.logcatResult.parsedLines,
+          parseErrors: result.logcatResult.parseErrors,
+          tagStats: result.logcatResult.tagStats,
+        }
+      : undefined,
+    kernelResult: result.kernelResult
+      ? {
+          events: result.kernelResult.events,
+          totalLines: result.kernelResult.totalLines,
+        }
+      : undefined,
+  };
+  res.json(slim);
 });
 
 // ============================================================

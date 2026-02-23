@@ -18,7 +18,9 @@ router.get('/', (req: Request, res: Response) => {
 
 /**
  * GET /api/history/:id
- * Get the full AnalysisResult for a history entry.
+ * Get the AnalysisResult for a history entry.
+ * Strips logcatResult.entries and kernelResult.entries to avoid sending 200MB+
+ * of raw log data to the frontend — those are queryable via the search API.
  */
 router.get('/:id', (req: Request, res: Response) => {
   const id = String(req.params.id);
@@ -28,7 +30,26 @@ router.get('/:id', (req: Request, res: Response) => {
     return res.status(404).json({ error: 'History entry not found' });
   }
 
-  res.json(result);
+  // Strip raw entries to keep response size reasonable
+  const slim = {
+    ...result,
+    logcatResult: result.logcatResult
+      ? {
+          anomalies: result.logcatResult.anomalies,
+          totalLines: result.logcatResult.totalLines,
+          parsedLines: result.logcatResult.parsedLines,
+          parseErrors: result.logcatResult.parseErrors,
+          tagStats: result.logcatResult.tagStats,
+        }
+      : undefined,
+    kernelResult: result.kernelResult
+      ? {
+          events: result.kernelResult.events,
+          totalLines: result.kernelResult.totalLines,
+        }
+      : undefined,
+  };
+  res.json(slim);
 });
 
 /**
