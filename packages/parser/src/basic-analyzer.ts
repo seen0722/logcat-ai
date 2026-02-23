@@ -36,6 +36,7 @@ export interface BasicAnalyzerInput {
   halStatus?: HALStatusSummary;
   tombstoneAnalyses?: TombstoneAnalysis[];
   systemProperties?: string;
+  uptimeContent?: string;
 }
 
 /**
@@ -43,9 +44,9 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent } = input;
 
-  const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties);
+  const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties, uptimeContent);
 
   // Calculate boot epoch for kernel timestamp conversion
   const bootEpochMs = bootStatus.uptimeSeconds != null
@@ -648,6 +649,7 @@ export function analyzeBootStatus(
   logcatResult: LogcatParseResult,
   kernelResult: KernelParseResult,
   systemProperties?: string,
+  uptimeContent?: string,
 ): BootStatusSummary {
   let bootCompleted = false;
   let bootReason: string | undefined;
@@ -702,6 +704,11 @@ export function analyzeBootStatus(
     uptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
   }
 
+  // 4. Fallback: parse UPTIME section ("up 9 days, 15:31" / "up 23:14" / "up 24 min")
+  if (uptimeSeconds == null && uptimeContent) {
+    uptimeSeconds = parseUptimeSection(uptimeContent);
+  }
+
   // First boot counts as 1, so restarts = count - 1 (if > 0)
   const restartCount = systemServerRestarts > 1 ? systemServerRestarts - 1 : 0;
 
@@ -711,6 +718,29 @@ export function analyzeBootStatus(
     systemServerRestarts: restartCount,
     uptimeSeconds,
   };
+}
+
+/**
+ * Parse the UPTIME section output from the `uptime` command.
+ * Formats:
+ *   "HH:MM:SS up N days, HH:MM, ..."
+ *   "HH:MM:SS up HH:MM, ..."
+ *   "HH:MM:SS up N min, ..."
+ */
+function parseUptimeSection(content: string): number | undefined {
+  const m = content.match(/up\s+(?:(\d+)\s+days?,\s*)?(\d+):(\d+)/);
+  if (m) {
+    const days = m[1] ? parseInt(m[1], 10) : 0;
+    const hours = parseInt(m[2], 10);
+    const minutes = parseInt(m[3], 10);
+    return days * 86400 + hours * 3600 + minutes * 60;
+  }
+  // "up N min" format
+  const minMatch = content.match(/up\s+(\d+)\s+min/);
+  if (minMatch) {
+    return parseInt(minMatch[1], 10) * 60;
+  }
+  return undefined;
 }
 
 function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {

@@ -195,6 +195,12 @@ router.get('/:id', async (req: Request, res: Response) => {
       );
       const systemProperties = sysPropSection?.content;
 
+      // Extract UPTIME section for boot uptime fallback
+      const uptimeSection = unpackResult.sections.find(
+        (s) => s.name === 'UPTIME' || s.command === 'uptime'
+      );
+      const uptimeContent = uptimeSection?.content;
+
       // Filter sections for rawDataStore: exclude logcat sections (already in logcatEntries)
       // and free large section content strings to reduce memory
       const logcatSectionNames = ['SYSTEM LOG', 'EVENT LOG', 'MAIN LOG', 'CRASH LOG', 'RADIO LOG', 'LOGCAT'];
@@ -247,6 +253,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         halStatus,
         tombstoneAnalyses: tombstoneResult.analyses,
         systemProperties,
+        uptimeContent,
       });
       const t5 = Date.now();
       console.log(`[perf] Basic analysis: ${((t5 - t4) / 1000).toFixed(1)}s`);
