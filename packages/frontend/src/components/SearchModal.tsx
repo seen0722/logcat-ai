@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { searchLogcat, LogcatSearchResult } from '../lib/api';
-import { entriesToCSV, entriesToLogcatText, downloadBlob } from '../lib/export-utils';
+import { searchLogcat, LogcatSearchResult, searchKernel, KernelSearchResult } from '../lib/api';
+import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
 
 interface Props {
   uploadId: string;
   onClose: () => void;
 }
+
+type SearchSource = 'logcat' | 'kernel';
+
+// ── Logcat helpers ──
 
 function levelColor(level: string): string {
   switch (level.toUpperCase()) {
@@ -25,20 +29,57 @@ function levelBg(level: string): string {
   }
 }
 
+// ── Kernel helpers ──
+
+function kernelLevelColor(level: string): string {
+  const num = parseInt(level.replace(/[<>]/g, ''), 10);
+  if (num <= 3) return 'text-red-400';
+  if (num === 4) return 'text-yellow-400';
+  if (num === 5) return 'text-blue-400';
+  if (num === 6) return 'text-green-400';
+  return 'text-gray-400';
+}
+
+function kernelLevelBg(level: string): string {
+  const num = parseInt(level.replace(/[<>]/g, ''), 10);
+  if (num <= 3) return 'bg-red-950/30';
+  if (num === 4) return 'bg-yellow-950/20';
+  return '';
+}
+
+function kernelLevelLabel(level: string): string {
+  const num = parseInt(level.replace(/[<>]/g, ''), 10);
+  const labels: Record<number, string> = {
+    0: 'EMERG', 1: 'ALERT', 2: 'CRIT', 3: 'ERR',
+    4: 'WARN', 5: 'NOTICE', 6: 'INFO', 7: 'DEBUG',
+  };
+  return labels[num] ?? level;
+}
+
 export default function SearchModal({ uploadId, onClose }: Props) {
+  const [source, setSource] = useState<SearchSource>('logcat');
   const [q, setQ] = useState('');
+  // Logcat-only filters
   const [tag, setTag] = useState('');
-  const [level, setLevel] = useState('');
   const [pid, setPid] = useState('');
+  // Shared filters
+  const [level, setLevel] = useState('');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(0);
 
-  const [result, setResult] = useState<LogcatSearchResult | null>(null);
+  const [logcatResult, setLogcatResult] = useState<LogcatSearchResult | null>(null);
+  const [kernelResult, setKernelResult] = useState<KernelSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Track last search params for pagination
-  const lastSearchRef = useRef<{ q?: string; tag?: string; level?: string; pid?: number; limit: number } | null>(null);
+  const lastSearchRef = useRef<{
+    source: SearchSource;
+    q?: string;
+    tag?: string;
+    level?: string;
+    pid?: number;
+    limit: number;
+  } | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -47,7 +88,6 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     inputRef.current?.focus();
   }, []);
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -56,6 +96,22 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // Reset state when switching tabs
+  const switchSource = (newSource: SearchSource) => {
+    if (newSource === source) return;
+    setSource(newSource);
+    setQ('');
+    setTag('');
+    setPid('');
+    setLevel('');
+    setPage(0);
+    setLogcatResult(null);
+    setKernelResult(null);
+    setError('');
+    lastSearchRef.current = null;
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
   const doSearchWithOffset = useCallback(async (offset: number) => {
     const params = lastSearchRef.current;
     if (!params) return;
@@ -63,25 +119,48 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await searchLogcat(uploadId, { ...params, offset });
-      setResult(res);
+      if (params.source === 'kernel') {
+        const res = await searchKernel(uploadId, {
+          q: params.q,
+          level: params.level,
+          limit: params.limit,
+          offset,
+        });
+        setKernelResult(res);
+      } else {
+        const res = await searchLogcat(uploadId, {
+          q: params.q,
+          tag: params.tag,
+          level: params.level,
+          pid: params.pid,
+          limit: params.limit,
+          offset,
+        });
+        setLogcatResult(res);
+      }
       resultsRef.current?.scrollTo(0, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
-      setResult(null);
+      setLogcatResult(null);
+      setKernelResult(null);
     } finally {
       setLoading(false);
     }
   }, [uploadId]);
 
   const doSearch = async () => {
-    if (!q.trim() && !tag.trim() && !level && !pid.trim()) return;
+    if (source === 'logcat') {
+      if (!q.trim() && !tag.trim() && !level && !pid.trim()) return;
+    } else {
+      if (!q.trim() && !level) return;
+    }
 
     const params = {
+      source,
       q: q.trim() || undefined,
-      tag: tag.trim() || undefined,
+      tag: source === 'logcat' ? (tag.trim() || undefined) : undefined,
       level: level || undefined,
-      pid: pid ? Number(pid) : undefined,
+      pid: source === 'logcat' && pid ? Number(pid) : undefined,
       limit,
     };
     lastSearchRef.current = params;
@@ -90,12 +169,32 @@ export default function SearchModal({ uploadId, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await searchLogcat(uploadId, { ...params, offset: 0 });
-      setResult(res);
+      if (source === 'kernel') {
+        const res = await searchKernel(uploadId, {
+          q: params.q,
+          level: params.level,
+          limit: params.limit,
+          offset: 0,
+        });
+        setKernelResult(res);
+        setLogcatResult(null);
+      } else {
+        const res = await searchLogcat(uploadId, {
+          q: params.q,
+          tag: params.tag,
+          level: params.level,
+          pid: params.pid,
+          limit: params.limit,
+          offset: 0,
+        });
+        setLogcatResult(res);
+        setKernelResult(null);
+      }
       resultsRef.current?.scrollTo(0, 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
-      setResult(null);
+      setLogcatResult(null);
+      setKernelResult(null);
     } finally {
       setLoading(false);
     }
@@ -107,18 +206,31 @@ export default function SearchModal({ uploadId, onClose }: Props) {
 
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  const result = source === 'kernel' ? kernelResult : logcatResult;
   const totalPages = result ? Math.ceil(result.totalMatches / limit) : 0;
 
   const handleExport = (format: 'csv' | 'text') => {
     if (!result || result.entries.length === 0) return;
-    const keyword = q.trim() || tag.trim() || 'search';
+    const keyword = q.trim() || (source === 'logcat' ? tag.trim() : '') || 'search';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    if (format === 'csv') {
-      const content = entriesToCSV(result.entries);
-      downloadBlob(content, `logcat-search-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
-    } else {
-      const content = entriesToLogcatText(result.entries);
-      downloadBlob(content, `logcat-search-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+    const prefix = source === 'kernel' ? 'kernel-search' : 'logcat-search';
+
+    if (source === 'kernel' && kernelResult) {
+      if (format === 'csv') {
+        const content = kernelEntriesToCSV(kernelResult.entries);
+        downloadBlob(content, `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
+      } else {
+        const content = kernelEntriesToDmesgText(kernelResult.entries);
+        downloadBlob(content, `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+      }
+    } else if (logcatResult) {
+      if (format === 'csv') {
+        const content = entriesToCSV(logcatResult.entries);
+        downloadBlob(content, `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
+      } else {
+        const content = entriesToLogcatText(logcatResult.entries);
+        downloadBlob(content, `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+      }
     }
     setShowExportMenu(false);
   };
@@ -137,9 +249,33 @@ export default function SearchModal({ uploadId, onClose }: Props) {
         className="w-full max-w-5xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header with Tab */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60 shrink-0">
-          <h2 className="text-lg font-semibold text-gray-100">Search Logcat</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-gray-100">Search</h2>
+            <div className="flex bg-[#161b22] rounded-lg p-0.5 border border-gray-700/60">
+              <button
+                onClick={() => switchSource('logcat')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  source === 'logcat'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Logcat
+              </button>
+              <button
+                onClick={() => switchSource('kernel')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  source === 'kernel'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Kernel
+              </button>
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
@@ -158,7 +294,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search keyword..."
+              placeholder={source === 'kernel' ? 'Search kernel message...' : 'Search keyword...'}
               className="flex-1 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
             />
             <button
@@ -170,46 +306,72 @@ export default function SearchModal({ uploadId, onClose }: Props) {
             </button>
           </div>
 
-          {/* Filters row */}
+          {/* Filters row — adaptive based on source */}
           <div className="flex gap-3 flex-wrap items-center">
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">Tag</label>
-              <input
-                type="text"
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="e.g. ActivityManager"
-                className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">Level</label>
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">All</option>
-                <option value="V">V - Verbose</option>
-                <option value="D">D - Debug</option>
-                <option value="I">I - Info</option>
-                <option value="W">W - Warning</option>
-                <option value="E">E - Error</option>
-                <option value="F">F - Fatal</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">PID</label>
-              <input
-                type="number"
-                value={pid}
-                onChange={(e) => setPid(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="—"
-                className="w-20 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
+            {source === 'logcat' && (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-500">Tag</label>
+                  <input
+                    type="text"
+                    value={tag}
+                    onChange={(e) => setTag(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="e.g. ActivityManager"
+                    className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-500">Level</label>
+                  <select
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                    className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">All</option>
+                    <option value="V">V - Verbose</option>
+                    <option value="D">D - Debug</option>
+                    <option value="I">I - Info</option>
+                    <option value="W">W - Warning</option>
+                    <option value="E">E - Error</option>
+                    <option value="F">F - Fatal</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-500">PID</label>
+                  <input
+                    type="number"
+                    value={pid}
+                    onChange={(e) => setPid(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="—"
+                    className="w-20 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {source === 'kernel' && (
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs text-gray-500">Level</label>
+                <select
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value)}
+                  className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">All</option>
+                  <option value="<0>">&lt;0&gt; EMERG</option>
+                  <option value="<1>">&lt;1&gt; ALERT</option>
+                  <option value="<2>">&lt;2&gt; CRIT</option>
+                  <option value="<3>">&lt;3&gt; ERR</option>
+                  <option value="<4>">&lt;4&gt; WARN</option>
+                  <option value="<5>">&lt;5&gt; NOTICE</option>
+                  <option value="<6>">&lt;6&gt; INFO</option>
+                  <option value="<7>">&lt;7&gt; DEBUG</option>
+                </select>
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-gray-500">Per page</label>
               <select
@@ -239,7 +401,11 @@ export default function SearchModal({ uploadId, onClose }: Props) {
 
           {!loading && !error && !result && (
             <div className="text-center py-16">
-              <p className="text-gray-500 text-sm">Enter a keyword or filter to search logcat entries.</p>
+              <p className="text-gray-500 text-sm">
+                {source === 'kernel'
+                  ? 'Enter a keyword or select a level to search kernel messages.'
+                  : 'Enter a keyword or filter to search logcat entries.'}
+              </p>
               <p className="text-gray-600 text-xs mt-1">Supports FTS5 full-text search with BM25 ranking.</p>
             </div>
           )}
@@ -252,7 +418,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                 <span>matched</span>
                 <span className="text-gray-600">|</span>
                 <span>
-                  {page * limit + 1}–{Math.min((page + 1) * limit, result.totalMatches)} of {result.totalMatches.toLocaleString()}
+                  {result.totalMatches > 0 ? `${page * limit + 1}–${Math.min((page + 1) * limit, result.totalMatches)}` : '0'} of {result.totalMatches.toLocaleString()}
                 </span>
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
                   result.method === 'fts5'
@@ -285,7 +451,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                         onClick={() => handleExport('text')}
                         className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
                       >
-                        Export Text
+                        {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'}
                       </button>
                     </div>
                   )}
@@ -319,11 +485,36 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                 <p className="text-gray-500 text-sm text-center py-12">
                   No matching entries found.
                 </p>
-              ) : (
+              ) : source === 'kernel' && kernelResult ? (
+                /* Kernel results table */
                 <div className="px-4 py-2 overflow-x-auto">
                   <table className="w-full text-xs font-mono">
                     <tbody>
-                      {result.entries.map((entry, i) => (
+                      {kernelResult.entries.map((entry, i) => (
+                        <tr
+                          key={i}
+                          className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`}
+                        >
+                          <td className="text-gray-600 py-1 px-2 whitespace-nowrap align-top">
+                            [{entry.timestamp}]
+                          </td>
+                          <td className={`py-1 px-1 whitespace-nowrap align-top font-semibold ${kernelLevelColor(entry.level)}`}>
+                            {kernelLevelLabel(entry.level)}
+                          </td>
+                          <td className={`py-1 px-2 align-top break-all ${kernelLevelColor(entry.level)}`}>
+                            {entry.message}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : logcatResult ? (
+                /* Logcat results table */
+                <div className="px-4 py-2 overflow-x-auto">
+                  <table className="w-full text-xs font-mono">
+                    <tbody>
+                      {logcatResult.entries.map((entry, i) => (
                         <tr
                           key={i}
                           className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${levelBg(entry.level)}`}
@@ -345,7 +536,7 @@ export default function SearchModal({ uploadId, onClose }: Props) {
                     </tbody>
                   </table>
                 </div>
-              )}
+              ) : null}
 
               {/* Bottom pagination */}
               {totalPages > 1 && (

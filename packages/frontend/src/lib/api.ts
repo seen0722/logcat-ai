@@ -184,6 +184,39 @@ export async function searchLogcat(
   return res.json();
 }
 
+// ---- Kernel Search API ----
+
+export interface KernelSearchResult {
+  totalMatches: number;
+  showing: number;
+  method: 'fts5' | 'keyword';
+  entries: Array<{
+    entryIndex: number;
+    timestamp: string;
+    level: string;
+    facility: string;
+    message: string;
+  }>;
+}
+
+export async function searchKernel(
+  id: string,
+  params: { q?: string; level?: string; limit?: number; offset?: number },
+): Promise<KernelSearchResult> {
+  const qs = new URLSearchParams({ source: 'kernel' });
+  if (params.q) qs.set('q', params.q);
+  if (params.level) qs.set('level', params.level);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+
+  const res = await fetch(`${API_BASE}/search/${id}?${qs}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? 'Search failed');
+  }
+  return res.json();
+}
+
 // ---- Batch API ----
 
 export async function uploadBatchFiles(files: File[]): Promise<BatchUploadResponse> {

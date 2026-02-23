@@ -54,6 +54,16 @@ export function initDatabase(): void {
       message,
       tokenize='porter unicode61'
     );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS kernel_fts USING fts5(
+      analysis_id,
+      entry_index,
+      timestamp_sec,
+      level,
+      facility,
+      message,
+      tokenize='porter unicode61'
+    );
   `);
 
   console.log(`[logcat-ai] Database initialized at ${dbPath}`);

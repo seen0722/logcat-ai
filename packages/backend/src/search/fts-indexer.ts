@@ -4,7 +4,7 @@
  */
 
 import { getDatabase } from '../db.js';
-import type { LogEntry } from '@logcat-ai/parser';
+import type { LogEntry, KernelLogEntry } from '@logcat-ai/parser';
 
 export interface FTSSearchResult {
   lineNumber: number;
@@ -134,4 +134,119 @@ function sanitizeFTSQuery(query: string): string {
     .map((t) => `"${t.replace(/"/g, '""')}"`);
 
   return terms.join(' ');
+}
+
+// ============================================================
+// Kernel FTS5 Functions
+// ============================================================
+
+export interface KernelFTSSearchResult {
+  entryIndex: number;
+  timestamp: string;
+  level: string;
+  facility: string;
+  message: string;
+  rank: number;
+}
+
+export interface KernelFTSPaginatedResult {
+  totalMatches: number;
+  entries: KernelFTSSearchResult[];
+}
+
+/**
+ * Index kernel log entries into FTS5 for a given analysis.
+ * Replaces any existing index for the same analysis ID.
+ */
+export function indexKernelEntries(analysisId: string, entries: KernelLogEntry[]): void {
+  if (entries.length === 0) return;
+
+  const db = getDatabase();
+
+  db.prepare('DELETE FROM kernel_fts WHERE analysis_id = ?').run(analysisId);
+
+  const insert = db.prepare(
+    'INSERT INTO kernel_fts (analysis_id, entry_index, timestamp_sec, level, facility, message) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+
+  const batchInsert = db.transaction((entries: KernelLogEntry[]) => {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      insert.run(
+        analysisId,
+        i,
+        String(entry.timestamp),
+        entry.level,
+        entry.facility,
+        entry.message,
+      );
+    }
+  });
+
+  batchInsert(entries);
+}
+
+/**
+ * Search kernel entries using FTS5 BM25 ranking.
+ */
+export function searchKernelFTS(
+  analysisId: string,
+  query: string,
+  limit = 50,
+  offset = 0,
+): KernelFTSPaginatedResult | null {
+  const db = getDatabase();
+
+  const safeQuery = sanitizeFTSQuery(query);
+  if (!safeQuery) return null;
+
+  try {
+    const countRow = db
+      .prepare(
+        `SELECT COUNT(*) as cnt FROM kernel_fts WHERE analysis_id = ? AND kernel_fts MATCH ?`,
+      )
+      .get(analysisId, safeQuery) as { cnt: number } | undefined;
+
+    const totalMatches = countRow?.cnt ?? 0;
+    if (totalMatches === 0) return null;
+
+    const rows = db
+      .prepare(
+        `SELECT entry_index, timestamp_sec, level, facility, message, rank
+         FROM kernel_fts
+         WHERE analysis_id = ? AND kernel_fts MATCH ?
+         ORDER BY rank
+         LIMIT ? OFFSET ?`,
+      )
+      .all(analysisId, safeQuery, limit, offset) as Array<{
+      entry_index: number;
+      timestamp_sec: string;
+      level: string;
+      facility: string;
+      message: string;
+      rank: number;
+    }>;
+
+    return {
+      totalMatches,
+      entries: rows.map((row) => ({
+        entryIndex: row.entry_index,
+        timestamp: row.timestamp_sec,
+        level: row.level,
+        facility: row.facility,
+        message: row.message,
+        rank: row.rank,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Delete kernel FTS5 index for a given analysis.
+ */
+export function deleteKernelIndex(analysisId: string): void {
+  const db = getDatabase();
+  db.prepare('DELETE FROM kernel_fts WHERE analysis_id = ?').run(analysisId);
 }

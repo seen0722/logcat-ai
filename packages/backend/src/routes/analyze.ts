@@ -19,7 +19,7 @@ import { getConfig } from '../config.js';
 import { analyzeDeep } from '../llm-gateway/llm-gateway.js';
 import { analysisStore } from '../store.js';
 import { rawDataStore } from '../raw-data-store.js';
-import { indexLogcatEntries } from '../search/fts-indexer.js';
+import { indexLogcatEntries, indexKernelEntries } from '../search/fts-indexer.js';
 
 const router = Router();
 
@@ -169,7 +169,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       try {
         indexLogcatEntries(id, logcatResult.entries);
       } catch (err) {
-        console.error('[FTS5] Indexing failed:', err instanceof Error ? err.message : err);
+        console.error('[FTS5] Logcat indexing failed:', err instanceof Error ? err.message : err);
+      }
+
+      // Index kernel entries in FTS5 for full-text search
+      try {
+        indexKernelEntries(id, kernelResult.entries);
+      } catch (err) {
+        console.error('[FTS5] Kernel indexing failed:', err instanceof Error ? err.message : err);
       }
 
       // Stage 3: Basic Analysis
@@ -354,7 +361,7 @@ function analyzeStandaloneFile(
     try {
       indexLogcatEntries(id, logcatResult.entries);
     } catch (err) {
-      console.error('[FTS5] Indexing failed:', err instanceof Error ? err.message : err);
+      console.error('[FTS5] Logcat indexing failed:', err instanceof Error ? err.message : err);
     }
 
     sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Analyzing logcat...' });
@@ -376,6 +383,13 @@ function analyzeStandaloneFile(
       anrAnalyses: [],
       sections: [],
     });
+
+    // Index kernel entries in FTS5 for full-text search
+    try {
+      indexKernelEntries(id, kernelResult.entries);
+    } catch (err) {
+      console.error('[FTS5] Kernel indexing failed:', err instanceof Error ? err.message : err);
+    }
 
     sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Analyzing kernel log...' });
     return analyzeBasic({

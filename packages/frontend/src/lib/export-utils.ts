@@ -43,6 +43,37 @@ export function entriesToLogcatText(entries: ExportEntry[]): string {
   }).join('\n');
 }
 
+// ---- Kernel Export ----
+
+interface KernelExportEntry {
+  timestamp: string;
+  level: string;
+  facility: string;
+  message: string;
+}
+
+/** Export kernel entries as CSV with header row. */
+export function kernelEntriesToCSV(entries: KernelExportEntry[]): string {
+  const header = 'timestamp,level,facility,message';
+  const rows = entries.map((e) => {
+    const fields = [e.timestamp, e.level, e.facility, e.message];
+    return fields.map((f) => {
+      if (/[,"\n\r]/.test(f)) {
+        return `"${f.replace(/"/g, '""')}"`;
+      }
+      return f;
+    }).join(',');
+  });
+  return [header, ...rows].join('\n');
+}
+
+/** Export kernel entries as dmesg text format. */
+export function kernelEntriesToDmesgText(entries: KernelExportEntry[]): string {
+  return entries.map((e) => {
+    return `${e.level}[${e.timestamp.padStart(12)}] ${e.message}`;
+  }).join('\n');
+}
+
 /** Trigger a browser download for the given content. */
 export function downloadBlob(content: string, filename: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
