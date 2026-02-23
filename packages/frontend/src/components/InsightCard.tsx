@@ -112,7 +112,7 @@ function DeepAnalysisBlock({ deepAnalysis }: { deepAnalysis: NonNullable<Insight
 
       {/* Evidence (collapsible) */}
       {deepAnalysis.evidence && deepAnalysis.evidence.length > 0 && (
-        <details className="group">
+        <details className="group" onClick={(e) => e.stopPropagation()}>
           <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-400 select-none">
             Evidence ({deepAnalysis.evidence.length} items) ▸
           </summary>
