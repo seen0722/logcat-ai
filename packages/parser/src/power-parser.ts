@@ -158,13 +158,16 @@ export function parseDeviceIdle(content: string): { dozeState: DozeState; dozeSe
   dozeState.lightEnabled = stateKv('mLightEnabled') !== 'false';
 
   // Settings extraction — look for the "Settings:" block
-  const settingsMatch = content.match(/Settings:\s*\n([\s\S]*?)(?:\n\s*\n|\n\w)/);
+  // Match indented lines containing key=value pairs (4+ spaces indent)
+  // Stop when indent decreases (e.g. "  Idling history:" at 2 spaces) or at blank line
+  const settingsMatch = content.match(/Settings:\s*\n((?:[ \t]{4,}\S+=[^\n]*\n?)+)/);
   if (settingsMatch) {
     const block = settingsMatch[1];
 
     // Settings values can be plain numbers (ms) or Android duration format (+30m0s0ms)
+    // Use line-start anchor to prevent partial key matches (e.g. "idle_to" matching "light_idle_to")
     const settingVal = (key: string): number => {
-      const m = block.match(new RegExp(`${key}=\\+?([^\\n,]+)`));
+      const m = block.match(new RegExp(`(?:^|\\n)\\s*${key}=\\+?([^\\n,]+)`));
       if (!m) return 0;
       const raw = m[1].trim();
       // Plain number = milliseconds
@@ -175,11 +178,11 @@ export function parseDeviceIdle(content: string): { dozeState: DozeState; dozeSe
 
     dozeSettings.inactiveTo = settingVal('inactive_to');
     dozeSettings.idleTo = settingVal('idle_to') || settingVal('idle_after_inactive_to');
-    dozeSettings.idleFactor = parseFloat(block.match(/idle_factor=([\d.]+)/)?.[1] ?? '0') || 0;
+    dozeSettings.idleFactor = parseFloat(block.match(/(?:^|\n)\s*idle_factor=([\d.]+)/)?.[1] ?? '0') || 0;
     dozeSettings.maxIdleTo = settingVal('max_idle_to');
     dozeSettings.lightIdleTo = settingVal('light_idle_to');
     dozeSettings.lightMaxIdleTo = settingVal('light_max_idle_to');
-    dozeSettings.lightIdleFactor = parseFloat(block.match(/light_idle_factor=([\d.]+)/)?.[1] ?? '0') || 0;
+    dozeSettings.lightIdleFactor = parseFloat(block.match(/(?:^|\n)\s*light_idle_factor=([\d.]+)/)?.[1] ?? '0') || 0;
   }
 
   return { dozeState, dozeSettings };
@@ -241,21 +244,27 @@ export function parseBatteryStats(content: string): BatteryStatsSummary {
   const dischargeMatch = statsBlock.match(/(?:^|\n)\s*Discharge:\s*([\d.]+)\s*mAh/);
   if (dischargeMatch) result.totalDischargeMah = parseFloat(dischargeMatch[1]);
 
-  // Screen off discharge
-  const screenOffMatch = statsBlock.match(/Amount discharged while screen off:\s*([\d.]+)\s*mAh/);
+  // Screen off discharge — multiple format variants:
+  //   "Screen off discharge: 9025 mAh"
+  //   "Amount discharged while screen off: NNN mAh"
+  const screenOffMatch = statsBlock.match(/(?:Screen off discharge|Amount discharged while screen off):\s*([\d.]+)\s*mAh/);
   if (screenOffMatch) result.screenOffDischargeMah = parseFloat(screenOffMatch[1]);
 
-  // Deep Doze time: "Device Idle mode enabled time: ..." or "Device deep doze ..."
-  // Pattern: "Device Idle (deep): 2h 10m 15s 123ms"
-  const deepDozeMatch = statsBlock.match(/(?:Device Idle mode enabled|Device idle time|Device Idle \(deep\))(?:\s*time)?:\s*([^(]+?)(?:\s*\(|$)/m);
+  // Deep Doze time — multiple format variants:
+  //   "Idle mode full time: 5d 20h 16m 37s 183ms (97.0%) 74x"
+  //   "Device Idle mode enabled time: ..."
+  //   "Device Idle (deep): 2h 10m 15s 123ms"
+  const deepDozeMatch = statsBlock.match(/(?:Idle mode full time|Device Idle mode enabled|Device idle time|Device Idle \(deep\))(?:\s*time)?:\s*([^(]+?)(?:\s*\(|$)/m);
   if (deepDozeMatch) {
     result.deepDozeTime = deepDozeMatch[1].trim();
     result.deepDozeTimeMs = parseDurationToMs(result.deepDozeTime);
   }
 
-  // Deep Doze discharge: "Discharge step during device Idle mode: NNN mAh"
-  // Or: "Amount discharged in deep doze: NNN mAh"
-  const deepDozeDischargeMatch = statsBlock.match(/(?:Discharge step during device Idle mode|Amount discharged.*deep doze):\s*([\d.]+)\s*mAh/i);
+  // Deep Doze discharge — multiple format variants:
+  //   "Device deep doze discharge: 6999 mAh"
+  //   "Discharge step during device Idle mode: NNN mAh"
+  //   "Amount discharged in deep doze: NNN mAh"
+  const deepDozeDischargeMatch = statsBlock.match(/(?:Device deep doze discharge|Discharge step during device Idle mode|Amount discharged.*deep doze):\s*([\d.]+)\s*mAh/i);
   if (deepDozeDischargeMatch) {
     result.deepDozeDischargeMah = parseFloat(deepDozeDischargeMatch[1]);
   }
@@ -266,8 +275,11 @@ export function parseBatteryStats(content: string): BatteryStatsSummary {
     result.deepDozeDischargeRateMahPerHr = result.deepDozeDischargeMah / hours;
   }
 
-  // Light Doze time
-  const lightDozeMatch = statsBlock.match(/(?:Device light idle time|Device Idle \(light\))(?:\s*time)?:\s*([^(]+?)(?:\s*\(|$)/m);
+  // Light Doze time — multiple format variants:
+  //   "Idle mode light time: 2h 41m 53s 160ms (1.9%) 27x"
+  //   "Device light idle time: ..."
+  //   "Device Idle (light): ..."
+  const lightDozeMatch = statsBlock.match(/(?:Idle mode light time|Device light idle time|Device Idle \(light\))(?:\s*time)?:\s*([^(]+?)(?:\s*\(|$)/m);
   if (lightDozeMatch) {
     result.lightDozeTime = lightDozeMatch[1].trim();
     result.lightDozeTimeMs = parseDurationToMs(result.lightDozeTime);
@@ -506,12 +518,45 @@ export function parseSuspendStats(entries: KernelLogEntry[]): SuspendStats {
 }
 
 // ============================================================
+// Helpers: extract per-service sub-section from large DUMPSYS
+// ============================================================
+
+/**
+ * Extract a specific "DUMP OF SERVICE <name>:" sub-section from a large DUMPSYS block.
+ * Handles both "DUMP OF SERVICE <name>:" and "DUMP OF SERVICE CRITICAL <name>:" formats.
+ * Returns the text between the marker and the next "DUMP OF SERVICE" or section boundary.
+ * Returns null if not found.
+ */
+function extractServiceSubSection(content: string, serviceName: string): string | null {
+  // Try both formats: "DUMP OF SERVICE power:" and "DUMP OF SERVICE CRITICAL power:"
+  let startIdx = content.indexOf(`DUMP OF SERVICE ${serviceName}:`);
+  if (startIdx === -1) {
+    startIdx = content.indexOf(`DUMP OF SERVICE CRITICAL ${serviceName}:`);
+  }
+  if (startIdx === -1) return null;
+
+  // Find the end: next "DUMP OF SERVICE" or "------" section boundary
+  const searchFrom = startIdx + 30; // skip past current header
+  const nextDump = content.indexOf('DUMP OF SERVICE ', searchFrom);
+  const nextBoundary = content.indexOf('\n------', searchFrom);
+
+  let endIdx = content.length;
+  if (nextDump > -1) endIdx = Math.min(endIdx, nextDump);
+  if (nextBoundary > -1) endIdx = Math.min(endIdx, nextBoundary);
+
+  return content.slice(startIdx, endIdx);
+}
+
+// ============================================================
 // Aggregate: Parse all power-related sections
 // ============================================================
 
 /**
  * Parse all power-related sections from a bugreport.
  * Uses content-based detection (not section names) to find relevant sections.
+ *
+ * Large DUMPSYS sections (e.g. 20MB+) contain multiple "DUMP OF SERVICE xxx:" sub-sections.
+ * We extract the specific sub-section for each service to avoid regex matching the wrong fields.
  */
 export function parsePowerSections(
   sections: BugreportSection[],
@@ -522,16 +567,26 @@ export function parsePowerSections(
   };
 
   for (const section of sections) {
-    // Power Manager: contains "mWakefulness="
+    // Power Manager: extract "DUMP OF SERVICE [CRITICAL] power:" sub-section
     if (!result.powerManagerState && section.content.includes('mWakefulness=')) {
-      result.powerManagerState = parsePowerManager(section.content);
+      const subSection = extractServiceSubSection(section.content, 'power');
+      // For large multi-service sections, only parse if we found the specific sub-section
+      // For small dedicated sections (<100KB), parse the whole content
+      const toParse = subSection ?? (section.content.length < 100_000 ? section.content : null);
+      if (toParse) {
+        result.powerManagerState = parsePowerManager(toParse);
+      }
     }
 
-    // DeviceIdle: contains "DeviceIdleController" and "mState="
-    if (!result.dozeState && section.content.includes('DeviceIdleController') && section.content.includes('mState=')) {
-      const { dozeState, dozeSettings } = parseDeviceIdle(section.content);
-      result.dozeState = dozeState;
-      result.dozeSettings = dozeSettings;
+    // DeviceIdle: extract "DUMP OF SERVICE [CRITICAL] deviceidle:" sub-section
+    if (!result.dozeState && section.content.includes('mDeepEnabled=')) {
+      const subSection = extractServiceSubSection(section.content, 'deviceidle');
+      const toParse = subSection ?? (section.content.length < 100_000 ? section.content : null);
+      if (toParse) {
+        const { dozeState, dozeSettings } = parseDeviceIdle(toParse);
+        result.dozeState = dozeState;
+        result.dozeSettings = dozeSettings;
+      }
     }
 
     // BatteryStats: contains "Statistics since last charge:"
@@ -548,7 +603,8 @@ export function parsePowerSections(
 
     // Alarm Stats: section contains "Alarm Stats:"
     if (!result.alarmWakeups && section.content.includes('Alarm Stats:')) {
-      result.alarmWakeups = parseAlarmStats(section.content);
+      const subSection = extractServiceSubSection(section.content, 'alarm');
+      result.alarmWakeups = parseAlarmStats(subSection ?? section.content);
     }
   }
 
