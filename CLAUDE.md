@@ -71,14 +71,14 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `unpacker.ts` — ZIP extraction, section splitting (logcat with buffer info, ANR traces, kernel, dumpsys)
 - `logcat-parser.ts` — 11 anomaly types (crash, ANR, watchdog, etc.); `parseLogcat(content, buffer?)` accepts optional buffer param; `detectAnomalies()` and `computeTagStats()` are exported for per-section parsing
 - `anr-parser.ts` — 18 ANR case types, lock graph construction, deadlock detection
-- `kernel-parser.ts` — 12 kernel event types
+- `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation, timeline↔insight linking
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`)
 
 ### Backend (`@logcat-ai/backend`)
 
@@ -198,11 +198,20 @@ HAL 按照介面家族分組（同一介面不同版本歸同一家族），只�
 
 ### Kernel 事件偵測（kernel-parser.ts）
 
-解析 dmesg 輸出，偵測 12 種事件：`kernel_panic`、`oom_kill`、`lowmemory_killer`、`kswapd_active`、`driver_error`、`gpu_error`、`thermal_shutdown`、`thermal_throttling`、`watchdog_reset`、`storage_io_error`、`suspend_resume_error`、`selinux_denial`。其中 `thermal_*` 和 `driver_error` 對 BSP 除錯特別重要。
+解析 kernel log 輸出，偵測 12 種事件：`kernel_panic`、`oom_kill`、`lowmemory_killer`、`kswapd_active`、`driver_error`、`gpu_error`、`thermal_shutdown`、`thermal_throttling`、`watchdog_reset`、`storage_io_error`、`suspend_resume_error`、`selinux_denial`。其中 `thermal_*` 和 `driver_error` 對 BSP 除錯特別重要。
 
 ### KERNEL LOG 段落格式差異
 
-KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timestamp] message`）或 `logcat -b kernel -v threadtime`（logcat 格式）。`kernel-parser.ts` 僅支援 dmesg 格式，logcat 格式會導致 0 entries、0 events。此時 `uptimeSeconds` 改由 `UPTIME (uptime)` 段落的 `uptime` 指令輸出解析（支援 `up N days, HH:MM` / `up HH:MM` / `up N min` 三種格式）。
+KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timestamp] message`）或 `logcat -b kernel -v threadtime`（logcat 格式，常見於 `userdebug` build）。`kernel-parser.ts` 透過掃描前 10 行自動偵測格式：
+
+- **dmesg 格式**：`<6>[ 3772.736783] message` — timestamp 為 boot 後秒數，直接使用
+- **logcat 格式**：`02-08 14:01:56.821  root  0  0 I  tag : message` — timestamp 為 `MM-DD HH:mm:ss.SSS`，轉為相對第一筆 entry 的秒數差；logcat level 映射為 kernel level（`F→<0>`, `E→<3>`, `W→<4>`, `I→<6>`, `D/V→<7>`）
+
+兩種格式最終產出相同的 `KernelLogEntry[]`，下游 `detectKernelEvents()` 不需區分。當 KERNEL LOG 為 logcat 格式且無 dmesg timestamp 時，`uptimeSeconds` 改由 `UPTIME (uptime)` 段落解析（支援 `up N days, HH:MM` / `up HH:MM` / `up N min` 三種格式）。
+
+### Build Type（unpacker.ts）
+
+`BugreportMetadata.buildType` 從 `ro.build.type` system property 提取，值為 `user`、`userdebug`、`eng` 或 `unknown`。`userdebug` build 的 KERNEL LOG 通常使用 logcat 格式而非 dmesg。前端 `SystemOverview` 對非 `user` build 顯示黃色警示標籤。
 
 ### 健康評分（basic-analyzer.ts）
 
