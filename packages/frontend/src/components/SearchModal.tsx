@@ -9,6 +9,8 @@ interface Props {
   initialStartTime?: string;
   initialEndTime?: string;
   initialSource?: SearchSource;
+  /** The exact event timestamp to scroll to after auto-search (center of time window) */
+  initialFocusTime?: string;
 }
 
 type SearchSource = 'logcat' | 'kernel';
@@ -60,7 +62,7 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
-export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource }: Props) {
+export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource, initialFocusTime }: Props) {
   const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
   // Logcat-only filters
@@ -96,6 +98,28 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const initialSearchDone = useRef(false);
+
+  /** Scroll results container so the row closest to focusTime is centered in view */
+  const scrollToFocusTime = useCallback((focusTime: string) => {
+    // Double rAF ensures React has committed DOM updates and browser has painted
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const container = resultsRef.current;
+      if (!container) return;
+      const rows = container.querySelectorAll<HTMLElement>('tr[data-ts]');
+      let bestRow: HTMLElement | null = null;
+      for (const row of rows) {
+        const ts = row.getAttribute('data-ts') ?? '';
+        if (ts <= focusTime) bestRow = row; // pick last row <= focusTime
+      }
+      if (bestRow) {
+        bestRow.scrollIntoView({ block: 'center' });
+        // Use background highlight — ring doesn't render on <tr> elements
+        bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
+        bestRow.style.transition = 'background-color 2s ease-out';
+        setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 2000);
+      }
+    }));
+  }, []);
 
   useEffect(() => {
     if (initialTag && !initialSearchDone.current) {
@@ -142,6 +166,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         }).then((res) => {
           setKernelResult(res);
           setLoading(false);
+          if (initialFocusTime) scrollToFocusTime(initialFocusTime);
         }).catch((err) => {
           setError(err instanceof Error ? err.message : 'Search failed');
           setLoading(false);
@@ -155,6 +180,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         }).then((res) => {
           setLogcatResult(res);
           setLoading(false);
+          if (initialFocusTime) scrollToFocusTime(initialFocusTime);
         }).catch((err) => {
           setError(err instanceof Error ? err.message : 'Search failed');
           setLoading(false);
@@ -294,34 +320,53 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   };
 
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const result = source === 'kernel' ? kernelResult : logcatResult;
   const totalPages = result ? Math.ceil(result.totalMatches / limit) : 0;
 
-  const handleExport = (format: 'csv' | 'text') => {
-    if (!result || result.entries.length === 0) return;
+  const handleExport = async (format: 'csv' | 'text') => {
+    if (!result || result.totalMatches === 0) return;
     const keyword = q.trim() || (source === 'logcat' ? tag.trim() : '') || 'search';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const prefix = source === 'kernel' ? 'kernel-search' : 'logcat-search';
+    const params = lastSearchRef.current;
+    if (!params) return;
 
-    if (source === 'kernel' && kernelResult) {
-      if (format === 'csv') {
-        const content = kernelEntriesToCSV(kernelResult.entries);
-        downloadBlob(content, `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
-      } else {
-        const content = kernelEntriesToDmesgText(kernelResult.entries);
-        downloadBlob(content, `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
-      }
-    } else if (logcatResult) {
-      if (format === 'csv') {
-        const content = entriesToCSV(logcatResult.entries);
-        downloadBlob(content, `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
-      } else {
-        const content = entriesToLogcatText(logcatResult.entries);
-        downloadBlob(content, `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
-      }
-    }
     setShowExportMenu(false);
+    setExporting(true);
+
+    try {
+      // Fetch ALL matching entries for export (not just current page)
+      if (source === 'kernel') {
+        const all = await searchKernel(uploadId, {
+          q: params.q, level: params.level,
+          startTime: params.startTime, endTime: params.endTime,
+          limit: result.totalMatches, offset: 0, export: true,
+        });
+        if (format === 'csv') {
+          downloadBlob(kernelEntriesToCSV(all.entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
+        } else {
+          downloadBlob(kernelEntriesToDmesgText(all.entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+        }
+      } else {
+        const all = await searchLogcat(uploadId, {
+          q: params.q, tag: params.tag, level: params.level,
+          pid: params.pid, buffer: params.buffer,
+          startTime: params.startTime, endTime: params.endTime,
+          limit: result.totalMatches, offset: 0, export: true,
+        });
+        if (format === 'csv') {
+          downloadBlob(entriesToCSV(all.entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
+        } else {
+          downloadBlob(entriesToLogcatText(all.entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const goToPage = (newPage: number) => {
@@ -335,7 +380,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[85vh]"
+        className="w-full max-w-6xl 2xl:max-w-7xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[85vh] 2xl:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Tab */}
@@ -568,27 +613,28 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 {/* Export dropdown */}
                 <div className="relative">
                   <button
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                    className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors flex items-center gap-1"
+                    onClick={() => !exporting && setShowExportMenu(!showExportMenu)}
+                    disabled={exporting}
+                    className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-50 transition-colors flex items-center gap-1"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    Export
+                    {exporting ? 'Exporting...' : 'Export'}
                   </button>
                   {showExportMenu && (
-                    <div className="absolute top-full left-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-10 py-1 min-w-[140px]">
+                    <div className="absolute top-full left-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-10 py-1 min-w-[180px]">
                       <button
                         onClick={() => handleExport('csv')}
                         className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
                       >
-                        Export CSV
+                        Export CSV ({result.totalMatches.toLocaleString()} rows)
                       </button>
                       <button
                         onClick={() => handleExport('text')}
                         className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
                       >
-                        {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'}
+                        {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'} ({result.totalMatches.toLocaleString()} rows)
                       </button>
                     </div>
                   )}
@@ -637,6 +683,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                       {kernelResult.entries.map((entry, i) => (
                         <tr
                           key={i}
+                          data-ts={entry.timestamp}
                           className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`}
                         >
                           <td className="text-gray-600 py-1 px-2 whitespace-nowrap align-top">
@@ -669,6 +716,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                       {logcatResult.entries.map((entry, i) => (
                         <tr
                           key={i}
+                          data-ts={entry.timestamp}
                           className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${levelBg(entry.level)}`}
                         >
                           <td className="text-gray-600 py-1 px-2 whitespace-nowrap align-top">

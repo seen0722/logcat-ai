@@ -96,13 +96,16 @@ function parseDmesgKernel(lines: string[]): KernelLogEntry[] {
 
     const match = line.match(DMESG_LINE_RE);
     if (match) {
-      const level = match[1] ?? '';
+      const rawPriority = match[1] ?? '';
       const timestamp = parseFloat(match[2]);
       const message = match[3];
 
+      // Syslog priority = facility*8 + severity; extract severity (lower 3 bits)
+      const severity = rawPriority ? parseInt(rawPriority, 10) & 7 : -1;
+
       entries.push({
         timestamp,
-        level: level ? `<${level}>` : '',
+        level: severity >= 0 ? `<${severity}>` : '',
         facility: '',
         message,
         raw: line,
