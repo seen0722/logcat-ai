@@ -70,6 +70,8 @@ export function searchLogcatFTS(
   limit = 50,
   offset = 0,
   buffer?: string,
+  startTime?: string,
+  endTime?: string,
 ): FTSPaginatedResult | null {
   const db = getDatabase();
 
@@ -80,12 +82,24 @@ export function searchLogcatFTS(
   // If buffer filter is specified, add it to the FTS5 MATCH query
   const matchQuery = buffer ? `${safeQuery} AND buffer:"${buffer}"` : safeQuery;
 
+  // Build optional timestamp range WHERE clauses (lexicographic comparison)
+  let timeClause = '';
+  const timeParams: string[] = [];
+  if (startTime) {
+    timeClause += ' AND timestamp >= ?';
+    timeParams.push(startTime);
+  }
+  if (endTime) {
+    timeClause += ' AND timestamp <= ?';
+    timeParams.push(endTime);
+  }
+
   try {
     const countRow = db
       .prepare(
-        `SELECT COUNT(*) as cnt FROM logcat_fts WHERE analysis_id = ? AND logcat_fts MATCH ?`,
+        `SELECT COUNT(*) as cnt FROM logcat_fts WHERE analysis_id = ? AND logcat_fts MATCH ?${timeClause}`,
       )
-      .get(analysisId, matchQuery) as { cnt: number } | undefined;
+      .get(analysisId, matchQuery, ...timeParams) as { cnt: number } | undefined;
 
     const totalMatches = countRow?.cnt ?? 0;
     if (totalMatches === 0) return null;
@@ -94,11 +108,11 @@ export function searchLogcatFTS(
       .prepare(
         `SELECT line_number, timestamp, pid, tid, level, tag, message, buffer, rank
          FROM logcat_fts
-         WHERE analysis_id = ? AND logcat_fts MATCH ?
+         WHERE analysis_id = ? AND logcat_fts MATCH ?${timeClause}
          ORDER BY rank
          LIMIT ? OFFSET ?`,
       )
-      .all(analysisId, matchQuery, limit, offset) as Array<{
+      .all(analysisId, matchQuery, ...timeParams, limit, offset) as Array<{
       line_number: number;
       timestamp: string;
       pid: string;
@@ -211,18 +225,32 @@ export function searchKernelFTS(
   query: string,
   limit = 50,
   offset = 0,
+  startTime?: string,
+  endTime?: string,
 ): KernelFTSPaginatedResult | null {
   const db = getDatabase();
 
   const safeQuery = sanitizeFTSQuery(query);
   if (!safeQuery) return null;
 
+  // Build optional timestamp range WHERE clauses (lexicographic comparison on timestamp_sec)
+  let timeClause = '';
+  const timeParams: string[] = [];
+  if (startTime) {
+    timeClause += ' AND timestamp_sec >= ?';
+    timeParams.push(startTime);
+  }
+  if (endTime) {
+    timeClause += ' AND timestamp_sec <= ?';
+    timeParams.push(endTime);
+  }
+
   try {
     const countRow = db
       .prepare(
-        `SELECT COUNT(*) as cnt FROM kernel_fts WHERE analysis_id = ? AND kernel_fts MATCH ?`,
+        `SELECT COUNT(*) as cnt FROM kernel_fts WHERE analysis_id = ? AND kernel_fts MATCH ?${timeClause}`,
       )
-      .get(analysisId, safeQuery) as { cnt: number } | undefined;
+      .get(analysisId, safeQuery, ...timeParams) as { cnt: number } | undefined;
 
     const totalMatches = countRow?.cnt ?? 0;
     if (totalMatches === 0) return null;
@@ -231,11 +259,11 @@ export function searchKernelFTS(
       .prepare(
         `SELECT entry_index, timestamp_sec, level, facility, message, rank
          FROM kernel_fts
-         WHERE analysis_id = ? AND kernel_fts MATCH ?
+         WHERE analysis_id = ? AND kernel_fts MATCH ?${timeClause}
          ORDER BY rank
          LIMIT ? OFFSET ?`,
       )
-      .all(analysisId, safeQuery, limit, offset) as Array<{
+      .all(analysisId, safeQuery, ...timeParams, limit, offset) as Array<{
       entry_index: number;
       timestamp_sec: string;
       level: string;

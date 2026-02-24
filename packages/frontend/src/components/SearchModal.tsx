@@ -6,6 +6,8 @@ interface Props {
   uploadId: string;
   onClose: () => void;
   initialTag?: string;
+  initialStartTime?: string;
+  initialEndTime?: string;
 }
 
 type SearchSource = 'logcat' | 'kernel';
@@ -57,7 +59,7 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
-export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
+export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime }: Props) {
   const [source, setSource] = useState<SearchSource>('logcat');
   const [q, setQ] = useState('');
   // Logcat-only filters
@@ -66,6 +68,9 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
   const [buffer, setBuffer] = useState('');
   // Shared filters
   const [level, setLevel] = useState(initialTag ? 'E' : '');
+  // Time range filters
+  const [startTime, setStartTime] = useState(initialStartTime ?? '');
+  const [endTime, setEndTime] = useState(initialEndTime ?? '');
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(0);
 
@@ -81,6 +86,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
     level?: string;
     pid?: number;
     buffer?: string;
+    startTime?: string;
+    endTime?: string;
     limit: number;
   } | null>(null);
 
@@ -113,6 +120,29 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
         setError(err instanceof Error ? err.message : 'Search failed');
         setLoading(false);
       });
+    } else if (initialStartTime && !initialSearchDone.current) {
+      initialSearchDone.current = true;
+      // Auto-trigger search with time range
+      const params = {
+        source: 'logcat' as SearchSource,
+        startTime: initialStartTime,
+        endTime: initialEndTime,
+        limit,
+      };
+      lastSearchRef.current = params;
+      setLoading(true);
+      searchLogcat(uploadId, {
+        startTime: initialStartTime,
+        endTime: initialEndTime,
+        limit,
+        offset: 0,
+      }).then((res) => {
+        setLogcatResult(res);
+        setLoading(false);
+      }).catch((err) => {
+        setError(err instanceof Error ? err.message : 'Search failed');
+        setLoading(false);
+      });
     } else {
       inputRef.current?.focus();
     }
@@ -135,6 +165,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
     setPid('');
     setBuffer('');
     setLevel('');
+    setStartTime('');
+    setEndTime('');
     setPage(0);
     setLogcatResult(null);
     setKernelResult(null);
@@ -154,6 +186,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
         const res = await searchKernel(uploadId, {
           q: params.q,
           level: params.level,
+          startTime: params.startTime,
+          endTime: params.endTime,
           limit: params.limit,
           offset,
         });
@@ -165,6 +199,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
           level: params.level,
           pid: params.pid,
           buffer: params.buffer,
+          startTime: params.startTime,
+          endTime: params.endTime,
           limit: params.limit,
           offset,
         });
@@ -190,6 +226,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
       level: level || undefined,
       pid: source === 'logcat' && pid ? Number(pid) : undefined,
       buffer: source === 'logcat' && buffer ? buffer : undefined,
+      startTime: startTime.trim() || undefined,
+      endTime: endTime.trim() || undefined,
       limit,
     };
     lastSearchRef.current = params;
@@ -202,6 +240,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
         const res = await searchKernel(uploadId, {
           q: params.q,
           level: params.level,
+          startTime: params.startTime,
+          endTime: params.endTime,
           limit: params.limit,
           offset: 0,
         });
@@ -214,6 +254,8 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
           level: params.level,
           pid: params.pid,
           buffer: params.buffer,
+          startTime: params.startTime,
+          endTime: params.endTime,
           limit: params.limit,
           offset: 0,
         });
@@ -428,6 +470,40 @@ export default function SearchModal({ uploadId, onClose, initialTag }: Props) {
                 <option value={100}>100</option>
               </select>
             </div>
+          </div>
+
+          {/* Time range row */}
+          <div className="flex gap-3 items-center">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500">From</label>
+              <input
+                type="text"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="MM-DD HH:mm:ss"
+                className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-gray-500">To</label>
+              <input
+                type="text"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="MM-DD HH:mm:ss"
+                className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+            {(startTime || endTime) && (
+              <button
+                onClick={() => { setStartTime(''); setEndTime(''); }}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                Clear time
+              </button>
+            )}
           </div>
         </div>
 

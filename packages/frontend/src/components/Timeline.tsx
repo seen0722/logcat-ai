@@ -3,6 +3,7 @@ import { TimelineEvent, Severity } from '../lib/types';
 
 interface Props {
   events: TimelineEvent[];
+  onSearchTime?: (startTime: string, endTime: string) => void;
 }
 
 const SEVERITY_DOT: Record<Severity, string> = {
@@ -36,7 +37,7 @@ const INACTIVE_BTN = 'bg-transparent text-gray-500 border-gray-700';
 const ALL_SEVERITIES: Severity[] = ['critical', 'warning', 'info'];
 const ALL_SOURCES = ['logcat', 'kernel', 'anr', 'tombstone'] as const;
 
-export default function Timeline({ events }: Props) {
+export default function Timeline({ events, onSearchTime }: Props) {
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(new Set(['critical', 'warning']));
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(['logcat', 'anr', 'kernel', 'tombstone']));
 
@@ -152,6 +153,20 @@ export default function Timeline({ events }: Props) {
                     <span className="text-[10px] text-indigo-400/70 font-medium" title="Click to jump to related insight">
                       &#x2197;
                     </span>
+                  )}
+                  {onSearchTime && event.timestamp && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSearchTime(event.timestamp, event.timestamp);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-indigo-400 transition-all p-0.5 rounded hover:bg-indigo-500/10"
+                      title="Search logs around this time"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
                   )}
                 </div>
                 <p className={`transition-colors ${hasLink ? 'text-gray-300 group-hover:text-indigo-300 underline decoration-indigo-500/30 underline-offset-2' : 'text-gray-300 group-hover:text-white'}`}>

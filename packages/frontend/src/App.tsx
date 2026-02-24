@@ -27,6 +27,8 @@ export default function App() {
 
   const [showSearch, setShowSearch] = useState(false);
   const [searchTag, setSearchTag] = useState<string | null>(null);
+  const [searchStartTime, setSearchStartTime] = useState<string | null>(null);
+  const [searchEndTime, setSearchEndTime] = useState<string | null>(null);
 
   // Batch state
   const [showBatchUpload, setShowBatchUpload] = useState(false);
@@ -37,6 +39,52 @@ export default function App() {
     setShowBatchUpload(false);
     setBatchAggregation(aggregation);
     setBatchItems(items);
+  };
+
+  // Compute time range ±deltaSeconds from a timestamp in "MM-DD HH:mm:ss.SSS" format
+  const computeTimeRange = (timestamp: string, deltaSeconds: number): { startTime: string; endTime: string } => {
+    // Parse "MM-DD HH:mm:ss.SSS" or "MM-DD HH:mm:ss"
+    const match = timestamp.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
+    if (!match) {
+      // Fallback: return original timestamp as-is
+      return { startTime: timestamp, endTime: timestamp };
+    }
+    const [, mo, dd, hh, mm, ss, msStr] = match;
+    const ms = msStr ? parseInt(msStr.padEnd(3, '0'), 10) : 0;
+
+    // Convert to total milliseconds for easy arithmetic (using a reference year)
+    const toMs = (month: number, day: number, hour: number, min: number, sec: number, millis: number) => {
+      return ((((month * 31 + day) * 24 + hour) * 60 + min) * 60 + sec) * 1000 + millis;
+    };
+
+    const totalMs = toMs(parseInt(mo, 10), parseInt(dd, 10), parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), ms);
+    const startMs = totalMs - deltaSeconds * 1000;
+    const endMs = totalMs + deltaSeconds * 1000;
+
+    const fromMs = (total: number) => {
+      const millis = ((total % 1000) + 1000) % 1000;
+      let secs = Math.floor(total / 1000);
+      const s = ((secs % 60) + 60) % 60;
+      secs = Math.floor(secs / 60);
+      const m = ((secs % 60) + 60) % 60;
+      secs = Math.floor(secs / 60);
+      const h = ((secs % 24) + 24) % 24;
+      secs = Math.floor(secs / 24);
+      const d = ((secs % 31) + 31) % 31 || 1;
+      secs = Math.floor(secs / 31);
+      const mon = Math.max(1, Math.min(12, secs));
+      return `${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+    };
+
+    return { startTime: fromMs(startMs), endTime: fromMs(endMs) };
+  };
+
+  const handleTimelineSearch = (eventTimestamp: string, _eventTimestampEnd: string) => {
+    const { startTime, endTime } = computeTimeRange(eventTimestamp, 5);
+    setSearchStartTime(startTime);
+    setSearchEndTime(endTime);
+    setSearchTag(null);
+    setShowSearch(true);
   };
 
   const handleBatchViewReport = (id: string) => {
@@ -145,7 +193,7 @@ export default function App() {
           {result.anrAnalyses.length > 0 && (
             <ANRDetail analyses={result.anrAnalyses} />
           )}
-          <Timeline events={result.timeline} />
+          <Timeline events={result.timeline} onSearchTime={handleTimelineSearch} />
           {uploadId && <ChatPanel uploadId={uploadId} />}
         </div>
       )}
@@ -227,7 +275,9 @@ export default function App() {
         <SearchModal
           uploadId={uploadId}
           initialTag={searchTag ?? undefined}
-          onClose={() => { setShowSearch(false); setSearchTag(null); }}
+          initialStartTime={searchStartTime ?? undefined}
+          initialEndTime={searchEndTime ?? undefined}
+          onClose={() => { setShowSearch(false); setSearchTag(null); setSearchStartTime(null); setSearchEndTime(null); }}
         />
       )}
     </div>

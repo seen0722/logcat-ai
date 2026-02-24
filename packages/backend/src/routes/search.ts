@@ -18,6 +18,8 @@ router.get('/:id', (req: Request, res: Response) => {
   const level = req.query.level ? String(req.query.level) : undefined;
   const pid = req.query.pid ? parseInt(String(req.query.pid), 10) : undefined;
   const buffer = req.query.buffer ? String(req.query.buffer) : undefined;
+  const startTime = req.query.startTime ? String(req.query.startTime) : undefined;
+  const endTime = req.query.endTime ? String(req.query.endTime) : undefined;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), 500);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
@@ -27,7 +29,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 
   if (source === 'kernel') {
-    return handleKernelSearch(id, rawData.kernelResult.entries, { q, level, limit, offset }, res);
+    return handleKernelSearch(id, rawData.kernelResult.entries, { q, level, startTime, endTime, limit, offset }, res);
   }
 
   // ── Logcat search (default) ──
@@ -38,7 +40,7 @@ router.get('/:id', (req: Request, res: Response) => {
 
   // Try FTS5 first if only keyword search (no tag/level/pid filters)
   if (q && !tag && !level && !pid) {
-    const ftsResult = searchLogcatFTS(id, q, limit, offset, buffer);
+    const ftsResult = searchLogcatFTS(id, q, limit, offset, buffer, startTime, endTime);
     if (ftsResult) {
       return res.json({
         totalMatches: ftsResult.totalMatches,
@@ -63,6 +65,13 @@ router.get('/:id', (req: Request, res: Response) => {
 
   if (buffer) {
     filtered = filtered.filter(e => e.buffer === buffer);
+  }
+
+  if (startTime) {
+    filtered = filtered.filter(e => e.timestamp >= startTime);
+  }
+  if (endTime) {
+    filtered = filtered.filter(e => e.timestamp <= endTime);
   }
 
   if (tag) {
@@ -114,10 +123,10 @@ router.get('/:id', (req: Request, res: Response) => {
 function handleKernelSearch(
   id: string,
   entries: KernelLogEntry[],
-  params: { q?: string; level?: string; limit: number; offset: number },
+  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number },
   res: Response,
 ) {
-  const { q, level, limit, offset } = params;
+  const { q, level, startTime, endTime, limit, offset } = params;
 
   if (entries.length === 0) {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
@@ -125,7 +134,7 @@ function handleKernelSearch(
 
   // Try FTS5 first if only keyword search (no level filter)
   if (q && !level) {
-    const ftsResult = searchKernelFTS(id, q, limit, offset);
+    const ftsResult = searchKernelFTS(id, q, limit, offset, startTime, endTime);
     if (ftsResult) {
       return res.json({
         totalMatches: ftsResult.totalMatches,
@@ -154,6 +163,13 @@ function handleKernelSearch(
         return idx >= 0 && idx <= maxIdx;
       });
     }
+  }
+
+  if (startTime) {
+    filtered = filtered.filter(e => String(e.timestamp) >= startTime);
+  }
+  if (endTime) {
+    filtered = filtered.filter(e => String(e.timestamp) <= endTime);
   }
 
   if (q) {

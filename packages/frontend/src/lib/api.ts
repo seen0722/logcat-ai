@@ -202,7 +202,7 @@ export interface LogcatSearchResult {
 
 export async function searchLogcat(
   id: string,
-  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; limit?: number; offset?: number },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit?: number; offset?: number },
 ): Promise<LogcatSearchResult> {
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
@@ -210,6 +210,8 @@ export async function searchLogcat(
   if (params.level) qs.set('level', params.level);
   if (params.pid !== undefined) qs.set('pid', String(params.pid));
   if (params.buffer) qs.set('buffer', params.buffer);
+  if (params.startTime) qs.set('startTime', params.startTime);
+  if (params.endTime) qs.set('endTime', params.endTime);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset !== undefined) qs.set('offset', String(params.offset));
 
@@ -238,11 +240,13 @@ export interface KernelSearchResult {
 
 export async function searchKernel(
   id: string,
-  params: { q?: string; level?: string; limit?: number; offset?: number },
+  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit?: number; offset?: number },
 ): Promise<KernelSearchResult> {
   const qs = new URLSearchParams({ source: 'kernel' });
   if (params.q) qs.set('q', params.q);
   if (params.level) qs.set('level', params.level);
+  if (params.startTime) qs.set('startTime', params.startTime);
+  if (params.endTime) qs.set('endTime', params.endTime);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset !== undefined) qs.set('offset', String(params.offset));
 
