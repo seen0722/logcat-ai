@@ -1,0 +1,41 @@
+---
+config:
+  theme: dark
+  themeVariables:
+    primaryColor: '#4f46e5'
+    primaryTextColor: '#e2e8f0'
+    primaryBorderColor: '#6366f1'
+    lineColor: '#94a3b8'
+    textColor: '#e2e8f0'
+    nodeTextColor: '#e2e8f0'
+---
+stateDiagram-v2
+    direction TB
+
+    [*] --> ACTIVE: 螢幕關閉 + 未充電
+
+    ACTIVE --> INACTIVE: inactive_to (1m)
+
+    INACTIVE --> IDLE_PENDING: motion_inactive_to (10m)<br/>等待動態感測器
+
+    IDLE_PENDING --> INACTIVE: 偵測到動作
+
+    IDLE_PENDING --> SENSING: idle_after_inactive_to (1m)<br/>確認靜止
+
+    SENSING --> LOCATING: sensing_to (30s)
+
+    LOCATING --> IDLE: locating_to (15s)
+
+    IDLE --> MAINTENANCE: 進入維護窗口<br/>(≥30s)
+
+    MAINTENANCE --> IDLE: 維護結束, idle 時間指數遞增<br/>15m → 30m → 1h → 2h → 4h → 6h<br/>(×2 倍, 上限 6h)
+
+    IDLE --> ACTIVE: 螢幕開啟 / 動作偵測 / 充電
+    MAINTENANCE --> ACTIVE: 螢幕開啟 / 充電
+
+    state IDLE {
+        [*]: 最嚴格限制<br/>Alarm 延遲<br/>WakeLock 忽略<br/>App 網路受限<br/>Job/Sync 完全暫停
+    }
+    state SENSING {
+        [*]: 感測器偵測<br/>確認裝置靜止
+    }

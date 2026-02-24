@@ -1,0 +1,111 @@
+---
+config:
+  theme: dark
+  themeVariables:
+    primaryColor: '#4f46e5'
+    primaryTextColor: '#e2e8f0'
+    primaryBorderColor: '#6366f1'
+    secondaryColor: '#1e293b'
+    secondaryTextColor: '#e2e8f0'
+    secondaryBorderColor: '#475569'
+    tertiaryColor: '#0f172a'
+    tertiaryTextColor: '#e2e8f0'
+    tertiaryBorderColor: '#334155'
+    lineColor: '#94a3b8'
+    textColor: '#e2e8f0'
+    mainBkg: '#1e293b'
+    nodeBorder: '#6366f1'
+    clusterBkg: '#0f172a'
+    clusterBorder: '#334155'
+    titleColor: '#e2e8f0'
+    edgeLabelBackground: '#1e293b'
+    nodeTextColor: '#e2e8f0'
+---
+graph TB
+    subgraph APP["APPLICATION LAYER"]
+        A1["App Jobs<br/>JobScheduler"]
+        A2["Alarms<br/>AlarmManager"]
+        A3["WakeLocks<br/>PowerManager"]
+        A4["Network<br/>Requests"]
+    end
+
+    subgraph FW["FRAMEWORK LAYER (system_server)"]
+        subgraph DOZE["DeviceIdleController (Doze)"]
+            LD["Light Doze<br/>mLightState"]
+            DD["Deep Doze<br/>mState"]
+        end
+        subgraph PMS["PowerManagerService"]
+            WLM["WakeLock 管理<br/>PARTIAL / SCREEN / FULL"]
+            SB["Suspend Blockers<br/>WakeLocks ref=N<br/>Display ref=N<br/>Broadcasts ref=N"]
+        end
+        subgraph CTRL["Doze 控制目標"]
+            C1["AlarmManager<br/>批次/延遲"]
+            C2["JobScheduler<br/>暫停"]
+            C3["NetworkPolicy<br/>網路受限"]
+            C4["WakeLock<br/>Deep 時忽略"]
+        end
+    end
+
+    subgraph HAL["HAL LAYER"]
+        SS["ISystemSuspend HAL<br/>監聽 wakeup_count<br/>觸發 autosuspend"]
+    end
+
+    subgraph KERNEL["KERNEL LAYER"]
+        PM["PM Suspend Framework<br/>suspend_enter()"]
+        subgraph PHASES["Suspend 四階段"]
+            P1["1. Freeze Tasks"]
+            P2["2. Check Wakeup Sources"]
+            P3["3. Suspend Devices"]
+            P4["4. CPU Enter s2idle"]
+        end
+        subgraph WS["Wakeup Sources"]
+            W1["timerfd"]
+            W2["em7590_wake_ws<br/>LTE Modem"]
+            W3["qrtr_ws<br/>QMI Router"]
+            W4["hal_bluetooth"]
+            W5["NETLINK"]
+            W6["alarmtimer"]
+        end
+        subgraph IRQ["Hardware IRQ"]
+            I1["Modem IRQ<br/>EM7590"]
+            I2["RTC Alarm"]
+            I3["PMIC<br/>Charger"]
+            I4["GPIO<br/>Button"]
+        end
+    end
+
+    A1 --> DOZE
+    A2 --> DOZE
+    A3 --> PMS
+    A4 --> DOZE
+
+    LD --> C1
+    LD --> C2
+    DD --> C1
+    DD --> C2
+    DD --> C3
+    DD --> C4
+
+    WLM --> SB
+    SB -->|"所有 ref=0"| SS
+    SS -->|"寫入 /sys/power/state"| PM
+    PM --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+
+    P2 -.->|"pending"| W1
+    P2 -.->|"pending"| W2
+
+    IRQ -->|"wakeup IRQ"| P4
+
+    style APP fill:#1a1a2e,stroke:#6366f1,stroke-width:2px
+    style FW fill:#0f172a,stroke:#4f46e5,stroke-width:2px
+    style HAL fill:#1e1b4b,stroke:#818cf8,stroke-width:2px
+    style KERNEL fill:#172554,stroke:#3b82f6,stroke-width:2px
+    style DOZE fill:#1e293b,stroke:#8b5cf6,stroke-width:1px
+    style PMS fill:#1e293b,stroke:#8b5cf6,stroke-width:1px
+    style PHASES fill:#1e293b,stroke:#3b82f6,stroke-width:1px
+    style WS fill:#1e293b,stroke:#f59e0b,stroke-width:1px
+    style IRQ fill:#1e293b,stroke:#ef4444,stroke-width:1px
+    style CTRL fill:#1e293b,stroke:#8b5cf6,stroke-width:1px

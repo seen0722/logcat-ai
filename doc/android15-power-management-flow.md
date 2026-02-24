@@ -7,6 +7,11 @@
 
 ## 1. 全局架構總覽
 
+![全局架構總覽](diagrams/01-architecture-overview.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     APPLICATION LAYER                               │
@@ -120,11 +125,18 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 2. DeviceIdleController (Doze) 狀態機
 
 ### 2.1 Light Doze 狀態機
+
+![Light Doze 狀態機](diagrams/02-light-doze-state.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
 
 ```
                     螢幕關閉 + 未充電
@@ -155,7 +167,14 @@
               └──→ 回到 ACTIVE
 ```
 
+</details>
+
 ### 2.2 Deep Doze 狀態機
+
+![Deep Doze 狀態機](diagrams/03-deep-doze-state.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
 
 ```
                     螢幕關閉 + 未充電
@@ -202,6 +221,8 @@
               └──→ 回到 ACTIVE ◄───────────────────────┘
 ```
 
+</details>
+
 ### 2.3 Doze 對各子系統的控制
 
 ```
@@ -242,6 +263,11 @@
 ## 3. System Suspend 完整流程
 
 ### 3.1 從 Framework 到 Kernel 的 Suspend 路徑
+
+![System Suspend 流程](diagrams/04-suspend-flow.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
 
 ```
 PowerManagerService
@@ -351,6 +377,8 @@ ISystemSuspend HAL (system/hardware/interfaces/suspend/)
 └──────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ### 3.2 Wakeup Source 生命週期
 
 ```
@@ -404,6 +432,11 @@ ISystemSuspend HAL (system/hardware/interfaces/suspend/)
 
 ## 4. Doze + Suspend 的交互關係
 
+![Doze vs Suspend](diagrams/06-doze-vs-suspend.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                                                                │
@@ -452,9 +485,16 @@ Suspend:│ S R S R S──R S──────R S─R S──────R S�
   空白 = CPU awake
 ```
 
+</details>
+
 ---
 
 ## 5. 喚醒路徑（Hardware → Framework）
+
+![喚醒路徑](diagrams/05-wakeup-path.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
 
 ```
                         ┌──────────────────┐
@@ -534,9 +574,16 @@ Suspend:│ S R S R S──R S──────R S─R S──────R S�
 └──────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 ---
 
 ## 6. 本裝置 (T70) 的問題定位
+
+![T70 問題定位](diagrams/07-t70-problem.png)
+
+<details>
+<summary>ASCII 版本（點擊展開）</summary>
 
 ```
 正常裝置的 suspend 循環：
@@ -569,6 +616,8 @@ Suspend:│ S R S R S──R S──────R S─R S──────R S�
   功耗: 50.5 mAh/h（應為 <20 mAh/h）
 ```
 
+</details>
+
 ---
 
 ## 7. 關鍵 sysfs 與 debugfs 節點
@@ -596,4 +645,3 @@ adb shell cat /sys/power/pm_wakeup_irq
 # 禁用特定裝置的 wakeup 能力（謹慎使用）
 adb shell "echo disabled > /sys/devices/.../power/wakeup"
 ```
-![](![](![](![]())))

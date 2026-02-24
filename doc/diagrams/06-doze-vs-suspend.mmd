@@ -1,0 +1,41 @@
+---
+config:
+  theme: dark
+  themeVariables:
+    primaryColor: '#4f46e5'
+    primaryTextColor: '#e2e8f0'
+    primaryBorderColor: '#6366f1'
+    lineColor: '#94a3b8'
+    textColor: '#e2e8f0'
+    nodeTextColor: '#e2e8f0'
+---
+flowchart TB
+    subgraph DOZE_LAYER["DOZE (Framework 層)"]
+        direction LR
+        D1["DeviceIdleController"]
+        D2["控制 App 行為<br/>Alarm / Job / Network / WakeLock"]
+        D1 --> D2
+    end
+
+    subgraph SUSPEND_LAYER["SUSPEND (Kernel 層)"]
+        direction LR
+        S1["PM Suspend Framework"]
+        S2["控制 CPU 狀態<br/>s2idle / C-states / 硬體省電"]
+        S1 --> S2
+    end
+
+    DOZE_LAYER ~~~ SUSPEND_LAYER
+
+    subgraph COMBO["四種組合情境"]
+        C1["✅ Doze ON + Suspend ON<br/><br/>正常省電模式<br/>App 受限 + CPU 休眠<br/>功耗: ~10-20 mAh/h"]
+        C2["⚠️ Doze ON + Suspend 失敗<br/><br/>本裝置 T70 的狀況<br/>App 受限，但 CPU 因<br/>timerfd/modem 無法休眠<br/>功耗: 50.5 mAh/h"]
+        C3["⚠️ Doze OFF + Suspend ON<br/><br/>關閉 Doze 後<br/>App 不受限，CPU 閒時仍休眠<br/>但更頻繁被喚醒<br/>功耗: ~200-500 mAh/h"]
+        C4["❌ Doze OFF + Suspend OFF<br/><br/>完全不省電<br/>App 隨意 + CPU 永遠醒著<br/>功耗: ~1000+ mAh/h"]
+    end
+
+    style DOZE_LAYER fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px
+    style SUSPEND_LAYER fill:#172554,stroke:#3b82f6,stroke-width:2px
+    style C1 fill:#065f46,stroke:#10b981,stroke-width:2px,color:#e2e8f0
+    style C2 fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#e2e8f0
+    style C3 fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#e2e8f0
+    style C4 fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#e2e8f0

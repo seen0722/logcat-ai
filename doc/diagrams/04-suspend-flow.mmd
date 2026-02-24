@@ -1,0 +1,70 @@
+---
+config:
+  theme: dark
+  themeVariables:
+    primaryColor: '#4f46e5'
+    primaryTextColor: '#e2e8f0'
+    primaryBorderColor: '#6366f1'
+    lineColor: '#94a3b8'
+    textColor: '#e2e8f0'
+    nodeTextColor: '#e2e8f0'
+---
+flowchart TB
+    START["PowerManagerService<br/>所有 Suspend Blocker ref=0"]
+    HAL["ISystemSuspend HAL<br/>enableAutosuspend()"]
+    READ["讀取 /sys/power/wakeup_count<br/>取得計數值 N"]
+    WRITE["寫入 /sys/power/wakeup_count ← N"]
+    RACE{"寫入時<br/>wakeup_count<br/>已改變？"}
+    STATE["寫入 /sys/power/state ← mem"]
+
+    subgraph KERNEL["Kernel suspend_enter()"]
+        FREEZE["Phase 1: Freeze Tasks<br/>try_to_freeze_tasks()"]
+        FREEZE_OK{"凍結<br/>成功？"}
+        FREEZE_FAIL["❌ Freezing of tasks aborted<br/>(本裝置: 326 次)"]
+
+        CHECK["Phase 2: Check Wakeup Sources<br/>pm_wakeup_pending()"]
+        CHECK_OK{"有 pending<br/>wakeup source？"}
+        CHECK_FAIL["❌ Pending Wakeup Sources: timerfd<br/>(本裝置: 2,066 次)"]
+
+        SUSPEND["Phase 3: Suspend Devices<br/>dpm_suspend() 呼叫 driver callbacks"]
+        SUSPEND_OK{"所有 driver<br/>成功？"}
+        SUSPEND_FAIL["❌ alarmtimer.0.auto failed<br/>error -16 EBUSY<br/>(本裝置: 62 次)"]
+
+        S2IDLE["Phase 4: CPU Enter s2idle<br/>CPU 進入最深 C-state<br/>══ SUSPENDED ══"]
+
+        WAKEUP["⚡ Hardware IRQ 觸發喚醒"]
+
+        RESUME["Phase 5: Resume<br/>1. CPU 退出 C-state<br/>2. dpm_resume() driver resume<br/>3. thaw_processes() 解凍<br/>4. 記錄 last active wakeup source"]
+    end
+
+    START --> HAL
+    HAL --> READ
+    READ --> WRITE
+    WRITE --> RACE
+    RACE -->|"是 (EINVAL)"| READ
+    RACE -->|"否"| STATE
+    STATE --> FREEZE
+    FREEZE --> FREEZE_OK
+    FREEZE_OK -->|"否"| FREEZE_FAIL
+    FREEZE_FAIL --> READ
+    FREEZE_OK -->|"是"| CHECK
+    CHECK --> CHECK_OK
+    CHECK_OK -->|"是"| CHECK_FAIL
+    CHECK_FAIL --> READ
+    CHECK_OK -->|"否"| SUSPEND
+    SUSPEND --> SUSPEND_OK
+    SUSPEND_OK -->|"否"| SUSPEND_FAIL
+    SUSPEND_FAIL --> READ
+    SUSPEND_OK -->|"是"| S2IDLE
+    S2IDLE -.-> WAKEUP
+    WAKEUP --> RESUME
+    RESUME --> READ
+
+    style START fill:#4f46e5,stroke:#6366f1,stroke-width:2px,color:#e2e8f0
+    style HAL fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#e2e8f0
+    style S2IDLE fill:#065f46,stroke:#10b981,stroke-width:3px,color:#e2e8f0
+    style WAKEUP fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#e2e8f0
+    style FREEZE_FAIL fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fca5a5
+    style CHECK_FAIL fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fca5a5
+    style SUSPEND_FAIL fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fca5a5
+    style KERNEL fill:#0f172a,stroke:#3b82f6,stroke-width:2px
