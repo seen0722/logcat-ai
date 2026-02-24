@@ -373,11 +373,12 @@ export function parseAlarmStats(content: string): AlarmWakeupStat[] {
   if (statsIdx === -1) return results;
   const statsBlock = content.slice(statsIdx);
 
-  // Match per-uid blocks:
-  //   u0a123:com.example.app +1h2m3s456ms running, 789 wakeups:
+  // Match per-uid blocks (two UID formats):
+  //   u0a123:com.example.app +1h2m3s456ms running, 789 wakeups:   (app UID)
+  //   1000:android +1m1s75ms running, 523 wakeups:                 (system UID)
   //     +30s456ms 0 wakes 123 alarms, last -1h2m3s4ms:
   //       *walarm*:com.example.ALARM_ACTION
-  const uidRegex = /^\s+u(\w+):(\S+)\s+\+?([^\n]*?)running,\s*(\d+)\s*wakeups?:/gm;
+  const uidRegex = /^\s+(\d+|u\w+):(\S+)\s+\+?([^\n]*?)running,\s*(\d+)\s*wakeups?:/gm;
   let uidMatch: RegExpExecArray | null;
 
   while ((uidMatch = uidRegex.exec(statsBlock)) !== null) {
