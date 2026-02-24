@@ -38,6 +38,7 @@ function makeResult(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
       androidVersion: '13',
       sdkLevel: 33,
       buildFingerprint: 'test/build',
+      buildType: 'userdebug',
       deviceModel: 'TestDevice',
       manufacturer: 'TestMfg',
       buildDate: '2024-01-01',

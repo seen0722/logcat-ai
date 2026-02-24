@@ -12,6 +12,7 @@ const DEVICE_MODEL_RE = /\[ro\.product\.model\]:\s*\[(.+?)\]/;
 const MANUFACTURER_RE = /\[ro\.product\.manufacturer\]:\s*\[(.+?)\]/;
 const BUILD_DATE_RE = /\[ro\.build\.date\]:\s*\[(.+?)\]/;
 const KERNEL_VERSION_RE = /Linux version\s+(\S+)/;
+const BUILD_TYPE_RE = /\[ro\.build\.type\]:\s*\[(.+?)\]/;
 
 /**
  * Unpack a bugreport.zip and parse its contents into structured data.
@@ -198,6 +199,7 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
   const androidVersion = matchFirst(propsContent, ANDROID_VERSION_RE) ?? 'unknown';
   const sdkLevel = parseInt(matchFirst(propsContent, SDK_LEVEL_RE) ?? '0', 10);
   const buildFingerprint = matchFirst(propsContent, BUILD_FINGERPRINT_RE) ?? 'unknown';
+  const buildType = matchFirst(propsContent, BUILD_TYPE_RE) ?? 'unknown';
   const deviceModel = matchFirst(propsContent, DEVICE_MODEL_RE) ?? 'unknown';
   const manufacturer = matchFirst(propsContent, MANUFACTURER_RE) ?? 'unknown';
   const buildDate = matchFirst(propsContent, BUILD_DATE_RE) ?? 'unknown';
@@ -218,6 +220,7 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
     androidVersion,
     sdkLevel,
     buildFingerprint,
+    buildType,
     deviceModel,
     manufacturer,
     buildDate,

@@ -14,11 +14,81 @@ import {
 // [ timestamp] message
 const DMESG_LINE_RE = /^(?:<(\d+)>)?\s*\[\s*(\d+\.\d+)\](?:\[[\s\w]+\])?\s+(.*)/;
 
+// logcat -b kernel -v threadtime format:
+// MM-DD HH:mm:ss.SSS  uid  pid  tid  level  tag  : message
+const LOGCAT_KERNEL_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+\S+\s+\d+\s+\d+\s+([VDIWEF])\s+(.*)/;
+
+// Logcat level → kernel level mapping
+const LOGCAT_LEVEL_TO_KERNEL: Record<string, string> = {
+  F: '<0>',
+  E: '<3>',
+  W: '<4>',
+  I: '<6>',
+  D: '<7>',
+  V: '<7>',
+};
+
 /**
- * Parse kernel log (dmesg) into structured entries and detect events.
+ * Detect whether the content is dmesg or logcat -b kernel format.
+ * Checks first 10 non-empty lines and compares match counts.
+ */
+function detectFormat(lines: string[]): 'dmesg' | 'logcat' {
+  let dmesgCount = 0;
+  let logcatCount = 0;
+  let checked = 0;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    if (line.startsWith('--------- beginning of')) continue;
+    if (DMESG_LINE_RE.test(line)) dmesgCount++;
+    if (LOGCAT_KERNEL_RE.test(line)) logcatCount++;
+    checked++;
+    if (checked >= 10) break;
+  }
+
+  return logcatCount > dmesgCount ? 'logcat' : 'dmesg';
+}
+
+/**
+ * Parse MM-DD HH:mm:ss.SSS timestamp to milliseconds since year start.
+ */
+function parseLogcatTimestampMs(ts: string): number {
+  const parts = ts.match(/(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
+  if (!parts) return 0;
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const hour = parseInt(parts[3], 10);
+  const min = parseInt(parts[4], 10);
+  const sec = parseInt(parts[5], 10);
+  const ms = parseInt(parts[6], 10);
+  // Use a fixed year (2026) to get consistent day-of-year calculation
+  const d = new Date(2026, month, day, hour, min, sec, ms);
+  return d.getTime();
+}
+
+/**
+ * Parse kernel log (dmesg or logcat -b kernel) into structured entries and detect events.
  */
 export function parseKernelLog(content: string): KernelParseResult {
   const lines = content.split('\n');
+  const format = detectFormat(lines);
+
+  const entries: KernelLogEntry[] =
+    format === 'logcat' ? parseLogcatKernel(lines) : parseDmesgKernel(lines);
+
+  const events = detectKernelEvents(entries);
+
+  return {
+    entries,
+    events,
+    totalLines: lines.length,
+  };
+}
+
+/**
+ * Parse standard dmesg format lines.
+ */
+function parseDmesgKernel(lines: string[]): KernelLogEntry[] {
   const entries: KernelLogEntry[] = [];
 
   for (const line of lines) {
@@ -40,13 +110,46 @@ export function parseKernelLog(content: string): KernelParseResult {
     }
   }
 
-  const events = detectKernelEvents(entries);
+  return entries;
+}
 
-  return {
-    entries,
-    events,
-    totalLines: lines.length,
-  };
+/**
+ * Parse logcat -b kernel -v threadtime format lines.
+ * Timestamps are converted to seconds-since-first-entry to match dmesg convention.
+ */
+function parseLogcatKernel(lines: string[]): KernelLogEntry[] {
+  const entries: KernelLogEntry[] = [];
+  let baseMs = -1;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    // Skip logcat buffer separator lines
+    if (line.startsWith('--------- beginning of')) continue;
+
+    const match = line.match(LOGCAT_KERNEL_RE);
+    if (match) {
+      const tsStr = match[1];
+      const logcatLevel = match[2];
+      const rest = match[3]; // "tag  : message" or just message
+
+      // Combine tag + message: "SELinux : avc: denied..." → "SELinux : avc: denied..."
+      const message = rest;
+
+      const ms = parseLogcatTimestampMs(tsStr);
+      if (baseMs < 0) baseMs = ms;
+      const timestamp = (ms - baseMs) / 1000;
+
+      entries.push({
+        timestamp,
+        level: LOGCAT_LEVEL_TO_KERNEL[logcatLevel] ?? '',
+        facility: '',
+        message,
+        raw: line,
+      });
+    }
+  }
+
+  return entries;
 }
 
 // ============================================================

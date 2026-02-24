@@ -8,6 +8,7 @@ function makeResult(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
       androidVersion: '13',
       sdkLevel: 33,
       buildFingerprint: 'google/test/device:13/TP1A.220624.014',
+      buildType: 'userdebug',
       deviceModel: 'Pixel 7',
       manufacturer: 'Google',
       buildDate: '2024-01-01',

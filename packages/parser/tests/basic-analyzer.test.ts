@@ -7,6 +7,7 @@ function makeMetadata(overrides?: Partial<BugreportMetadata>): BugreportMetadata
     androidVersion: '14',
     sdkLevel: 34,
     buildFingerprint: 'google/raven/raven:14/UP1A.231005.007/10754064:userdebug/dev-keys',
+    buildType: 'userdebug',
     deviceModel: 'Pixel 6 Pro',
     manufacturer: 'Google',
     buildDate: '2024-01-01',

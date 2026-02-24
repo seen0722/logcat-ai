@@ -397,6 +397,7 @@ const EMPTY_METADATA = {
   androidVersion: '',
   sdkLevel: 0,
   buildFingerprint: '',
+  buildType: 'unknown',
   deviceModel: '',
   manufacturer: '',
   buildDate: '',

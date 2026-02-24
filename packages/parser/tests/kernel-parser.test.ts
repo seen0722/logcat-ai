@@ -225,6 +225,61 @@ describe('parseKernelLog', () => {
     expect(result.events[0].details.permission).toBe('read write');
   });
 
+  // ---- logcat -b kernel format ----
+
+  it('should parse logcat -b kernel format entries', () => {
+    const content = [
+      '--------- beginning of kernel',
+      '02-08 14:01:56.821  root     0     0 I         : Booting Linux on physical CPU 0x0',
+      '02-08 14:01:56.921  root     0     0 I         : Machine model: Qualcomm Technologies, Inc.',
+      '02-08 14:02:15.871  1000   607   607 E SELinux : avc:  denied  { find } for pid=123',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.entries).toHaveLength(3);
+    expect(result.entries[0].timestamp).toBeCloseTo(0.0);
+    expect(result.entries[0].level).toBe('<6>');
+    expect(result.entries[0].message).toContain('Booting Linux');
+    expect(result.entries[1].timestamp).toBeCloseTo(0.1, 1);
+    expect(result.entries[2].timestamp).toBeCloseTo(19.05, 1);
+    expect(result.entries[2].level).toBe('<3>');
+  });
+
+  it('should detect selinux_denial in logcat kernel format', () => {
+    const content = [
+      '02-08 14:01:56.821  root     0     0 I         : Booting Linux on physical CPU 0x0',
+      '02-08 14:02:15.871  1000   607   607 E SELinux : avc:  denied  { find } for pid=123 scontext=u:r:hal_audio:s0 tcontext=u:object_r:proc:s0 tclass=file',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('selinux_denial');
+    expect(result.events[0].details.scontext).toBe('u:r:hal_audio:s0');
+  });
+
+  it('should skip logcat buffer separator lines', () => {
+    const content = [
+      '--------- beginning of kernel',
+      '02-08 14:01:56.821  root     0     0 I         : test message',
+      '--------- beginning of kernel',
+      '02-08 14:01:57.821  root     0     0 I         : test message 2',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.entries).toHaveLength(2);
+  });
+
+  it('should detect kernel events in logcat format (driver_error)', () => {
+    const content = [
+      '02-08 14:01:56.821  root     0     0 I         : Booting Linux',
+      '02-08 14:02:00.000  root     0     0 E         : msm_sensor: error initializing driver for camera module',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('driver_error');
+  });
+
   // No events
   it('should return empty events for clean log', () => {
     const content = [

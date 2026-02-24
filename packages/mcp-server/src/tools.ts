@@ -230,6 +230,7 @@ async function analyzeTextFile(filePath: string): Promise<AnalysisResult> {
     androidVersion: '',
     sdkLevel: 0,
     buildFingerprint: '',
+    buildType: 'unknown',
     deviceModel: '',
     manufacturer: '',
     buildDate: '',

@@ -54,6 +54,7 @@ export interface BugreportMetadata {
   androidVersion: string;
   sdkLevel: number;
   buildFingerprint: string;
+  buildType: string;           // "user" | "userdebug" | "eng" | "unknown"
   deviceModel: string;
   manufacturer: string;
   buildDate: string;

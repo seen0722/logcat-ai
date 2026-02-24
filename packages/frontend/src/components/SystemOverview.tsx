@@ -81,6 +81,17 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             {metadata.buildFingerprint.split('/').slice(-2).join('/')}
           </p>
         </div>
+        {metadata.buildType && metadata.buildType !== 'unknown' && (
+          <div>
+            <span className="text-gray-500">Build Type</span>
+            <p className={`font-medium ${metadata.buildType !== 'user' ? 'text-amber-400' : ''}`}>
+              {metadata.buildType}
+              {metadata.buildType !== 'user' && (
+                <span className="text-xs text-amber-500 ml-1">(non-production)</span>
+              )}
+            </p>
+          </div>
+        )}
         {bootStatus && (
           <>
             <div>
