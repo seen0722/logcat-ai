@@ -338,7 +338,7 @@ export function parseKernelWakeLocks(content: string): KernelWakeLockStat[] {
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
-    const name = match[1];
+    const name = match[1].replace(/^"|"$/g, ''); // strip surrounding quotes from CHECKIN format
     const totalTimeMs = parseInt(match[2], 10);
     const count = parseInt(match[3], 10);
 

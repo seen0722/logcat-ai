@@ -290,48 +290,49 @@ export default function PowerOverview({ powerStatus }: Props) {
             </>
           )}
 
-          {/* Top Kernel Wakelocks */}
-          {kernelWakeLocks.length > 0 && (
-            <div className="space-y-2 pt-1">
-              <div className="text-xs text-gray-500">Top Kernel Wakelocks</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-gray-500 border-b border-gray-700">
-                      <th className="text-left py-1 pr-2">Wake Lock</th>
-                      <th className="text-right py-1 px-2">Total Time</th>
-                      <th className="text-right py-1 px-2">Count</th>
-                      <th className="text-right py-1 pl-2">Avg Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {kernelWakeLocks.slice(0, 10).map((wl, i) => (
-                      <tr key={i} className="border-b border-gray-800">
-                        <td className="py-1 pr-2 text-gray-300 truncate max-w-[200px]" title={wl.name}>
-                          {wl.name}
-                        </td>
-                        <td className={`py-1 px-2 text-right whitespace-nowrap ${
-                          wl.totalTimeMs > 7_200_000 ? 'text-red-400' :
-                          wl.totalTimeMs > 1_800_000 ? 'text-amber-400' :
-                          'text-gray-400'
-                        }`}>
-                          {formatMs(wl.totalTimeMs)}
-                        </td>
-                        <td className="py-1 px-2 text-right text-gray-400">
-                          {wl.count.toLocaleString()}
-                        </td>
-                        <td className="py-1 pl-2 text-right text-gray-400 whitespace-nowrap">
-                          {formatMs(wl.avgTimeMs)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Top Kernel Wakelocks — full width below the 3-column grid */}
+      {kernelWakeLocks.length > 0 && (
+        <div className="bg-surface rounded-lg p-3 space-y-2">
+          <h3 className="text-sm font-semibold text-gray-400">Top Kernel Wakelocks</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-700">
+                  <th className="text-left py-1 pr-2">Wake Lock</th>
+                  <th className="text-right py-1 px-2">Total Time</th>
+                  <th className="text-right py-1 px-2">Count</th>
+                  <th className="text-right py-1 pl-2">Avg Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kernelWakeLocks.slice(0, 10).map((wl, i) => (
+                  <tr key={i} className="border-b border-gray-800">
+                    <td className="py-1 pr-2 text-gray-300" title={wl.name}>
+                      {wl.name}
+                    </td>
+                    <td className={`py-1 px-2 text-right whitespace-nowrap ${
+                      wl.totalTimeMs > 7_200_000 ? 'text-red-400' :
+                      wl.totalTimeMs > 1_800_000 ? 'text-amber-400' :
+                      'text-gray-400'
+                    }`}>
+                      {formatMs(wl.totalTimeMs)}
+                    </td>
+                    <td className="py-1 px-2 text-right text-gray-400">
+                      {wl.count.toLocaleString()}
+                    </td>
+                    <td className="py-1 pl-2 text-right text-gray-400 whitespace-nowrap">
+                      {formatMs(wl.avgTimeMs)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Alarm Wakeups (Phase 3) */}
       {alarmWakeups && alarmWakeups.length > 0 && (
