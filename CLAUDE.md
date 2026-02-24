@@ -84,7 +84,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering, `export=true` raises limit cap from 500 to 100K for full-result export)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
@@ -110,7 +110,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
-- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, buffer, level, pid filters; kernel: keyword, severity level filter), From/To time range fields (`MM-DD HH:mm:ss`), column headers, empty search to browse all entries, CSV/Text export. Accepts `initialStartTime`/`initialEndTime` props to pre-fill time range and auto-trigger search
+- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, buffer, level, pid filters; kernel: keyword, severity level filter), From/To time range fields (`MM-DD HH:mm:ss`), column headers, empty search to browse all entries, CSV/Text export of all matched results (fetches full dataset via `export=true` API param, not just current page). Accepts `initialStartTime`/`initialEndTime` props to pre-fill time range and auto-trigger search, `initialFocusTime` to scroll-to and highlight the target event row
 - `components/Timeline.tsx` — Timeline event list with severity/source filters; hover reveals search icon (magnifying glass) that opens SearchModal with ±5s time window around the event timestamp (via `onSearchTime` prop). Original insightId click-to-scroll behavior preserved with `e.stopPropagation()`
 
 ### MCP Server (`@logcat-ai/mcp-server`)
@@ -204,7 +204,7 @@ HAL 按照介面家族分組（同一介面不同版本歸同一家族），只�
 
 KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timestamp] message`）或 `logcat -b kernel -v threadtime`（logcat 格式，常見於 `userdebug` build）。`kernel-parser.ts` 透過掃描前 10 行自動偵測格式：
 
-- **dmesg 格式**：`<6>[ 3772.736783] message` — timestamp 為 boot 後秒數，直接使用
+- **dmesg 格式**：`<6>[ 3772.736783] message` — timestamp 為 boot 後秒數，直接使用；`<N>` 為 syslog priority（facility*8 + severity），解析時用 `priority & 7` 取低 3 位元得到真正的 kernel severity（0-7），例如 `<14>` → severity 6 (INFO)、`<11>` → severity 3 (ERR)
 - **logcat 格式**：`02-08 14:01:56.821  root  0  0 I  tag : message` — timestamp 為 `MM-DD HH:mm:ss.SSS`，轉為相對第一筆 entry 的秒數差；logcat level 映射為 kernel level（`F→<0>`, `E→<3>`, `W→<4>`, `I→<6>`, `D/V→<7>`）
 
 兩種格式最終產出相同的 `KernelLogEntry[]`，下游 `detectKernelEvents()` 不需區分。當 KERNEL LOG 為 logcat 格式且無 dmesg timestamp 時，`uptimeSeconds` 改由 `UPTIME (uptime)` 段落解析（支援 `up N days, HH:MM` / `up HH:MM` / `up N min` 三種格式）。
