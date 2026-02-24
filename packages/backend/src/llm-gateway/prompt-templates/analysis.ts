@@ -23,10 +23,19 @@ Rules:
 - When Error Distribution by Layer data is provided, use it to assess overall system health by layer.
 - Output in the structured JSON format as specified.`;
 
-  // All insights (not capped at 20)
-  const insights = result.insights
+  // List critical + warning insights (capped at 40), then summary counts for the rest
+  const criticalAndWarning = result.insights.filter((i) => i.severity === 'critical' || i.severity === 'warning');
+  const infoInsights = result.insights.filter((i) => i.severity !== 'critical' && i.severity !== 'warning');
+  const listedInsights = criticalAndWarning.slice(0, 40);
+  let insights = listedInsights
     .map((i) => `- [${i.severity.toUpperCase()}] [${i.source}] ${i.id}: ${i.title}`)
     .join('\n');
+  if (criticalAndWarning.length > 40) {
+    insights += `\n... and ${criticalAndWarning.length - 40} more warning/critical insights`;
+  }
+  if (infoInsights.length > 0) {
+    insights += `\n(${infoInsights.length} info-level insights omitted)`;
+  }
 
   // Timeline (up to 50)
   const timeline = result.timeline

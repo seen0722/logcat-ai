@@ -18,9 +18,10 @@ export interface InsightContext {
   temporalContext: string[];
 }
 
-const MAX_TOTAL_TOKENS = 60_000;
+const MAX_TOTAL_TOKENS = 20_000;
 const CHARS_PER_TOKEN = 3.5;
 const MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN;
+const MAX_CONTEXT_INSIGHTS = 20;
 
 /**
  * Build targeted context for each critical/warning insight.
@@ -28,9 +29,13 @@ const MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN;
  * and temporal context within a token budget.
  */
 export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
-  const targetInsights = result.insights.filter(
-    (i) => i.severity === 'critical' || i.severity === 'warning'
-  );
+  const criticalInsights = result.insights.filter((i) => i.severity === 'critical');
+  const warningInsights = result.insights.filter((i) => i.severity === 'warning');
+  // Prioritize critical insights, then fill with warnings up to MAX_CONTEXT_INSIGHTS
+  const targetInsights = [
+    ...criticalInsights,
+    ...warningInsights,
+  ].slice(0, MAX_CONTEXT_INSIGHTS);
 
   const contexts: InsightContext[] = targetInsights.map((insight) => {
     const ctx: InsightContext = {
