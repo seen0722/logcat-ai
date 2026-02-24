@@ -186,10 +186,26 @@ export interface KernelFTSPaginatedResult {
 }
 
 /**
+ * Format epoch milliseconds to MM-DD HH:mm:ss.SSS display string.
+ */
+function formatEpochToDisplay(epochMs: number): string {
+  const d = new Date(epochMs);
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${MM}-${DD} ${hh}:${mm}:${ss}.${ms}`;
+}
+
+/**
  * Index kernel log entries into FTS5 for a given analysis.
  * Replaces any existing index for the same analysis ID.
+ * When bootEpochMs is provided, timestamps are stored as wall-clock MM-DD HH:mm:ss.SSS
+ * for consistent lexicographic comparison with search time ranges.
  */
-export function indexKernelEntries(analysisId: string, entries: KernelLogEntry[]): void {
+export function indexKernelEntries(analysisId: string, entries: KernelLogEntry[], bootEpochMs?: number): void {
   if (entries.length === 0) return;
 
   const db = getDatabase();
@@ -203,10 +219,13 @@ export function indexKernelEntries(analysisId: string, entries: KernelLogEntry[]
   const batchInsert = db.transaction((entries: KernelLogEntry[]) => {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
+      const ts = bootEpochMs != null
+        ? formatEpochToDisplay(bootEpochMs + entry.timestamp * 1000)
+        : String(entry.timestamp);
       insert.run(
         analysisId,
         i,
-        String(entry.timestamp),
+        ts,
         entry.level,
         entry.facility,
         entry.message,

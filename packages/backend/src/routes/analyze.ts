@@ -231,15 +231,6 @@ router.get('/:id', async (req: Request, res: Response) => {
         console.error('[FTS5] Logcat indexing failed:', err instanceof Error ? err.message : err);
       }
 
-      // Index kernel entries in FTS5 for full-text search
-      try {
-        indexKernelEntries(id, kernelResult.entries);
-      } catch (err) {
-        console.error('[FTS5] Kernel indexing failed:', err instanceof Error ? err.message : err);
-      }
-      const t4 = Date.now();
-      console.log(`[perf] FTS5 indexing: ${((t4 - t3) / 1000).toFixed(1)}s`);
-
       // Stage 3: Basic Analysis
       sendSSE(res, { stage: 'analyzing', progress: 70, message: 'Running rule-based analysis...' });
 
@@ -255,8 +246,26 @@ router.get('/:id', async (req: Request, res: Response) => {
         systemProperties,
         uptimeContent,
       });
+
+      // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
+      const bootEpochMs = analysisResult.bootStatus?.uptimeSeconds != null
+        ? unpackResult.metadata.bugreportTimestamp.getTime() - analysisResult.bootStatus.uptimeSeconds * 1000
+        : undefined;
+      // Update rawDataStore with bootEpochMs for in-memory kernel search timestamp conversion
+      const rawData = rawDataStore.get(id);
+      if (rawData && bootEpochMs != null) {
+        rawData.bootEpochMs = bootEpochMs;
+      }
+      try {
+        indexKernelEntries(id, kernelResult.entries, bootEpochMs);
+      } catch (err) {
+        console.error('[FTS5] Kernel indexing failed:', err instanceof Error ? err.message : err);
+      }
+      const t4 = Date.now();
+      console.log(`[perf] FTS5 indexing: ${((t4 - t3) / 1000).toFixed(1)}s`);
+
       const t5 = Date.now();
-      console.log(`[perf] Basic analysis: ${((t5 - t4) / 1000).toFixed(1)}s`);
+      console.log(`[perf] Basic analysis + kernel FTS: ${((t5 - t3) / 1000).toFixed(1)}s`);
       console.log(`[perf] TOTAL: ${((t5 - t0) / 1000).toFixed(1)}s`);
     }
 

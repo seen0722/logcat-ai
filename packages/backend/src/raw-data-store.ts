@@ -15,6 +15,7 @@ export interface RawData {
   kernelResult: KernelParseResult;
   anrAnalyses: ANRTraceAnalysis[];
   sections: BugreportSection[];
+  bootEpochMs?: number;
 }
 
 /**

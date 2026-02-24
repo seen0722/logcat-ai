@@ -29,7 +29,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 
   if (source === 'kernel') {
-    return handleKernelSearch(id, rawData.kernelResult.entries, { q, level, startTime, endTime, limit, offset }, res);
+    return handleKernelSearch(id, rawData.kernelResult.entries, rawData.bootEpochMs, { q, level, startTime, endTime, limit, offset }, res);
   }
 
   // ── Logcat search (default) ──
@@ -120,9 +120,24 @@ router.get('/:id', (req: Request, res: Response) => {
 // Kernel Search
 // ============================================================
 
+/**
+ * Format epoch milliseconds to MM-DD HH:mm:ss.SSS display string.
+ */
+function formatEpochToDisplay(epochMs: number): string {
+  const d = new Date(epochMs);
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${MM}-${DD} ${hh}:${mm}:${ss}.${ms}`;
+}
+
 function handleKernelSearch(
   id: string,
   entries: KernelLogEntry[],
+  bootEpochMs: number | undefined,
   params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number },
   res: Response,
 ) {
@@ -151,8 +166,14 @@ function handleKernelSearch(
     }
   }
 
+  // Convert kernel entry timestamp to display string for filtering and response
+  const toDisplayTs = (secsSinceBoot: number): string =>
+    bootEpochMs != null
+      ? formatEpochToDisplay(bootEpochMs + secsSinceBoot * 1000)
+      : String(secsSinceBoot);
+
   // Fallback: in-memory filtering
-  let filtered = entries.map((e, i) => ({ ...e, entryIndex: i }));
+  let filtered = entries.map((e, i) => ({ ...e, entryIndex: i, displayTs: toDisplayTs(e.timestamp) }));
 
   if (level) {
     // level is e.g. "<4>" — show entries with severity <= this number (lower = more severe)
@@ -166,10 +187,10 @@ function handleKernelSearch(
   }
 
   if (startTime) {
-    filtered = filtered.filter(e => String(e.timestamp) >= startTime);
+    filtered = filtered.filter(e => e.displayTs >= startTime);
   }
   if (endTime) {
-    filtered = filtered.filter(e => String(e.timestamp) <= endTime);
+    filtered = filtered.filter(e => e.displayTs <= endTime);
   }
 
   if (q) {
@@ -186,7 +207,7 @@ function handleKernelSearch(
     method: 'keyword',
     entries: results.map(e => ({
       entryIndex: e.entryIndex,
-      timestamp: String(e.timestamp),
+      timestamp: e.displayTs,
       level: e.level,
       facility: e.facility,
       message: e.message,
