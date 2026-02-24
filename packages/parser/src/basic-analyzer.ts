@@ -1016,10 +1016,10 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'critical',
         category: 'power',
-        title: `Deep Doze 放電率異常 (${rate.toFixed(1)} mAh/h)`,
-        description: `Deep Doze 期間放電率為 ${rate.toFixed(1)} mAh/h（理想值 <20 mAh/h）。` +
-          `Doze 時間: ${power.batteryStats.deepDozeTime}, 放電量: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh。` +
-          `可能原因：wakelock 阻擋 suspend、modem 頻繁喚醒、sensor HAL 異常。`,
+        title: `Abnormal Deep Doze discharge rate (${rate.toFixed(1)} mAh/h)`,
+        description: `Deep Doze discharge rate is ${rate.toFixed(1)} mAh/h (ideal <20 mAh/h). ` +
+          `Doze time: ${power.batteryStats.deepDozeTime}, discharge: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh. ` +
+          `Possible causes: wakelock blocking suspend, modem frequent wakeups, sensor HAL anomaly.`,
         source: 'power',
         debugCommands: POWER_DEBUG_COMMANDS,
       });
@@ -1028,9 +1028,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'warning',
         category: 'power',
-        title: `Deep Doze 放電率偏高 (${rate.toFixed(1)} mAh/h)`,
-        description: `Deep Doze 期間放電率為 ${rate.toFixed(1)} mAh/h（理想值 <20 mAh/h）。` +
-          `Doze 時間: ${power.batteryStats.deepDozeTime}, 放電量: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh。`,
+        title: `Elevated Deep Doze discharge rate (${rate.toFixed(1)} mAh/h)`,
+        description: `Deep Doze discharge rate is ${rate.toFixed(1)} mAh/h (ideal <20 mAh/h). ` +
+          `Doze time: ${power.batteryStats.deepDozeTime}, discharge: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh.`,
         source: 'power',
         debugCommands: POWER_DEBUG_COMMANDS,
       });
@@ -1044,9 +1044,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
           id: '',
           severity: 'warning',
           category: 'power',
-          title: `Partial wakelock 時間過高 (${(ratio * 100).toFixed(1)}%)`,
-          description: `Partial wakelock 佔電池使用時間的 ${(ratio * 100).toFixed(1)}%（${power.batteryStats.partialWakelockTime} / ${power.batteryStats.timePeriod}）。` +
-            `長時間持有 partial wakelock 會阻擋 CPU 進入休眠。`,
+          title: `Excessive partial wakelock time (${(ratio * 100).toFixed(1)}%)`,
+          description: `Partial wakelock accounts for ${(ratio * 100).toFixed(1)}% of battery time (${power.batteryStats.partialWakelockTime} / ${power.batteryStats.timePeriod}). ` +
+            `Prolonged partial wakelocks prevent CPU from entering suspend.`,
           source: 'power',
           debugCommands: ['adb shell dumpsys power', 'adb shell dumpsys batterystats --wakelock'],
         });
@@ -1064,8 +1064,8 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'warning',
         category: 'power',
-        title: `Suspend blocker 阻擋休眠`,
-        description: `${power.powerManagerState.suspendBlockers.length} 個 suspend blocker 正在阻擋裝置進入 suspend 狀態：${blockerNames}。`,
+        title: `Suspend blockers preventing sleep`,
+        description: `${power.powerManagerState.suspendBlockers.length} suspend blocker(s) preventing device from entering suspend: ${blockerNames}.`,
         source: 'power',
         debugCommands: ['adb shell dumpsys power'],
       });
@@ -1082,9 +1082,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'warning',
         category: 'power',
-        title: `${nonDozeWakeLocks.length} 個 active wake lock 持有中`,
-        description: `${nonDozeWakeLocks.length} 個非 Doze 類 wake lock 正在持有：${wlNames}${nonDozeWakeLocks.length > 5 ? '...' : ''}。` +
-          `大量 wake lock 會阻擋裝置進入深度休眠。`,
+        title: `${nonDozeWakeLocks.length} active wake locks held`,
+        description: `${nonDozeWakeLocks.length} non-Doze wake locks currently held: ${wlNames}${nonDozeWakeLocks.length > 5 ? '...' : ''}. ` +
+          `Excessive wake locks prevent the device from entering deep sleep.`,
         source: 'power',
         debugCommands: ['adb shell dumpsys power'],
       });
@@ -1100,9 +1100,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'critical',
         category: 'power',
-        title: `Kernel wakelock "${top.name}" 持有 ${(topMinutes / 60).toFixed(1)} 小時`,
-        description: `Kernel wakelock "${top.name}" 累計持有 ${(topMinutes / 60).toFixed(1)} 小時（${top.count} 次）。` +
-          `這是排名第一的 kernel wakelock，嚴重影響 suspend 效率。`,
+        title: `Kernel wakelock "${top.name}" held for ${(topMinutes / 60).toFixed(1)} hours`,
+        description: `Kernel wakelock "${top.name}" held for ${(topMinutes / 60).toFixed(1)} hours total (${top.count} times). ` +
+          `This is the top kernel wakelock, severely impacting suspend efficiency.`,
         source: 'power',
         debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources', 'adb shell dumpsys batterystats'],
       });
@@ -1111,9 +1111,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'warning',
         category: 'power',
-        title: `Kernel wakelock "${top.name}" 持有 ${topMinutes.toFixed(0)} 分鐘`,
-        description: `Kernel wakelock "${top.name}" 累計持有 ${topMinutes.toFixed(0)} 分鐘（${top.count} 次）。` +
-          `平均每次 ${top.avgTimeMs.toFixed(0)} ms。`,
+        title: `Kernel wakelock "${top.name}" held for ${topMinutes.toFixed(0)} minutes`,
+        description: `Kernel wakelock "${top.name}" held for ${topMinutes.toFixed(0)} minutes total (${top.count} times). ` +
+          `Average ${top.avgTimeMs.toFixed(0)} ms per acquisition.`,
         source: 'power',
         debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources'],
       });
@@ -1126,8 +1126,8 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
       id: '',
       severity: 'warning',
       category: 'power',
-      title: 'Deep Doze 已停用',
-      description: 'DeviceIdleController 的 Deep Doze 已被停用（mDeepEnabled=false）。裝置無法進入深度 Doze 模式，可能導致待機耗電異常。',
+      title: 'Deep Doze disabled',
+      description: 'DeviceIdleController Deep Doze is disabled (mDeepEnabled=false). Device cannot enter deep Doze mode, which may cause abnormal standby power drain.',
       source: 'power',
       debugCommands: ['adb shell dumpsys deviceidle'],
     });
@@ -1141,10 +1141,10 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
           id: '',
           severity: 'critical',
           category: 'power',
-          title: `過度 alarm 喚醒: ${alarm.appName} (${alarm.wakeupCount} 次)`,
-          description: `${alarm.appName} (uid=${alarm.uid}) 觸發了 ${alarm.wakeupCount} 次 alarm wakeup。` +
-            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count} 次)。` : '') +
-            ` 頻繁的 alarm wakeup 會打斷 Doze 模式並增加耗電。`,
+          title: `Excessive alarm wakeups: ${alarm.appName} (${alarm.wakeupCount})`,
+          description: `${alarm.appName} (uid=${alarm.uid}) triggered ${alarm.wakeupCount} alarm wakeups.` +
+            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count}).` : '') +
+            ` Frequent alarm wakeups disrupt Doze mode and increase power drain.`,
           source: 'power',
           debugCommands: ['adb shell dumpsys alarm'],
         });
@@ -1153,9 +1153,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
           id: '',
           severity: 'warning',
           category: 'power',
-          title: `過度 alarm 喚醒: ${alarm.appName} (${alarm.wakeupCount} 次)`,
-          description: `${alarm.appName} (uid=${alarm.uid}) 觸發了 ${alarm.wakeupCount} 次 alarm wakeup。` +
-            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count} 次)。` : ''),
+          title: `Excessive alarm wakeups: ${alarm.appName} (${alarm.wakeupCount})`,
+          description: `${alarm.appName} (uid=${alarm.uid}) triggered ${alarm.wakeupCount} alarm wakeups.` +
+            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count}).` : ''),
           source: 'power',
           debugCommands: ['adb shell dumpsys alarm'],
         });
@@ -1171,9 +1171,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'critical',
         category: 'power',
-        title: `Suspend 成功率極低 (${rate.toFixed(1)}%)`,
-        description: `${power.suspendStats.totalSuspendAttempts} 次 suspend 嘗試中，只有 ${rate.toFixed(1)}% 成功。` +
-          `Abort: ${power.suspendStats.suspendAbortCount} 次。` +
+        title: `Very low suspend success rate (${rate.toFixed(1)}%)`,
+        description: `Only ${rate.toFixed(1)}% of ${power.suspendStats.totalSuspendAttempts} suspend attempts succeeded. ` +
+          `Aborts: ${power.suspendStats.suspendAbortCount}. ` +
           (power.suspendStats.topAbortSources.length > 0
             ? ` Top abort source: ${power.suspendStats.topAbortSources[0].name} (${power.suspendStats.topAbortSources[0].percentage.toFixed(1)}%)`
             : ''),
@@ -1185,9 +1185,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
         id: '',
         severity: 'warning',
         category: 'power',
-        title: `Suspend 成功率偏低 (${rate.toFixed(1)}%)`,
-        description: `${power.suspendStats.totalSuspendAttempts} 次 suspend 嘗試中，${rate.toFixed(1)}% 成功。` +
-          `Abort: ${power.suspendStats.suspendAbortCount} 次。`,
+        title: `Low suspend success rate (${rate.toFixed(1)}%)`,
+        description: `${rate.toFixed(1)}% of ${power.suspendStats.totalSuspendAttempts} suspend attempts succeeded. ` +
+          `Aborts: ${power.suspendStats.suspendAbortCount}.`,
         source: 'power',
         debugCommands: ['adb shell dmesg | grep suspend'],
       });
@@ -1201,9 +1201,9 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
           id: '',
           severity: 'warning',
           category: 'power',
-          title: `Wakeup source "${topSource.name}" 阻擋 ${topSource.percentage.toFixed(0)}% suspend`,
-          description: `Wakeup source "${topSource.name}" 造成 ${topSource.count} 次 suspend abort，佔全部 abort 的 ${topSource.percentage.toFixed(1)}%。` +
-            `應調查此 wakeup source 的觸發原因。`,
+          title: `Wakeup source "${topSource.name}" blocking ${topSource.percentage.toFixed(0)}% of suspends`,
+          description: `Wakeup source "${topSource.name}" caused ${topSource.count} suspend aborts, accounting for ${topSource.percentage.toFixed(1)}% of all aborts. ` +
+            `Investigate the trigger cause of this wakeup source.`,
           source: 'power',
           debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources'],
         });
