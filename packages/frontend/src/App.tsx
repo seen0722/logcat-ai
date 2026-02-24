@@ -29,6 +29,7 @@ export default function App() {
   const [searchTag, setSearchTag] = useState<string | null>(null);
   const [searchStartTime, setSearchStartTime] = useState<string | null>(null);
   const [searchEndTime, setSearchEndTime] = useState<string | null>(null);
+  const [searchSource, setSearchSource] = useState<'logcat' | 'kernel' | null>(null);
 
   // Batch state
   const [showBatchUpload, setShowBatchUpload] = useState(false);
@@ -79,11 +80,12 @@ export default function App() {
     return { startTime: fromMs(startMs), endTime: fromMs(endMs) };
   };
 
-  const handleTimelineSearch = (eventTimestamp: string, _eventTimestampEnd: string) => {
+  const handleTimelineSearch = (eventTimestamp: string, _eventTimestampEnd: string, source?: string) => {
     const { startTime, endTime } = computeTimeRange(eventTimestamp, 5);
     setSearchStartTime(startTime);
     setSearchEndTime(endTime);
     setSearchTag(null);
+    setSearchSource(source === 'kernel' ? 'kernel' : null);
     setShowSearch(true);
   };
 
@@ -277,7 +279,8 @@ export default function App() {
           initialTag={searchTag ?? undefined}
           initialStartTime={searchStartTime ?? undefined}
           initialEndTime={searchEndTime ?? undefined}
-          onClose={() => { setShowSearch(false); setSearchTag(null); setSearchStartTime(null); setSearchEndTime(null); }}
+          initialSource={searchSource ?? undefined}
+          onClose={() => { setShowSearch(false); setSearchTag(null); setSearchStartTime(null); setSearchEndTime(null); setSearchSource(null); }}
         />
       )}
     </div>

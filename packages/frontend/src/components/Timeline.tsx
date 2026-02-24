@@ -3,7 +3,7 @@ import { TimelineEvent, Severity } from '../lib/types';
 
 interface Props {
   events: TimelineEvent[];
-  onSearchTime?: (startTime: string, endTime: string) => void;
+  onSearchTime?: (startTime: string, endTime: string, source?: string) => void;
 }
 
 const SEVERITY_DOT: Record<Severity, string> = {
@@ -158,7 +158,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSearchTime(event.timestamp, event.timestamp);
+                        onSearchTime(event.timestamp, event.timestamp, event.source);
                       }}
                       className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-indigo-400 transition-all p-0.5 rounded hover:bg-indigo-500/10"
                       title="Search logs around this time"

@@ -8,6 +8,7 @@ interface Props {
   initialTag?: string;
   initialStartTime?: string;
   initialEndTime?: string;
+  initialSource?: SearchSource;
 }
 
 type SearchSource = 'logcat' | 'kernel';
@@ -59,8 +60,8 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
-export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime }: Props) {
-  const [source, setSource] = useState<SearchSource>('logcat');
+export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource }: Props) {
+  const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
   // Logcat-only filters
   const [tag, setTag] = useState(initialTag ?? '');
@@ -122,27 +123,43 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       });
     } else if (initialStartTime && !initialSearchDone.current) {
       initialSearchDone.current = true;
-      // Auto-trigger search with time range
+      // Auto-trigger search with time range (use initialSource to pick logcat vs kernel)
+      const effectiveSource = initialSource ?? 'logcat';
       const params = {
-        source: 'logcat' as SearchSource,
+        source: effectiveSource,
         startTime: initialStartTime,
         endTime: initialEndTime,
         limit,
       };
       lastSearchRef.current = params;
       setLoading(true);
-      searchLogcat(uploadId, {
-        startTime: initialStartTime,
-        endTime: initialEndTime,
-        limit,
-        offset: 0,
-      }).then((res) => {
-        setLogcatResult(res);
-        setLoading(false);
-      }).catch((err) => {
-        setError(err instanceof Error ? err.message : 'Search failed');
-        setLoading(false);
-      });
+      if (effectiveSource === 'kernel') {
+        searchKernel(uploadId, {
+          startTime: initialStartTime,
+          endTime: initialEndTime,
+          limit,
+          offset: 0,
+        }).then((res) => {
+          setKernelResult(res);
+          setLoading(false);
+        }).catch((err) => {
+          setError(err instanceof Error ? err.message : 'Search failed');
+          setLoading(false);
+        });
+      } else {
+        searchLogcat(uploadId, {
+          startTime: initialStartTime,
+          endTime: initialEndTime,
+          limit,
+          offset: 0,
+        }).then((res) => {
+          setLogcatResult(res);
+          setLoading(false);
+        }).catch((err) => {
+          setError(err instanceof Error ? err.message : 'Search failed');
+          setLoading(false);
+        });
+      }
     } else {
       inputRef.current?.focus();
     }
