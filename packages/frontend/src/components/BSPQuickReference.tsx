@@ -1,4 +1,4 @@
-import { BootStatusSummary, MemInfoSummary, CpuInfoSummary, HALStatusSummary, TagStat } from '../lib/types';
+import { BootStatusSummary, MemInfoSummary, CpuInfoSummary, HALStatusSummary, TagStat, PowerParseResult } from '../lib/types';
 
 interface Props {
   bootStatus?: BootStatusSummary;
@@ -6,6 +6,7 @@ interface Props {
   cpuInfo?: CpuInfoSummary;
   halStatus?: HALStatusSummary;
   logTagStats?: TagStat[];
+  powerStatus?: PowerParseResult;
 }
 
 function formatKbToGb(kb: number): string {
@@ -23,11 +24,12 @@ function formatUptime(seconds: number): string {
   return `${s}s`;
 }
 
-export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halStatus, logTagStats }: Props) {
+export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halStatus, logTagStats, powerStatus }: Props) {
   const vendorTags = logTagStats?.filter(t => t.classification === 'vendor') ?? [];
   const hasData = bootStatus || memInfo || cpuInfo ||
     (halStatus && halStatus.families.length > 0) ||
-    vendorTags.length > 0;
+    vendorTags.length > 0 ||
+    powerStatus;
 
   if (!hasData) return null;
 
@@ -169,6 +171,47 @@ export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halSta
             </div>
           );
         })()}
+
+        {/* Power Summary */}
+        {powerStatus && powerStatus.batteryStats && (
+          <div className="bg-surface rounded-lg p-3 space-y-2">
+            <h3 className="text-sm font-semibold text-gray-400">Power Summary</h3>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              {powerStatus.powerManagerState && (
+                <>
+                  <span className="text-gray-500">Battery</span>
+                  <span className="text-gray-300">{powerStatus.powerManagerState.batteryLevel}%</span>
+                </>
+              )}
+              {powerStatus.batteryStats.deepDozeDischargeRateMahPerHr > 0 && (
+                <>
+                  <span className="text-gray-500">Deep Doze Rate</span>
+                  <span className={
+                    powerStatus.batteryStats.deepDozeDischargeRateMahPerHr > 40 ? 'text-red-400 font-medium' :
+                    powerStatus.batteryStats.deepDozeDischargeRateMahPerHr > 20 ? 'text-amber-400' :
+                    'text-green-400'
+                  }>
+                    {powerStatus.batteryStats.deepDozeDischargeRateMahPerHr.toFixed(1)} mAh/h
+                  </span>
+                </>
+              )}
+              {powerStatus.batteryStats.partialWakelockTime && (
+                <>
+                  <span className="text-gray-500">Partial WL</span>
+                  <span className="text-gray-300">{powerStatus.batteryStats.partialWakelockTime}</span>
+                </>
+              )}
+              {powerStatus.kernelWakeLocks.length > 0 && (
+                <>
+                  <span className="text-gray-500">Top K-WL</span>
+                  <span className="text-gray-300 truncate" title={powerStatus.kernelWakeLocks[0].name}>
+                    {powerStatus.kernelWakeLocks[0].name}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Vendor Errors */}
         {vendorTags.length > 0 && (

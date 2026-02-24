@@ -19,6 +19,7 @@ import {
   HALStatusSummary,
   TagStat,
   TombstoneAnalysis,
+  PowerParseResult,
 } from './types.js';
 import { generateSELinuxAllowRule } from './kernel-parser.js';
 
@@ -37,6 +38,7 @@ export interface BasicAnalyzerInput {
   tombstoneAnalyses?: TombstoneAnalysis[];
   systemProperties?: string;
   uptimeContent?: string;
+  powerStatus?: PowerParseResult;
 }
 
 /**
@@ -44,7 +46,7 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent, powerStatus } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties, uptimeContent);
 
@@ -62,6 +64,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const tombstoneInsights = generateTombstoneInsights(tombstoneAnalyses);
 
   const tagInsights = generateTagInsights(logcatResult.tagStats);
+  const powerInsights = generatePowerInsights(powerStatus);
 
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
@@ -78,6 +81,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...halInsights,
     ...tombstoneInsights,
     ...tagInsights,
+    ...powerInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -92,7 +96,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   });
 
   const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs);
-  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses);
+  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses, powerStatus);
 
   // Link timeline events to their corresponding insights
   linkTimelineToInsights(timeline, insights);
@@ -111,6 +115,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(halStatus ? { halStatus } : {}),
     ...(tombstoneAnalyses && tombstoneAnalyses.length > 0 ? { tombstoneAnalyses } : {}),
     ...(logcatResult.tagStats && logcatResult.tagStats.length > 0 ? { logTagStats: logcatResult.tagStats } : {}),
+    ...(powerStatus ? { powerStatus } : {}),
   };
 }
 
@@ -990,6 +995,226 @@ function generateTombstoneInsights(analyses?: TombstoneAnalysis[]): InsightCard[
 }
 
 // ============================================================
+// Power Management → Insights
+// ============================================================
+
+const POWER_DEBUG_COMMANDS = [
+  'adb shell dumpsys power',
+  'adb shell dumpsys deviceidle',
+  'adb shell dumpsys batterystats',
+];
+
+function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
+  if (!power) return [];
+  const insights: InsightCard[] = [];
+
+  // Deep Doze discharge rate
+  if (power.batteryStats) {
+    const rate = power.batteryStats.deepDozeDischargeRateMahPerHr;
+    if (rate > 40) {
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'power',
+        title: `Deep Doze 放電率異常 (${rate.toFixed(1)} mAh/h)`,
+        description: `Deep Doze 期間放電率為 ${rate.toFixed(1)} mAh/h（理想值 <20 mAh/h）。` +
+          `Doze 時間: ${power.batteryStats.deepDozeTime}, 放電量: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh。` +
+          `可能原因：wakelock 阻擋 suspend、modem 頻繁喚醒、sensor HAL 異常。`,
+        source: 'power',
+        debugCommands: POWER_DEBUG_COMMANDS,
+      });
+    } else if (rate > 20) {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'power',
+        title: `Deep Doze 放電率偏高 (${rate.toFixed(1)} mAh/h)`,
+        description: `Deep Doze 期間放電率為 ${rate.toFixed(1)} mAh/h（理想值 <20 mAh/h）。` +
+          `Doze 時間: ${power.batteryStats.deepDozeTime}, 放電量: ${power.batteryStats.deepDozeDischargeMah.toFixed(1)} mAh。`,
+        source: 'power',
+        debugCommands: POWER_DEBUG_COMMANDS,
+      });
+    }
+
+    // Partial wakelock time > 10% of battery time
+    if (power.batteryStats.timePeriodMs > 0 && power.batteryStats.partialWakelockTimeMs > 0) {
+      const ratio = power.batteryStats.partialWakelockTimeMs / power.batteryStats.timePeriodMs;
+      if (ratio > 0.1) {
+        insights.push({
+          id: '',
+          severity: 'warning',
+          category: 'power',
+          title: `Partial wakelock 時間過高 (${(ratio * 100).toFixed(1)}%)`,
+          description: `Partial wakelock 佔電池使用時間的 ${(ratio * 100).toFixed(1)}%（${power.batteryStats.partialWakelockTime} / ${power.batteryStats.timePeriod}）。` +
+            `長時間持有 partial wakelock 會阻擋 CPU 進入休眠。`,
+          source: 'power',
+          debugCommands: ['adb shell dumpsys power', 'adb shell dumpsys batterystats --wakelock'],
+        });
+      }
+    }
+  }
+
+  // Suspend blockers (when not charging)
+  if (power.powerManagerState && !power.powerManagerState.isPowered) {
+    if (power.powerManagerState.suspendBlockers.length > 0) {
+      const blockerNames = power.powerManagerState.suspendBlockers
+        .map((b) => `${b.name} (ref=${b.refCount})`)
+        .join(', ');
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'power',
+        title: `Suspend blocker 阻擋休眠`,
+        description: `${power.powerManagerState.suspendBlockers.length} 個 suspend blocker 正在阻擋裝置進入 suspend 狀態：${blockerNames}。`,
+        source: 'power',
+        debugCommands: ['adb shell dumpsys power'],
+      });
+    }
+
+    // Active wake locks (non-DOZE types > 3)
+    const nonDozeWakeLocks = power.powerManagerState.activeWakeLocks
+      .filter((wl) => !wl.type.includes('DOZE'));
+    if (nonDozeWakeLocks.length > 3) {
+      const wlNames = nonDozeWakeLocks.slice(0, 5)
+        .map((wl) => `${wl.tag} (${wl.type})`)
+        .join(', ');
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'power',
+        title: `${nonDozeWakeLocks.length} 個 active wake lock 持有中`,
+        description: `${nonDozeWakeLocks.length} 個非 Doze 類 wake lock 正在持有：${wlNames}${nonDozeWakeLocks.length > 5 ? '...' : ''}。` +
+          `大量 wake lock 會阻擋裝置進入深度休眠。`,
+        source: 'power',
+        debugCommands: ['adb shell dumpsys power'],
+      });
+    }
+  }
+
+  // Kernel wakelock insights
+  if (power.kernelWakeLocks.length > 0) {
+    const top = power.kernelWakeLocks[0];
+    const topMinutes = top.totalTimeMs / 60_000;
+    if (topMinutes > 120) {
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'power',
+        title: `Kernel wakelock "${top.name}" 持有 ${(topMinutes / 60).toFixed(1)} 小時`,
+        description: `Kernel wakelock "${top.name}" 累計持有 ${(topMinutes / 60).toFixed(1)} 小時（${top.count} 次）。` +
+          `這是排名第一的 kernel wakelock，嚴重影響 suspend 效率。`,
+        source: 'power',
+        debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources', 'adb shell dumpsys batterystats'],
+      });
+    } else if (topMinutes > 30) {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'power',
+        title: `Kernel wakelock "${top.name}" 持有 ${topMinutes.toFixed(0)} 分鐘`,
+        description: `Kernel wakelock "${top.name}" 累計持有 ${topMinutes.toFixed(0)} 分鐘（${top.count} 次）。` +
+          `平均每次 ${top.avgTimeMs.toFixed(0)} ms。`,
+        source: 'power',
+        debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources'],
+      });
+    }
+  }
+
+  // Deep Doze disabled
+  if (power.dozeState && !power.dozeState.deepEnabled) {
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'power',
+      title: 'Deep Doze 已停用',
+      description: 'DeviceIdleController 的 Deep Doze 已被停用（mDeepEnabled=false）。裝置無法進入深度 Doze 模式，可能導致待機耗電異常。',
+      source: 'power',
+      debugCommands: ['adb shell dumpsys deviceidle'],
+    });
+  }
+
+  // Alarm wakeup insights (Phase 3)
+  if (power.alarmWakeups) {
+    for (const alarm of power.alarmWakeups) {
+      if (alarm.wakeupCount > 1000) {
+        insights.push({
+          id: '',
+          severity: 'critical',
+          category: 'power',
+          title: `過度 alarm 喚醒: ${alarm.appName} (${alarm.wakeupCount} 次)`,
+          description: `${alarm.appName} (uid=${alarm.uid}) 觸發了 ${alarm.wakeupCount} 次 alarm wakeup。` +
+            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count} 次)。` : '') +
+            ` 頻繁的 alarm wakeup 會打斷 Doze 模式並增加耗電。`,
+          source: 'power',
+          debugCommands: ['adb shell dumpsys alarm'],
+        });
+      } else if (alarm.wakeupCount > 500) {
+        insights.push({
+          id: '',
+          severity: 'warning',
+          category: 'power',
+          title: `過度 alarm 喚醒: ${alarm.appName} (${alarm.wakeupCount} 次)`,
+          description: `${alarm.appName} (uid=${alarm.uid}) 觸發了 ${alarm.wakeupCount} 次 alarm wakeup。` +
+            (alarm.topAlarms.length > 0 ? ` Top alarm: ${alarm.topAlarms[0].name} (${alarm.topAlarms[0].count} 次)。` : ''),
+          source: 'power',
+          debugCommands: ['adb shell dumpsys alarm'],
+        });
+      }
+    }
+  }
+
+  // Suspend stats insights (Phase 3)
+  if (power.suspendStats && power.suspendStats.totalSuspendAttempts > 0) {
+    const rate = power.suspendStats.suspendSuccessRate;
+    if (rate < 50) {
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'power',
+        title: `Suspend 成功率極低 (${rate.toFixed(1)}%)`,
+        description: `${power.suspendStats.totalSuspendAttempts} 次 suspend 嘗試中，只有 ${rate.toFixed(1)}% 成功。` +
+          `Abort: ${power.suspendStats.suspendAbortCount} 次。` +
+          (power.suspendStats.topAbortSources.length > 0
+            ? ` Top abort source: ${power.suspendStats.topAbortSources[0].name} (${power.suspendStats.topAbortSources[0].percentage.toFixed(1)}%)`
+            : ''),
+        source: 'power',
+        debugCommands: ['adb shell dmesg | grep suspend', 'adb shell dumpsys power'],
+      });
+    } else if (rate < 70) {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'power',
+        title: `Suspend 成功率偏低 (${rate.toFixed(1)}%)`,
+        description: `${power.suspendStats.totalSuspendAttempts} 次 suspend 嘗試中，${rate.toFixed(1)}% 成功。` +
+          `Abort: ${power.suspendStats.suspendAbortCount} 次。`,
+        source: 'power',
+        debugCommands: ['adb shell dmesg | grep suspend'],
+      });
+    }
+
+    // Top abort source > 50%
+    if (power.suspendStats.topAbortSources.length > 0) {
+      const topSource = power.suspendStats.topAbortSources[0];
+      if (topSource.percentage > 50) {
+        insights.push({
+          id: '',
+          severity: 'warning',
+          category: 'power',
+          title: `Wakeup source "${topSource.name}" 阻擋 ${topSource.percentage.toFixed(0)}% suspend`,
+          description: `Wakeup source "${topSource.name}" 造成 ${topSource.count} 次 suspend abort，佔全部 abort 的 ${topSource.percentage.toFixed(1)}%。` +
+            `應調查此 wakeup source 的觸發原因。`,
+          source: 'power',
+          debugCommands: ['adb shell cat /sys/kernel/debug/wakeup_sources'],
+        });
+      }
+    }
+  }
+
+  return insights;
+}
+
+// ============================================================
 // Timeline ↔ Insight Linking
 // ============================================================
 
@@ -1320,11 +1545,27 @@ export function calculateHealthScore(
   memInfo?: MemInfoSummary,
   cpuInfo?: CpuInfoSummary,
   tombstoneAnalyses?: TombstoneAnalysis[],
+  powerStatus?: PowerParseResult,
 ): SystemHealthScore {
   let stability = calcStabilityScore(logcatResult, kernelResult, tombstoneAnalyses);
   let memory = calcMemoryScore(logcatResult, kernelResult);
   let responsiveness = calcResponsivenessScore(logcatResult, anrAnalyses);
   let kernel = calcKernelScore(kernelResult);
+
+  // Factor in power management issues into kernel dimension
+  if (powerStatus) {
+    if (powerStatus.batteryStats) {
+      const rate = powerStatus.batteryStats.deepDozeDischargeRateMahPerHr;
+      if (rate > 40) kernel -= 10;
+      else if (rate > 20) kernel -= 5;
+    }
+    if (powerStatus.suspendStats && powerStatus.suspendStats.totalSuspendAttempts > 0) {
+      const successRate = powerStatus.suspendStats.suspendSuccessRate;
+      if (successRate < 50) kernel -= 10;
+      else if (successRate < 70) kernel -= 5;
+    }
+    kernel = clamp(kernel, 0, 100);
+  }
 
   // Factor in dumpsys meminfo
   if (memInfo && memInfo.totalRamKb > 0) {

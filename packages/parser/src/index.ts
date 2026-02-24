@@ -9,3 +9,4 @@ export * from './dumpsys-parser.js';
 export * from './format-detector.js';
 export * from './comparison.js';
 export * from './batch-analyzer.js';
+export * from './power-parser.js';

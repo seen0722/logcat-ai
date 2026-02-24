@@ -2,7 +2,7 @@
 // We duplicate a slim subset to avoid depending on the Node.js parser package.
 
 export type Severity = 'critical' | 'warning' | 'info';
-export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability';
+export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability' | 'power';
 
 export interface InsightCard {
   id: string;
@@ -13,7 +13,7 @@ export interface InsightCard {
   relatedLogSnippet?: string;
   stackTrace?: string;
   timestamp?: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone';
+  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone' | 'power';
   suggestedAllowRule?: string;
   debugCommands?: string[];
   deepAnalysis?: {
@@ -220,6 +220,108 @@ export interface DeepAnalysisOverview {
   }>;
 }
 
+// ============================================================
+// Power Management
+// ============================================================
+
+export interface ActiveWakeLock {
+  type: string;
+  tag: string;
+  duration: string;
+  uid: number;
+  pid: number;
+}
+
+export interface SuspendBlocker {
+  name: string;
+  refCount: number;
+}
+
+export interface PowerManagerState {
+  wakefulness: string;
+  isPowered: boolean;
+  plugType: number;
+  batteryLevel: number;
+  lastSleepReason: string;
+  screenOffTimeout: number;
+  useAutoSuspend: boolean;
+  activeWakeLocks: ActiveWakeLock[];
+  suspendBlockers: SuspendBlocker[];
+  activeSuspendBlockerCount: number;
+}
+
+export interface DozeState {
+  deepState: string;
+  lightState: string;
+  screenOn: boolean;
+  charging: boolean;
+  deepEnabled: boolean;
+  lightEnabled: boolean;
+}
+
+export interface DozeSettings {
+  inactiveTo: number;
+  idleTo: number;
+  idleFactor: number;
+  maxIdleTo: number;
+  lightIdleTo: number;
+  lightMaxIdleTo: number;
+  lightIdleFactor: number;
+}
+
+export interface BatteryStatsSummary {
+  batteryCapacityMah: number;
+  totalDischargeMah: number;
+  screenOnTime: string;
+  screenOnTimeMs: number;
+  screenOffDischargeMah: number;
+  deepDozeTime: string;
+  deepDozeTimeMs: number;
+  deepDozeDischargeMah: number;
+  deepDozeDischargeRateMahPerHr: number;
+  lightDozeTime: string;
+  lightDozeTimeMs: number;
+  partialWakelockTime: string;
+  partialWakelockTimeMs: number;
+  timePeriod: string;
+  timePeriodMs: number;
+}
+
+export interface KernelWakeLockStat {
+  name: string;
+  count: number;
+  totalTimeMs: number;
+  avgTimeMs: number;
+}
+
+export interface AlarmWakeupStat {
+  appName: string;
+  uid: string;
+  wakeupCount: number;
+  runtimeMs: number;
+  topAlarms: Array<{ name: string; count: number }>;
+}
+
+export interface SuspendStats {
+  totalSuspendAttempts: number;
+  suspendAbortCount: number;
+  taskFreezeAbortCount: number;
+  deviceSuspendFailureCount: number;
+  suspendSuccessRate: number;
+  topAbortSources: Array<{ name: string; count: number; percentage: number }>;
+  topWakeupSources: Array<{ name: string; count: number; percentage: number }>;
+}
+
+export interface PowerParseResult {
+  powerManagerState?: PowerManagerState;
+  dozeState?: DozeState;
+  dozeSettings?: DozeSettings;
+  batteryStats?: BatteryStatsSummary;
+  kernelWakeLocks: KernelWakeLockStat[];
+  alarmWakeups?: AlarmWakeupStat[];
+  suspendStats?: SuspendStats;
+}
+
 export interface AnalysisResult {
   metadata: BugreportMetadata;
   insights: InsightCard[];
@@ -233,6 +335,7 @@ export interface AnalysisResult {
   tombstoneAnalyses?: TombstoneAnalysis[];
   logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
+  powerStatus?: PowerParseResult;
 }
 
 // SSE progress from backend

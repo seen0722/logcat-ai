@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-23（Phase 2.3 完成：Logcat Buffer Field & Search Filter + UX 改善）
+> **更新日期**：2026-02-24
 
 ---
 
@@ -317,7 +317,33 @@
 
 ---
 
-## 6. Backlog（未排期）
+## 6. Phase 2.4 — Power Management Analyzer
+
+### Phase 1: Parser + Insight 整合
+
+- [x] **P1-1: Power types** — `types.ts` 新增 PowerManagerState, DozeState, DozeSettings, BatteryStatsSummary, KernelWakeLockStat, PowerParseResult；InsightCategory 加 'power'；AnalysisResult 加 powerStatus
+- [x] **P1-2: power-parser.ts** — 新建，7 個解析函式（parsePowerManager, parseDeviceIdle, parseBatteryStats, parseKernelWakelocks, parsePowerSections, parseAlarmStats, parseSuspendStats）
+- [x] **P1-3: power-parser.test.ts** — 新建，29 個測試全部通過
+- [x] **P1-4: basic-analyzer 整合** — generatePowerInsights() 13 條規則 + calculateHealthScore kernel 維度整合
+- [x] **P1-5: Backend 整合** — analyze.ts 呼叫 parsePowerSections + context-builder.ts collectPowerContext
+- [x] **P1-6: Frontend types** — types.ts mirror power types
+
+### Phase 2: 前端 PowerOverview
+
+- [x] **P2-1: PowerOverview.tsx** — 新建，3 欄 grid（Power Manager / Doze / Battery Stats），Deep Doze 放電率色彩標示，Alarm Wakeups 表格，Suspend Statistics 區塊
+- [x] **P2-2: App.tsx 整合** — 在 TagStats 和 BSPQuickReference 之間渲染
+- [x] **P2-3: BSPQuickReference 擴展** — 加入 Power 摘要格
+
+### Phase 3: Alarm Stats + Suspend 統計
+
+- [x] **P3-1: Alarm/Suspend types** — AlarmWakeupStat, SuspendStats
+- [x] **P3-2: parseAlarmStats + parseSuspendStats** — 解析 DUMPSYS ALARM + kernel suspend 事件統計
+- [x] **P3-3: Alarm/Suspend insights** — 5 條規則（alarm wakeups > 500/1000, suspend 成功率, abort source）
+- [x] **P3-4: PowerOverview 擴展** — Alarm Wakeups 表格 + Suspend Statistics 區塊
+
+---
+
+## 7. Backlog（未排期）
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
@@ -328,7 +354,7 @@
 
 ---
 
-## 7. Test Summary
+## 8. Test Summary
 
 | Package | Tests | 說明 |
 |---------|-------|------|

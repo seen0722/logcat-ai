@@ -12,6 +12,7 @@ import ChatPanel from './components/ChatPanel';
 import DeepAnalysisOverview from './components/DeepAnalysisOverview';
 import TagStats from './components/TagStats';
 import BSPQuickReference from './components/BSPQuickReference';
+import PowerOverview from './components/PowerOverview';
 import HistoryPanel from './components/HistoryPanel';
 import ExportMenu from './components/ExportMenu';
 import ComparisonView from './components/ComparisonView';
@@ -183,12 +184,14 @@ export default function App() {
               onTagClick={(tag) => { setSearchTag(tag); setShowSearch(true); }}
             />
           )}
+          <PowerOverview powerStatus={result.powerStatus} />
           <BSPQuickReference
             bootStatus={result.bootStatus}
             memInfo={result.memInfo}
             cpuInfo={result.cpuInfo}
             halStatus={result.halStatus}
             logTagStats={result.logTagStats}
+            powerStatus={result.powerStatus}
           />
           {result.deepAnalysisOverview && (
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />

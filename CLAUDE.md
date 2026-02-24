@@ -74,11 +74,12 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
+- `power-parser.ts` — Power management analysis: PowerManager state, DeviceIdle (Doze) state/settings, BatteryStats summary with Deep Doze discharge rate calculation, kernel wakelocks from CHECKIN format, alarm wakeup stats, kernel suspend statistics
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation, timeline↔insight linking
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`)
 
 ### Backend (`@logcat-ai/backend`)
 
@@ -105,6 +106,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
 - `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
+- `components/PowerOverview.tsx` — Power management overview: 3-column grid (PowerManager state, Doze status, Battery statistics), Deep Doze discharge rate color coding (green <20, amber 20-40, red >40 mAh/h), alarm wakeups table, suspend statistics
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
 - `components/ExportMenu.tsx` — JSON/HTML export dropdown
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
@@ -224,3 +226,15 @@ KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timesta
 ### Deep Analysis Insight 篩選規則
 
 `context-builder.ts` 的 `buildInsightContexts()` **只處理 `critical` 和 `warning` severity 的 insight**。新增的 insight card 若要被 Deep Analysis LLM 分析，severity 必須 ≥ `warning`；`info` 等級的 insight 不會送 LLM，也不會產生 `deepAnalysis` 欄位（rootCause、fixSuggestion 等）。若 insight source 不是標準 anomaly 類型（如 tag-based insights），需在 `context-builder.ts` 新增專屬的 context 收集函式。
+
+### Power Management 分析（power-parser.ts）
+
+解析 bugreport 中的電源管理相關段落，提供 Doze 狀態、suspend 行為、電池放電率等分析：
+
+- **PowerManager State**：從 `DUMPSYS POWER` 解析 wakefulness、active wakelocks、suspend blockers
+- **DeviceIdle (Doze)**：從 `DUMPSYS DEVICEIDLE` 解析 Deep/Light Doze 狀態與設定參數（idle_to, idle_factor, max_idle_to 等），可與 AOSP 預設值比較
+- **BatteryStats**：從 `DUMPSYS BATTERYSTATS` 的 `Statistics since last charge:` 區塊提取預計算統計值，自動計算 Deep Doze 放電率（mAh/h）
+- **Kernel Wakelocks**：從 `CHECKIN BATTERYSTATS` 的 `9,0,l,kwl` 行提取 top kernel wakelocks（by totalTimeMs）
+- **Alarm Stats**：從 `DUMPSYS ALARM` 的 `Alarm Stats:` 區塊提取 per-app alarm wakeup 統計
+- **Suspend Stats**：從 kernel log entries 統計 suspend/resume 事件（成功率、abort sources、wakeup sources）
+- **段落辨識**：不靠段落名稱，靠內容特徵（`mWakefulness=`, `DeviceIdleController`, `Statistics since last charge:` 等）

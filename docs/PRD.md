@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.3.5
-> **更新日期**：2026-02-23
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter + UX 改善 + 大型 bugreport 記憶體修正）
+> **版本**：v0.4.0
+> **更新日期**：2026-02-24
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter + UX 改善 + 大型 bugreport 記憶體修正），Phase 2.4 進行中（Power Management Analyzer）
 
 ---
 
@@ -148,7 +148,26 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
   - Prioritized Actions（依優先級排序的建議動作）
 - **Backward Compatible**：支援舊版 array 格式回應，確保不同 LLM 能力的相容性
 
-### 3.4 輸出設計
+### 3.4 Power Management 分析
+
+#### 核心功能
+- 解析 bugreport 中的 dumpsys power、deviceidle、batterystats、alarm 段落
+- 提取 PowerManager state（wakefulness、active wakelocks）、Doze 狀態與設定、Battery 統計、Kernel Wakelocks
+- **Deep Doze 放電率自動計算**：從 batterystats 的預計算值（mAh since last charge / hours awake）萃取並換算為 mAh/h
+- 產出 power category insight cards（8+ 條規則，含 deep doze threshold、suspend 成功率、alarm wakeup 異常等）
+- 前端 PowerOverview 3 欄元件（PowerManager state / Doze status / Battery stats）
+- Phase 3 擴展：Alarm Stats 解析（per-app wakeup 統計）+ Kernel Suspend 統計（成功率、abort sources）
+
+#### Insight 規則示例
+| 規則 | 觸發條件 | Severity |
+|------|--------|----------|
+| Deep Doze 放電率過高 | mAh/h > 40 | Warning |
+| Deep Doze 未啟用 | 裝置支援但禁用 | Info |
+| Idle 完成時間超長 | idle_to > 預設值 2x | Warning |
+| Alarm Wakeups 過多 | > 500/hour | Warning |
+| Suspend 成功率低 | < 95% | Warning |
+
+### 3.5 輸出設計
 
 #### Insights Cards
 每個偵測到的問題一張卡片：
@@ -298,7 +317,38 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 - Timeline 新增 tombstone 事件
 - Health Score stability 子分數扣分（15 分/crash，frequency damping，max 40）
 
-### 4.7 Basic Analyzer（純規則引擎）
+### 4.8 Power Parser
+
+解析電源管理相關段落，提供 Doze 狀態、suspend 行為、電池放電率等分析：
+
+**7 個核心解析函式：**
+- `parsePowerManager()`：從 `DUMPSYS POWER` 提取 wakefulness、active wakelocks、suspend blockers
+- `parseDeviceIdle()`：從 `DUMPSYS DEVICEIDLE` 提取 Deep/Light Doze 狀態與設定參數（idle_to, idle_factor, max_idle_to）
+- `parseBatteryStats()`：從 `DUMPSYS BATTERYSTATS` 的 `Statistics since last charge:` 區塊提取預計算統計值，自動計算 Deep Doze 放電率（mAh/h）
+- `parseKernelWakelocks()`：從 `CHECKIN BATTERYSTATS` 的 `9,0,l,kwl` 行提取 top kernel wakelocks（by totalTimeMs）
+- `parsePowerSections()`：統合上述函式，遍歷 bugreport section list 辨識電源相關段落
+- `parseAlarmStats()`：從 `DUMPSYS ALARM` 的 `Alarm Stats:` 區塊提取 per-app alarm wakeup 統計
+- `parseSuspendStats()`：從 kernel log entries 統計 suspend/resume 事件（成功率、abort sources、wakeup sources）
+
+**段落辨識策略：**
+- 不靠 section name 精確匹配（段落名稱因廠商而異），靠內容特徵：
+  - `mWakefulness=` → PowerManager section
+  - `DeviceIdleController` → DeviceIdle section
+  - `Statistics since last charge:` → BatteryStats section
+  - `Alarm Stats:` → Alarm section
+  - `9,0,l,kwl` → CHECKIN format kernel wakelocks
+
+**13 條 Insight 規則：**
+| 規則類別 | 規則數 | 說明 |
+|---------|-------|------|
+| Power Management | 3 | wakefulness anomaly、active wakelocks、suspend blockers |
+| Doze/Idle | 2 | deep doze 放電率、idle 配置異常 |
+| Battery | 3 | battery drain rate、low battery warning、charging efficiency |
+| Kernel Wakelocks | 1 | top wakelocks 異常 |
+| Alarm Stats | 2 | alarm wakeups 過多、per-app alarm pattern |
+| Suspend/Resume | 2 | suspend 成功率低、abort source 分析 |
+
+### 4.9 Basic Analyzer（純規則引擎）
 
 不需要 LLM 即可完成：
 - 聚合三個 Parser 的結果（含 dumpsys meminfo/cpuinfo）
@@ -419,6 +469,7 @@ logcat-ai/
 │   │   │   ├── kernel-parser.ts # Kernel Log 解析（12 種事件偵測）
 │   │   │   ├── dumpsys-parser.ts # Dumpsys meminfo/cpuinfo/lshal 解析
 │   │   │   ├── tombstone-parser.ts # Tombstone native crash 解析
+│   │   │   ├── power-parser.ts  # Power management 解析（dumpsys power/deviceidle/batterystats/alarm）
 │   │   │   ├── basic-analyzer.ts # 規則引擎 + Health Score（frequency damping）
 │   │   │   ├── format-detector.ts # 獨立檔案格式偵測（logcat/dmesg）
 │   │   │   ├── comparison.ts    # 兩份分析結果差異比對
@@ -451,6 +502,7 @@ logcat-ai/
 │   │       │   ├── StackTrace.tsx
 │   │       │   ├── TagStats.tsx
 │   │       │   ├── BSPQuickReference.tsx
+│   │       │   ├── PowerOverview.tsx       # Power management 概覽（3 欄 grid + Deep Doze 放電率 + Alarm/Suspend 統計）
 │   │       │   ├── ChatPanel.tsx
 │   │       │   ├── HistoryPanel.tsx
 │   │       │   ├── ExportMenu.tsx
@@ -618,7 +670,32 @@ Week 5: Deep Analysis + 部署
 - ✅ Search Modal UX 改善：FTS5 pid/tid columns（修正 ?/? 顯示）、空搜尋瀏覽所有 entries、Logcat/Kernel 結果表格欄位標題、移除冗餘 kernel level 選項
 - ✅ 大型 bugreport 記憶體修正：per-element push 避免 stack overflow、解析後釋放 section content 字串、Node.js heap 4GB（支援 30MB+ ZIP / 695K entries）
 
-### 8.6 Phase 3：Backlog（未排期）
+### 8.6 Phase 2.4：Power Management Analyzer
+
+#### Phase 1：Parser + Insight 整合
+- `types.ts` 新增 PowerManagerState、DozeState、DozeSettings、BatteryStatsSummary、KernelWakeLockStat、PowerParseResult、AlarmWakeupStat、SuspendStats
+- `AnalysisResult.powerStatus` 新增 power 分析結果欄位
+- `InsightCategory` 新增 'power' 類別
+- 新增 `power-parser.ts`（7 個解析函式）
+- `basic-analyzer.ts` 新增 `generatePowerInsights()`（13 條規則 + kernel health score 整合）
+- `context-builder.ts` 新增 `collectPowerContext()` 供 Deep Analysis LLM 使用
+
+#### Phase 2：前端 PowerOverview 元件
+- 新增 `components/PowerOverview.tsx`：
+  - 3 欄 grid：PowerManager state / Doze status（含設定參數） / Battery stats
+  - Deep Doze 放電率色彩標示（green <20, amber 20-40, red >40 mAh/h）
+  - Alarm Wakeups 表格（per-app top 10，含時間戳）
+  - Suspend Statistics 區塊（成功率百分比、abort sources 排行）
+- `App.tsx` 在 `TagStats` 和 `BSPQuickReference` 之間渲染
+- 若無 power data 時 return null（optional prop）
+
+#### Phase 3：Alarm Stats + Suspend 統計
+- `power-parser.ts` 新增 `parseAlarmStats()` / `parseSuspendStats()`
+- Alarm Stats insight：wakeups > 500/1000、per-app pattern 異常
+- Suspend Stats insight：成功率 < 95%、abort source 分析
+- `PowerOverview.tsx` 擴展 Alarm 和 Suspend 區塊渲染
+
+### 8.7 Phase 3：Backlog（未排期）
 
 - CVE/Security 分析（比對 CVE 資料庫）
 - Jira/GitHub 整合（從 findings 建 issue）
@@ -629,16 +706,16 @@ Week 5: Deep Analysis + 部署
 
 ---
 
-## 9. 專案管理
+## 10. 專案管理
 
-### 9.1 追蹤策略
+### 10.1 追蹤策略
 
 GitHub Issues + Project Board：
 - **4 個 Milestones** 對應 Week 1-5 + Phase 1.5
 - **42 個 Issues** 涵蓋所有工作項目（#1-#29 已完成，#30-#42 Phase 1.5）
 - **Labels**：parser / backend / llm-gateway / frontend / infra / test + P0/P1/P2
 
-### 9.2 每日工作流
+### 10.2 每日工作流
 
 1. 開啟 GitHub Project Board 看當天的 Issue
 2. 將 Issue 拖到 In Progress
@@ -647,7 +724,7 @@ GitHub Issues + Project Board：
 
 ---
 
-## 10. 驗證方式
+## 11. 驗證方式
 
 | 驗證項目 | 方法 | 標準 |
 |---------|------|------|
@@ -658,7 +735,7 @@ GitHub Issues + Project Board：
 
 ---
 
-## 11. 目前進度
+## 12. 目前進度
 
 ### Week 1-2: Parser 核心 + 型別系統 ✅
 
@@ -714,11 +791,11 @@ GitHub Issues + Project Board：
 
 ---
 
-## 12. Phase 1.5 — BSP 分析能力強化（✅ 全部完成）
+## 13. Phase 1.5 — BSP 分析能力強化（✅ 全部完成）
 
 基於 Tech Lead review 與新手 BSP 工程師使用回饋，識別出以下改善方向。
 
-### 12.1 系統分析能力改善
+### 13.1 系統分析能力改善
 
 | 優先級 | # | 內容 | 工作量 | 影響度 | 狀態 |
 |--------|---|------|--------|--------|------|
@@ -730,7 +807,7 @@ GitHub Issues + Project Board：
 | P1 | #35 | Tombstone parser（native crash backtrace + signal info + vendor crash 偵測） | Medium | Medium | ✅ 完成 |
 | P2 | #36 | BSP-specific prompt tuning（vendor vs framework vs app 分層） | Low | Low | ✅ 完成 |
 
-### 12.2 新手 BSP 工程師 Debug 輔助
+### 13.2 新手 BSP 工程師 Debug 輔助
 
 | 優先級 | # | 內容 | 工作量 | 影響度 | 狀態 |
 |--------|---|------|--------|--------|------|
@@ -741,13 +818,13 @@ GitHub Issues + Project Board：
 | P1 | #41 | Quick debug commands 自動生成（根據發現的問題產出 adb 腳本） | Low | Medium | ✅ 完成 |
 | P2 | #42 | BSP Quick Reference 前端面板（整合 device state + resource snapshot + HAL status） | Medium | Medium | ✅ 完成 |
 
-### 12.3 #30 Timeline 重構（P0 最高優先）
+### 13.3 #30 Timeline 重構（P0 最高優先）
 
 **問題**：實測 308 events，重複 SELinux denial 佔滿畫面，critical 事件被埋沒，Timeline 形同廢物。
 
 **改善範圍：**
 
-#### A. 資料層 — `packages/parser/src/basic-analyzer.ts` `buildTimeline()`
+#### A. 資料層 — `packages/parser/src/basic-analyzer.ts` 的 `buildTimeline()`
 1. **事件聚合**：相同 title + 相同 source 在 30 秒窗口內 → 合併為一條
    - 新增 `TimelineEvent.count?: number` 和 `TimelineEvent.timeRange?: string`
    - 例：`SELinux denial: system_app → vendor_sierra_fw_check_prop (×47)` + `boot+3808s ~ boot+3902s`

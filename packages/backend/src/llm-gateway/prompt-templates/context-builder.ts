@@ -50,6 +50,8 @@ export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
       collectANRContext(ctx, insight, result);
     } else if (insight.source === 'kernel') {
       collectKernelContext(ctx, insight, result);
+    } else if (insight.source === 'power') {
+      collectPowerContext(ctx, insight, result);
     } else if (insight.source === 'cross') {
       collectLogcatContext(ctx, insight, result);
       collectKernelContext(ctx, insight, result);
@@ -230,6 +232,70 @@ function collectKernelContext(
 
   // Deduplicate
   ctx.anomalyLogs = [...new Set(ctx.anomalyLogs)];
+}
+
+function collectPowerContext(
+  ctx: InsightContext,
+  _insight: InsightCard,
+  result: AnalysisResult
+): void {
+  const power = result.powerStatus;
+  if (!power) return;
+
+  const lines: string[] = [];
+
+  if (power.powerManagerState) {
+    const pm = power.powerManagerState;
+    lines.push(`=== PowerManager State ===`);
+    lines.push(`Wakefulness: ${pm.wakefulness}, Battery: ${pm.batteryLevel}%, Powered: ${pm.isPowered}`);
+    lines.push(`AutoSuspend: ${pm.useAutoSuspend}, LastSleepReason: ${pm.lastSleepReason}`);
+    if (pm.activeWakeLocks.length > 0) {
+      lines.push(`Active WakeLocks (${pm.activeWakeLocks.length}):`);
+      for (const wl of pm.activeWakeLocks.slice(0, 10)) {
+        lines.push(`  ${wl.type} '${wl.tag}' uid=${wl.uid} pid=${wl.pid}${wl.duration ? ` ACQ=${wl.duration}` : ''}`);
+      }
+    }
+    if (pm.suspendBlockers.length > 0) {
+      lines.push(`Suspend Blockers (${pm.suspendBlockers.length}):`);
+      for (const sb of pm.suspendBlockers) {
+        lines.push(`  ${sb.name}: ref count=${sb.refCount}`);
+      }
+    }
+  }
+
+  if (power.dozeState) {
+    lines.push(`=== Doze State ===`);
+    lines.push(`Deep: ${power.dozeState.deepState}, Light: ${power.dozeState.lightState}`);
+    lines.push(`DeepEnabled: ${power.dozeState.deepEnabled}, LightEnabled: ${power.dozeState.lightEnabled}`);
+    lines.push(`ScreenOn: ${power.dozeState.screenOn}, Charging: ${power.dozeState.charging}`);
+  }
+
+  if (power.dozeSettings) {
+    const ds = power.dozeSettings;
+    lines.push(`=== Doze Settings ===`);
+    lines.push(`inactive_to=${ds.inactiveTo}ms, idle_to=${ds.idleTo}ms, idle_factor=${ds.idleFactor}, max_idle_to=${ds.maxIdleTo}ms`);
+    lines.push(`light_idle_to=${ds.lightIdleTo}ms, light_max_idle_to=${ds.lightMaxIdleTo}ms, light_idle_factor=${ds.lightIdleFactor}`);
+  }
+
+  if (power.batteryStats) {
+    const bs = power.batteryStats;
+    lines.push(`=== Battery Stats ===`);
+    lines.push(`Capacity: ${bs.batteryCapacityMah} mAh, Total Discharge: ${bs.totalDischargeMah} mAh`);
+    lines.push(`Time on Battery: ${bs.timePeriod}`);
+    lines.push(`Screen On: ${bs.screenOnTime}`);
+    lines.push(`Deep Doze: ${bs.deepDozeTime}, Discharge: ${bs.deepDozeDischargeMah} mAh, Rate: ${bs.deepDozeDischargeRateMahPerHr.toFixed(1)} mAh/h`);
+    lines.push(`Light Doze: ${bs.lightDozeTime}`);
+    lines.push(`Partial Wakelock: ${bs.partialWakelockTime}`);
+  }
+
+  if (power.kernelWakeLocks.length > 0) {
+    lines.push(`=== Top Kernel Wakelocks ===`);
+    for (const wl of power.kernelWakeLocks.slice(0, 5)) {
+      lines.push(`  ${wl.name}: ${wl.totalTimeMs}ms (${wl.count} times, avg ${wl.avgTimeMs.toFixed(0)}ms)`);
+    }
+  }
+
+  ctx.anomalyLogs = lines;
 }
 
 function collectTemporalContext(

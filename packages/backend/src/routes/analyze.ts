@@ -12,6 +12,7 @@ import {
   parseCpuInfo,
   parseLshal,
   parseTombstones,
+  parsePowerSections,
   detectLogFormat,
   AnalysisResult,
   DeepAnalysisOverview,
@@ -187,6 +188,12 @@ router.get('/:id', async (req: Request, res: Response) => {
       const tombstoneResult = parseTombstones(unpackResult.tombstoneContents);
 
       if (aborted) return;
+      sendSSE(res, { stage: 'parsing', progress: 62, message: 'Parsing power management...' });
+
+      // Parse power management sections (dumpsys power, deviceidle, batterystats, alarm)
+      const powerStatus = parsePowerSections(unpackResult.sections, kernelResult.entries);
+
+      if (aborted) return;
       sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
       // Extract system properties section (before freeing section content)
@@ -245,6 +252,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         tombstoneAnalyses: tombstoneResult.analyses,
         systemProperties,
         uptimeContent,
+        powerStatus,
       });
 
       // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
