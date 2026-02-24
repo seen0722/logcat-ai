@@ -84,13 +84,13 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
 - **Database** (`db.ts`): SQLite via better-sqlite3, WAL mode. `analyses` table + `logcat_fts` FTS5 virtual table (with `pid`, `tid`, `buffer` columns) + `kernel_fts` FTS5 virtual table. FTS5 tables use DROP+CREATE on migration (no ALTER TABLE support).
 - **Store** (`store.ts`): In-memory cache with 1-hour TTL, auto-syncs to SQLite via `history-store.ts`
-- **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat and kernel entries
+- **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat and kernel entries, supports optional `startTime`/`endTime` timestamp range filtering (lexicographic comparison on `MM-DD HH:mm:ss.SSS` format)
 - **Raw Data Store** (`raw-data-store.ts`): In-memory store for raw LogEntry[], sections (for agentic tool access)
 - **Config** (`config.ts`): Environment-based, mutable at runtime via settings API. Includes `dbPath` for SQLite.
 
@@ -110,7 +110,8 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
-- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, buffer, level, pid filters; kernel: keyword, severity level filter), column headers, empty search to browse all entries, CSV/Text export
+- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, buffer, level, pid filters; kernel: keyword, severity level filter), From/To time range fields (`MM-DD HH:mm:ss`), column headers, empty search to browse all entries, CSV/Text export. Accepts `initialStartTime`/`initialEndTime` props to pre-fill time range and auto-trigger search
+- `components/Timeline.tsx` — Timeline event list with severity/source filters; hover reveals search icon (magnifying glass) that opens SearchModal with ±5s time window around the event timestamp (via `onSearchTime` prop). Original insightId click-to-scroll behavior preserved with `e.stopPropagation()`
 
 ### MCP Server (`@logcat-ai/mcp-server`)
 
