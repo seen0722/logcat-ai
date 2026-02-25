@@ -30,3 +30,6 @@ npm-debug.log*
 
 # SQLite
 data/
+
+# E2E test screenshots
+packages/frontend/e2e/screenshots/
