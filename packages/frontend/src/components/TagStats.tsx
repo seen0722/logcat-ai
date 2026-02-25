@@ -8,8 +8,31 @@ interface Props {
 
 const classificationConfig: Record<TagClassification, { label: string; text: string; bg: string; bar: string }> = {
   vendor: { label: 'Vendor', text: 'text-amber-400', bg: 'bg-amber-500/15', bar: 'bg-amber-500' },
-  framework: { label: 'Framework', text: 'text-blue-400', bg: 'bg-blue-500/15', bar: 'bg-blue-500' },
-  app: { label: 'App', text: 'text-green-400', bg: 'bg-green-500/15', bar: 'bg-green-500' },
+  framework: { label: 'Framework', text: 'text-purple-400', bg: 'bg-purple-500/15', bar: 'bg-purple-500' },
+  app: { label: 'App', text: 'text-cyan-400', bg: 'bg-cyan-500/15', bar: 'bg-cyan-500' },
+};
+
+/** Common Android tags with brief explanations */
+const TAG_HINTS: Record<string, string> = {
+  crash_dump64: 'Native crash dump handler (64-bit)',
+  crash_dump32: 'Native crash dump handler (32-bit)',
+  lowmemorykiller: 'Low memory killer daemon',
+  ActivityManager: 'Android activity lifecycle manager',
+  WindowManager: 'Window and display management',
+  PackageManager: 'App package installation/management',
+  InputDispatcher: 'Touch/key input event dispatcher',
+  ServiceManager: 'Binder service registry',
+  SurfaceFlinger: 'Display compositor service',
+  AudioFlinger: 'Audio mixing and routing service',
+  Zygote: 'App process forking daemon',
+  SystemServer: 'Core Android system services',
+  Watchdog: 'System server hang detector',
+  SELinux: 'Mandatory access control policy',
+  eiak: 'Vendor-specific error/event tag',
+  PowerManagerService: 'Power state and wake lock management',
+  BatteryStatsService: 'Battery usage tracking service',
+  ConnectivityService: 'Network connectivity management',
+  HealthService: 'Hardware health monitoring HAL',
 };
 
 export default function TagStats({ tagStats, onTagClick }: Props) {
@@ -69,22 +92,29 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
         {displayedTags.map((t, i) => {
           const cfg = classificationConfig[t.classification];
           const barWidth = (t.count / maxCount) * 100;
+          const hint = TAG_HINTS[t.tag];
+          const tooltip = hint
+            ? `${t.tag}: ${hint}${onTagClick ? ' (click to search)' : ''}`
+            : onTagClick ? `Click to search "${t.tag}" logs` : t.tag;
           return (
             <div
               key={t.tag}
-              className={`flex items-center gap-2 text-sm${onTagClick ? ' cursor-pointer hover:bg-surface-hover rounded-md px-1 -mx-1 transition-colors' : ''}`}
+              className={`flex items-center gap-2 text-sm group${onTagClick ? ' cursor-pointer hover:bg-surface-hover rounded-md px-1 -mx-1 transition-colors' : ''}`}
               onClick={onTagClick ? () => onTagClick(t.tag) : undefined}
-              title={onTagClick ? `Click to search "${t.tag}" logs` : t.tag}
+              title={tooltip}
             >
               <span className="text-gray-600 w-5 text-right text-xs shrink-0">{i + 1}</span>
               <span className={`${cfg.bg} ${cfg.text} text-xs font-medium px-1.5 py-0.5 rounded shrink-0 w-20 text-center`}>
                 {cfg.label}
               </span>
-              <span className="truncate text-gray-300 min-w-0 w-56 shrink-0">{t.tag}</span>
+              <span className="truncate text-gray-300 min-w-0 w-56 shrink-0">
+                {t.tag}
+                {hint && <span className="text-gray-600 text-xs ml-1.5 hidden group-hover:inline">({hint})</span>}
+              </span>
               <div className="flex-1 flex items-center gap-2">
-                <div className="flex-1 bg-surface rounded-full h-1.5 overflow-hidden">
+                <div className="flex-1 bg-surface rounded-full h-2 overflow-hidden">
                   <div
-                    className={`${cfg.bar} opacity-80 h-full rounded-full transition-all duration-500`}
+                    className={`${cfg.bar} h-full rounded-full transition-all duration-500`}
                     style={{ width: `${barWidth}%` }}
                   />
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useComparison } from './hooks/useComparison';
 import { BatchAggregation, BatchFileResult } from './lib/types';
@@ -19,6 +19,7 @@ import ComparisonView from './components/ComparisonView';
 import BatchUpload from './components/BatchUpload';
 import BatchResults from './components/BatchResults';
 import SearchModal from './components/SearchModal';
+import SectionNav from './components/SectionNav';
 
 export default function App() {
   const { phase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
@@ -49,37 +50,24 @@ export default function App() {
     // Parse "MM-DD HH:mm:ss.SSS" or "MM-DD HH:mm:ss"
     const match = timestamp.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
     if (!match) {
-      // Fallback: return original timestamp as-is
       return { startTime: timestamp, endTime: timestamp };
     }
     const [, mo, dd, hh, mm, ss, msStr] = match;
-    const ms = msStr ? parseInt(msStr.padEnd(3, '0'), 10) : 0;
+    const millis = msStr ? parseInt(msStr.padEnd(3, '0'), 10) : 0;
 
-    // Convert to total milliseconds for easy arithmetic (using a reference year)
-    const toMs = (month: number, day: number, hour: number, min: number, sec: number, millis: number) => {
-      return ((((month * 31 + day) * 24 + hour) * 60 + min) * 60 + sec) * 1000 + millis;
+    // Use Date for correct month/day boundary arithmetic
+    const ref = new Date(2000, parseInt(mo, 10) - 1, parseInt(dd, 10),
+      parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), millis);
+
+    const fmt = (d: Date) => {
+      const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
     };
 
-    const totalMs = toMs(parseInt(mo, 10), parseInt(dd, 10), parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), ms);
-    const startMs = totalMs - deltaSeconds * 1000;
-    const endMs = totalMs + deltaSeconds * 1000;
-
-    const fromMs = (total: number) => {
-      const millis = ((total % 1000) + 1000) % 1000;
-      let secs = Math.floor(total / 1000);
-      const s = ((secs % 60) + 60) % 60;
-      secs = Math.floor(secs / 60);
-      const m = ((secs % 60) + 60) % 60;
-      secs = Math.floor(secs / 60);
-      const h = ((secs % 24) + 24) % 24;
-      secs = Math.floor(secs / 24);
-      const d = ((secs % 31) + 31) % 31 || 1;
-      secs = Math.floor(secs / 31);
-      const mon = Math.max(1, Math.min(12, secs));
-      return `${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+    return {
+      startTime: fmt(new Date(ref.getTime() - deltaSeconds * 1000)),
+      endTime: fmt(new Date(ref.getTime() + deltaSeconds * 1000)),
     };
-
-    return { startTime: fromMs(startMs), endTime: fromMs(endMs) };
   };
 
   const handleTimelineSearch = (eventTimestamp: string, _eventTimestampEnd: string, source?: string) => {
@@ -91,6 +79,31 @@ export default function App() {
     setSearchFocusTime(eventTimestamp);
     setShowSearch(true);
   };
+
+  // Build section navigation items based on available data
+  const navSections = useMemo(() => {
+    if (!result) return [];
+    const sections = [
+      { id: 'section-overview', label: 'Overview', icon: '\u{1F4CB}' },
+    ];
+    if (result.logTagStats && result.logTagStats.length > 0) {
+      sections.push({ id: 'section-tags', label: 'Tags', icon: '\u{1F3F7}' });
+    }
+    if (result.powerStatus) {
+      sections.push({ id: 'section-power', label: 'Power', icon: '\u{1F50B}' });
+    }
+    sections.push({ id: 'section-bsp', label: 'BSP Ref', icon: '\u{1F527}' });
+    if (result.deepAnalysisOverview) {
+      sections.push({ id: 'section-deep', label: 'AI Analysis', icon: '\u{1F9E0}' });
+    }
+    sections.push({ id: 'section-insights', label: 'Insights', icon: '\u{1F4A1}' });
+    if (result.anrAnalyses.length > 0) {
+      sections.push({ id: 'section-anr', label: 'ANR', icon: '\u{26A0}' });
+    }
+    sections.push({ id: 'section-timeline', label: 'Timeline', icon: '\u{23F1}' });
+    sections.push({ id: 'section-chat', label: 'Chat', icon: '\u{1F4AC}' });
+    return sections;
+  }, [result]);
 
   const handleBatchViewReport = (id: string) => {
     setBatchAggregation(null);
@@ -169,40 +182,66 @@ export default function App() {
 
       {/* Result Phase */}
       {phase === 'result' && result && (
-        <div className="max-w-5xl mx-auto space-y-6">
-          <SystemOverview
-            metadata={result.metadata}
-            healthScore={result.healthScore}
-            memInfo={result.memInfo}
-            cpuInfo={result.cpuInfo}
-            bootStatus={result.bootStatus}
-            halStatus={result.halStatus}
-          />
-          {result.logTagStats && result.logTagStats.length > 0 && (
-            <TagStats
-              tagStats={result.logTagStats}
-              onTagClick={(tag) => { setSearchTag(tag); setShowSearch(true); }}
-            />
-          )}
-          <PowerOverview powerStatus={result.powerStatus} />
-          <BSPQuickReference
-            bootStatus={result.bootStatus}
-            memInfo={result.memInfo}
-            cpuInfo={result.cpuInfo}
-            halStatus={result.halStatus}
-            logTagStats={result.logTagStats}
-            powerStatus={result.powerStatus}
-          />
-          {result.deepAnalysisOverview && (
-            <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
-          )}
-          <InsightsCards insights={result.insights} />
-          {result.anrAnalyses.length > 0 && (
-            <ANRDetail analyses={result.anrAnalyses} />
-          )}
-          <Timeline events={result.timeline} onSearchTime={handleTimelineSearch} />
-          {uploadId && <ChatPanel uploadId={uploadId} />}
-        </div>
+        <>
+          <SectionNav sections={navSections} />
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div id="section-overview">
+              <SystemOverview
+                metadata={result.metadata}
+                healthScore={result.healthScore}
+                memInfo={result.memInfo}
+                cpuInfo={result.cpuInfo}
+                bootStatus={result.bootStatus}
+                halStatus={result.halStatus}
+                insights={result.insights}
+              />
+            </div>
+            {result.logTagStats && result.logTagStats.length > 0 && (
+              <div id="section-tags">
+                <TagStats
+                  tagStats={result.logTagStats}
+                  onTagClick={(tag) => { setSearchTag(tag); setShowSearch(true); }}
+                />
+              </div>
+            )}
+            {result.powerStatus && (
+              <div id="section-power">
+                <PowerOverview powerStatus={result.powerStatus} />
+              </div>
+            )}
+            <div id="section-bsp">
+              <BSPQuickReference
+                bootStatus={result.bootStatus}
+                memInfo={result.memInfo}
+                cpuInfo={result.cpuInfo}
+                halStatus={result.halStatus}
+                logTagStats={result.logTagStats}
+                powerStatus={result.powerStatus}
+              />
+            </div>
+            {result.deepAnalysisOverview && (
+              <div id="section-deep">
+                <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
+              </div>
+            )}
+            <div id="section-insights">
+              <InsightsCards insights={result.insights} />
+            </div>
+            {result.anrAnalyses.length > 0 && (
+              <div id="section-anr">
+                <ANRDetail analyses={result.anrAnalyses} />
+              </div>
+            )}
+            <div id="section-timeline">
+              <Timeline events={result.timeline} onSearchTime={handleTimelineSearch} />
+            </div>
+            {uploadId && (
+              <div id="section-chat">
+                <ChatPanel uploadId={uploadId} />
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* History Panel (normal mode) */}

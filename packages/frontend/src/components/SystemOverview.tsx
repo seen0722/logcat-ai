@@ -1,3 +1,4 @@
+import { InsightCard } from '../lib/types';
 import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary } from '../lib/types';
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
   cpuInfo?: CpuInfoSummary;
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
+  insights?: InsightCard[];
 }
 
 function scoreColor(score: number): string {
@@ -15,31 +17,59 @@ function scoreColor(score: number): string {
   return 'text-red-400';
 }
 
-function ScoreRing({ score, label, size = 64 }: { score: number; label: string; size?: number }) {
+/** Build a brief deduction reason for a given health dimension */
+function deductionHint(dimension: string, score: number, insights?: InsightCard[]): string {
+  if (score >= 80 || !insights) return '';
+  const counts: Record<string, number> = {};
+  for (const i of insights) {
+    if (dimension === 'stability' && (i.category === 'crash' || i.category === 'stability')) {
+      counts[i.source] = (counts[i.source] || 0) + 1;
+    } else if (dimension === 'memory' && i.category === 'memory') {
+      counts[i.source] = (counts[i.source] || 0) + 1;
+    } else if (dimension === 'responsiveness' && (i.category === 'anr' || i.category === 'performance')) {
+      counts[i.category] = (counts[i.category] || 0) + 1;
+    } else if (dimension === 'kernel' && i.category === 'kernel') {
+      counts[i.source] = (counts[i.source] || 0) + 1;
+    }
+  }
+  const parts: string[] = [];
+  for (const [key, count] of Object.entries(counts)) {
+    parts.push(`${count} ${key}`);
+  }
+  return parts.slice(0, 2).join(', ');
+}
+
+function ScoreRing({ score, label, size = 64, hint }: { score: number; label: string; size?: number; hint?: string }) {
   const radius = (size - 8) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
+  const isLow = score < 70;
 
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size} className="-rotate-90">
-        <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none" stroke="#2a2d3e" strokeWidth={4}
-        />
-        <circle
-          cx={size / 2} cy={size / 2} r={radius}
-          fill="none"
-          stroke={score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'}
-          strokeWidth={4}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-all duration-1000 ease-out"
-        />
-      </svg>
-      <span className={`text-lg font-bold -mt-10 ${scoreColor(score)}`}>{score}</span>
-      <span className="text-xs text-gray-500 mt-5">{label}</span>
+      <div className={`relative ${isLow ? 'animate-pulse-subtle' : ''}`}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle
+            cx={size / 2} cy={size / 2} r={radius}
+            fill="none" stroke="#2a2d3e" strokeWidth={4}
+          />
+          <circle
+            cx={size / 2} cy={size / 2} r={radius}
+            fill="none"
+            stroke={score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'}
+            strokeWidth={isLow ? 5 : 4}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-1000 ease-out"
+          />
+        </svg>
+        <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${scoreColor(score)}`}>
+          {score}
+        </span>
+      </div>
+      <span className={`text-xs mt-1.5 ${isLow ? 'text-amber-400 font-medium' : 'text-gray-500'}`}>{label}</span>
+      {hint && <span className="text-[10px] text-gray-600 mt-0.5 max-w-[80px] text-center truncate" title={hint}>{hint}</span>}
     </div>
   );
 }
@@ -55,11 +85,12 @@ function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
-export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus }: Props) {
+export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus, insights }: Props) {
   const { breakdown } = healthScore;
+  const overallBorderColor = healthScore.overall >= 80 ? 'border-l-green-500' : healthScore.overall >= 50 ? 'border-l-amber-500' : 'border-l-red-500';
 
   return (
-    <div className="card space-y-4">
+    <div className={`card space-y-4 border-l-4 ${overallBorderColor}`}>
       <h2 className="text-lg font-semibold">System Overview</h2>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -127,10 +158,10 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
       {/* Health Scores */}
       <div className="flex items-center justify-around pt-2">
         <ScoreRing score={healthScore.overall} label="Overall" size={80} />
-        <ScoreRing score={breakdown.stability} label="Stability" />
-        <ScoreRing score={breakdown.memory} label="Memory" />
-        <ScoreRing score={breakdown.responsiveness} label="Response" />
-        <ScoreRing score={breakdown.kernel} label="Kernel" />
+        <ScoreRing score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
+        <ScoreRing score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
+        <ScoreRing score={breakdown.responsiveness} label="Response" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
+        <ScoreRing score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
       </div>
 
       {/* Memory, CPU & HAL Summary */}

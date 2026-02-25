@@ -27,6 +27,13 @@ const TOOL_LABELS: Record<string, string> = {
   search_section: 'Searching bugreport sections',
 };
 
+const SUGGESTED_QUESTIONS = [
+  'What is the root cause of the ANR?',
+  'Which HAL is causing issues?',
+  'Summarize all critical findings',
+  'Are there any memory leaks?',
+];
+
 export default function ChatPanel({ uploadId }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -37,11 +44,11 @@ export default function ChatPanel({ uploadId }: Props) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
+  const send = async (text?: string) => {
+    const msg = (text ?? input).trim();
+    if (!msg || streaming) return;
 
-    const userMsg: Message = { role: 'user', content: text };
+    const userMsg: Message = { role: 'user', content: msg };
     const allMessages = [...messages, userMsg];
     setMessages(allMessages);
     setInput('');
@@ -81,17 +88,54 @@ export default function ChatPanel({ uploadId }: Props) {
     }
   };
 
+  // Compact mode when no messages
+  if (messages.length === 0) {
+    return (
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-3">Ask Follow-up Questions</h2>
+
+        {/* Suggested questions */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {SUGGESTED_QUESTIONS.map((q) => (
+            <button
+              key={q}
+              onClick={() => send(q)}
+              className="text-xs px-3 py-1.5 bg-surface border border-border rounded-full text-gray-400 hover:text-gray-200 hover:border-indigo-500/50 transition-colors"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* Input */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-border-focus"
+            placeholder="Ask anything about this bugreport..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && send()}
+            disabled={streaming}
+          />
+          <button
+            onClick={() => send()}
+            disabled={!input.trim() || streaming}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card flex flex-col h-96">
       <h2 className="text-lg font-semibold mb-3">Ask Follow-up Questions</h2>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
-        {messages.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-8">
-            Ask anything about this bugreport analysis...
-          </p>
-        )}
         {messages.map((msg, i) => (
           <div key={i}>
             {/* Tool activity indicators (shown before assistant content) */}
@@ -159,7 +203,7 @@ export default function ChatPanel({ uploadId }: Props) {
           disabled={streaming}
         />
         <button
-          onClick={send}
+          onClick={() => send()}
           disabled={!input.trim() || streaming}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
