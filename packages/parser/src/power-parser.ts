@@ -568,6 +568,7 @@ export function parseEstimatedPowerUse(content: string): EstimatedPowerUse | und
   const components: Array<{ name: string; mah: number }> = [];
   const topUids: Array<{ uid: string; name: string; mah: number }> = [];
   let computedTotal = 0;
+  let actualDrain: { min: number; max: number } | undefined;
 
   // First line is the header, skip it
   for (let i = 1; i < lines.length; i++) {
@@ -579,9 +580,17 @@ export function parseEstimatedPowerUse(content: string): EstimatedPowerUse | und
     if (!trimmed) break;
 
     // "Capacity: 5870, Computed drain: 9112, actual drain: 9025"
+    // "Capacity: 13395, Computed drain: 1018, actual drain: 536-1072"
     const capacityMatch = trimmed.match(/Computed drain:\s*([\d.]+)/);
     if (capacityMatch) {
       computedTotal = parseFloat(capacityMatch[1]);
+      // Parse actual drain (single value or range)
+      const actualMatch = trimmed.match(/actual drain:\s*([\d.]+)(?:-([\d.]+))?/);
+      if (actualMatch) {
+        const min = parseFloat(actualMatch[1]);
+        const max = actualMatch[2] ? parseFloat(actualMatch[2]) : min;
+        actualDrain = { min, max };
+      }
       continue;
     }
 
@@ -615,6 +624,7 @@ export function parseEstimatedPowerUse(content: string): EstimatedPowerUse | und
     components,
     topUids: topUids.slice(0, 10),
     computedTotal,
+    actualDrain,
   };
 }
 

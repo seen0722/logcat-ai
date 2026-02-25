@@ -508,20 +508,36 @@ function renderEstimatedPower(epu?: EstimatedPowerUse, bs?: BatteryStatsSummary)
     );
   }
 
-  // Gap analysis
-  if (epu.computedTotal > 0 && bs && bs.totalDischargeMah > 0) {
+  // Gap analysis: compare Computed drain (power model) vs actual drain (coulomb counter)
+  if (epu.computedTotal > 0 && epu.actualDrain) {
+    const actualMid = (epu.actualDrain.min + epu.actualDrain.max) / 2;
+    const isRange = epu.actualDrain.min !== epu.actualDrain.max;
+    const actualLabel = isRange
+      ? `${epu.actualDrain.min.toFixed(0)}–${epu.actualDrain.max.toFixed(0)} mAh (midpoint: ${actualMid.toFixed(0)})`
+      : `${actualMid.toFixed(0)} mAh`;
+    const unaccounted = epu.computedTotal - actualMid;
+    const unaccountedPct = actualMid > 0 ? (unaccounted / actualMid) * 100 : 0;
+    html += '<h3>9.3 Gap Analysis</h3>';
+    html += table(['Metric', 'Value'], [
+      ['Computed Drain (power model)', `${epu.computedTotal.toFixed(1)} mAh`],
+      ['Actual Drain (coulomb counter)', actualLabel],
+      ['Overestimate', `${unaccounted.toFixed(1)} mAh`],
+      ['Overestimate %', `${unaccountedPct.toFixed(1)}%`],
+    ]);
+    if (Math.abs(unaccountedPct) > 50) {
+      html += '<div class="callout callout-warn">Significant gap between power model and coulomb counter — power profile calibration may need adjustment.</div>';
+    }
+  } else if (epu.computedTotal > 0 && bs && bs.totalDischargeMah > 0) {
+    // Fallback: no actual drain available, compare against battery stats discharge
     const unaccounted = bs.totalDischargeMah - epu.computedTotal;
     const unaccountedPct = (unaccounted / bs.totalDischargeMah) * 100;
     html += '<h3>9.3 Gap Analysis</h3>';
     html += table(['Metric', 'Value'], [
-      ['Computed Total', `${epu.computedTotal.toFixed(1)} mAh`],
-      ['Actual Discharge', `${bs.totalDischargeMah} mAh`],
-      ['Unaccounted', `${unaccounted.toFixed(1)} mAh`],
-      ['Unaccounted %', `${unaccountedPct.toFixed(1)}%`],
+      ['Computed Drain', `${epu.computedTotal.toFixed(1)} mAh`],
+      ['Reported Discharge', `${bs.totalDischargeMah} mAh`],
+      ['Difference', `${unaccounted.toFixed(1)} mAh`],
+      ['Difference %', `${unaccountedPct.toFixed(1)}%`],
     ]);
-    if (unaccountedPct > 50) {
-      html += '<div class="callout callout-warn">Most power consumption comes from sources not tracked by BatteryStats — most likely modem/WiFi radio hardware power.</div>';
-    }
   }
 
   return html;

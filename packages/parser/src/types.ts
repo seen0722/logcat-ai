@@ -575,6 +575,7 @@ export interface EstimatedPowerUse {
   components: Array<{ name: string; mah: number }>;
   topUids: Array<{ uid: string; name: string; mah: number }>;
   computedTotal: number;
+  actualDrain?: { min: number; max: number };
 }
 
 export interface ConnectivityStats {
