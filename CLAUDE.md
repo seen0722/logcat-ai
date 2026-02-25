@@ -239,4 +239,4 @@ KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timesta
 - **Alarm Stats**：從 `DUMPSYS ALARM` 的 `Alarm Stats:` 區塊提取 per-app alarm wakeup 統計
 - **Suspend Stats**：從 kernel log entries 統計 suspend/resume 事件（成功率、abort sources、wakeup sources）
 - **段落辨識**：不靠段落名稱，靠內容特徵（`mWakefulness=`, `DeviceIdleController`, `Statistics since last charge:` 等）
-- **Power 分析腳本**：`analyze-power.mjs` 已移至 `~/.claude/skills/power-analysis/`（GitHub: `seen0722/claude-skills`），透過絕對路徑引用本專案 parser，可從任何目錄執行
+- **Power 分析腳本**：`analyze-power.mjs` 已移至 `~/.claude/skills/power-analysis/`（GitHub: `seen0722/claude-skills`），需設定 `LOGCAT_AI_ROOT` 環境變數指向本專案根目錄，可從任何目錄執行
