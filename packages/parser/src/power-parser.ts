@@ -11,6 +11,9 @@ import {
   AlarmWakeupStat,
   SuspendStats,
   KernelLogEntry,
+  EstimatedPowerUse,
+  ConnectivityStats,
+  PartialWakeLockStat,
 } from './types.js';
 
 // ============================================================
@@ -519,6 +522,251 @@ export function parseSuspendStats(entries: KernelLogEntry[]): SuspendStats {
 }
 
 // ============================================================
+// Estimated Power Use (DUMPSYS BATTERYSTATS)
+// ============================================================
+
+/**
+ * Parse "Estimated power use (mAh):" block from batterystats.
+ * Format:
+ *   Estimated power use (mAh):
+ *     Capacity: 5870, Computed drain: 9112, actual drain: 9025
+ *     Screen: 45.2
+ *     Uid u0a123: 8.4 ( cpu=5.2 sensor=3.2 )
+ */
+export function parseEstimatedPowerUse(content: string): EstimatedPowerUse | undefined {
+  const idx = content.indexOf('Estimated power use (mAh):');
+  if (idx === -1) return undefined;
+
+  const block = content.slice(idx);
+  // Find the end: next section header (non-indented line after some indented lines)
+  const lines = block.split('\n');
+
+  const components: Array<{ name: string; mah: number }> = [];
+  const topUids: Array<{ uid: string; name: string; mah: number }> = [];
+  let computedTotal = 0;
+
+  // First line is the header, skip it
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at blank line or non-indented line (next section)
+    if (!line || (!/^\s/.test(line) && line.trim().length > 0)) break;
+
+    const trimmed = line.trim();
+    if (!trimmed) break;
+
+    // "Capacity: 5870, Computed drain: 9112, actual drain: 9025"
+    const capacityMatch = trimmed.match(/Computed drain:\s*([\d.]+)/);
+    if (capacityMatch) {
+      computedTotal = parseFloat(capacityMatch[1]);
+      continue;
+    }
+
+    // "Uid u0a123: 8.4 ( cpu=... )" or "Uid 1000: 3.2"
+    const uidMatch = trimmed.match(/^Uid\s+(\S+):\s*([\d.]+)/);
+    if (uidMatch) {
+      topUids.push({
+        uid: uidMatch[1],
+        name: uidMatch[1],
+        mah: parseFloat(uidMatch[2]),
+      });
+      continue;
+    }
+
+    // Component line: "Screen: 45.2" or "Wifi: 12.3"
+    const compMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9 _-]*):\s*([\d.]+)/);
+    if (compMatch && !compMatch[1].startsWith('Capacity')) {
+      components.push({
+        name: compMatch[1].trim(),
+        mah: parseFloat(compMatch[2]),
+      });
+    }
+  }
+
+  if (components.length === 0 && topUids.length === 0) return undefined;
+
+  // Sort UIDs by mah descending, keep top 10
+  topUids.sort((a, b) => b.mah - a.mah);
+
+  return {
+    components,
+    topUids: topUids.slice(0, 10),
+    computedTotal,
+  };
+}
+
+// ============================================================
+// Connectivity Stats (DUMPSYS BATTERYSTATS)
+// ============================================================
+
+/**
+ * Parse connectivity statistics from "Statistics since last charge:" block.
+ * Extracts WiFi/Cellular active time, data Rx/Tx, signal distribution.
+ */
+export function parseConnectivityStats(content: string): ConnectivityStats | undefined {
+  const statsIdx = content.indexOf('Statistics since last charge:');
+  if (statsIdx === -1) return undefined;
+  const block = content.slice(statsIdx);
+
+  const result: ConnectivityStats = {
+    cellularActiveTimeMs: 0,
+    cellularDataRxBytes: 0,
+    cellularDataTxBytes: 0,
+    wifiActiveTimeMs: 0,
+    wifiDataRxBytes: 0,
+    wifiDataTxBytes: 0,
+    bluetoothActiveTimeMs: 0,
+    gpsActiveTimeMs: 0,
+    connectivityChanges: 0,
+  };
+
+  let hasData = false;
+
+  // Cellular kernel active time: "Cellular kernel active time: 1h 2m 3s 456ms (1.2%)"
+  const cellActiveMatch = block.match(/Cellular kernel active time:\s*([^(]+)/);
+  if (cellActiveMatch) {
+    result.cellularActiveTimeMs = parseDurationToMs(cellActiveMatch[1].trim());
+    hasData = true;
+  }
+
+  // Cellular data received/sent (bytes): "Cellular data received: 123456789"
+  const cellRxMatch = block.match(/Cellular data received:\s*([\d.]+)\s*(\w+)?/);
+  if (cellRxMatch) {
+    result.cellularDataRxBytes = parseBytesValue(cellRxMatch[0]);
+    hasData = true;
+  }
+  const cellTxMatch = block.match(/Cellular data sent:\s*([\d.]+)\s*(\w+)?/);
+  if (cellTxMatch) {
+    result.cellularDataTxBytes = parseBytesValue(cellTxMatch[0]);
+    hasData = true;
+  }
+
+  // WiFi kernel active time: "Wifi kernel active time: 5m 30s 123ms (0.1%)"
+  const wifiActiveMatch = block.match(/Wifi kernel active time:\s*([^(]+)/);
+  if (wifiActiveMatch) {
+    result.wifiActiveTimeMs = parseDurationToMs(wifiActiveMatch[1].trim());
+    hasData = true;
+  }
+
+  // WiFi data: "Wifi data received: 123456789" / "Wifi data sent: ..."
+  const wifiRxMatch = block.match(/Wifi data received:\s*([\d.]+)\s*(\w+)?/);
+  if (wifiRxMatch) {
+    result.wifiDataRxBytes = parseBytesValue(wifiRxMatch[0]);
+    hasData = true;
+  }
+  const wifiTxMatch = block.match(/Wifi data sent:\s*([\d.]+)\s*(\w+)?/);
+  if (wifiTxMatch) {
+    result.wifiDataTxBytes = parseBytesValue(wifiTxMatch[0]);
+    hasData = true;
+  }
+
+  // Bluetooth active time: "Bluetooth total energy: ... active time: 1m 23s 456ms"
+  // or "Bluetooth active time: ..."
+  const btMatch = block.match(/Bluetooth.*active time:\s*([^\n,(]+)/);
+  if (btMatch) {
+    result.bluetoothActiveTimeMs = parseDurationToMs(btMatch[1].trim());
+    hasData = true;
+  }
+
+  // GPS sensor on time: "GPS sensor on time: 30m 12s 345ms"
+  const gpsMatch = block.match(/GPS sensor on time:\s*([^\n(]+)/);
+  if (gpsMatch) {
+    result.gpsActiveTimeMs = parseDurationToMs(gpsMatch[1].trim());
+    hasData = true;
+  }
+
+  // Connectivity changes: "Connectivity changes: 42"
+  const connMatch = block.match(/Connectivity changes:\s*(\d+)/);
+  if (connMatch) {
+    result.connectivityChanges = parseInt(connMatch[1], 10);
+    hasData = true;
+  }
+
+  // Signal strength distribution: "Signal level 0 time: 1h 2m (12.3%)"
+  const cellSignalDist: Array<{ level: string; percentage: number }> = [];
+  const cellSigRegex = /Signal level (\w+) time:[^(]*\(([\d.]+)%\)/g;
+  let sigMatch: RegExpExecArray | null;
+  while ((sigMatch = cellSigRegex.exec(block)) !== null) {
+    cellSignalDist.push({ level: sigMatch[1], percentage: parseFloat(sigMatch[2]) });
+  }
+  if (cellSignalDist.length > 0) {
+    result.cellularSignalDistribution = cellSignalDist;
+    hasData = true;
+  }
+
+  // WiFi signal levels: "Wifi signal level 0 time: ...(X%)"
+  const wifiSignalDist: Array<{ level: string; percentage: number }> = [];
+  const wifiSigRegex = /Wifi signal level (\w+) time:[^(]*\(([\d.]+)%\)/g;
+  while ((sigMatch = wifiSigRegex.exec(block)) !== null) {
+    wifiSignalDist.push({ level: sigMatch[1], percentage: parseFloat(sigMatch[2]) });
+  }
+  if (wifiSignalDist.length > 0) {
+    result.wifiSignalDistribution = wifiSignalDist;
+    hasData = true;
+  }
+
+  return hasData ? result : undefined;
+}
+
+/**
+ * Parse bytes value from strings like "123456789", "1.2 GB", "345 MB", "678 KB".
+ */
+function parseBytesValue(str: string): number {
+  const match = str.match(/([\d.]+)\s*(GB|MB|KB|B)?/i);
+  if (!match) return 0;
+  const val = parseFloat(match[1]);
+  const unit = (match[2] || 'B').toUpperCase();
+  switch (unit) {
+    case 'GB': return Math.round(val * 1_073_741_824);
+    case 'MB': return Math.round(val * 1_048_576);
+    case 'KB': return Math.round(val * 1024);
+    default: return Math.round(val);
+  }
+}
+
+// ============================================================
+// Partial Wake Locks (DUMPSYS BATTERYSTATS)
+// ============================================================
+
+/**
+ * Parse "All partial wake locks:" block from batterystats.
+ * Format:
+ *   All partial wake locks:
+ *     Wake lock u0a123 *alarm*: 1h 23m 45s 678ms (45 times) realtime
+ *     Wake lock 1000 *PowerManagerService.WakeLocks*: 2h 10m (123 times) realtime
+ */
+export function parsePartialWakeLocks(content: string): PartialWakeLockStat[] {
+  const idx = content.indexOf('All partial wake locks:');
+  if (idx === -1) return [];
+
+  const block = content.slice(idx);
+  const locks: PartialWakeLockStat[] = [];
+
+  // Match: "Wake lock <uid> <tag>: <duration> (<count> times) realtime"
+  const regex = /Wake lock\s+(\S+)\s+(.+?):\s*(.+?)\s*\((\d+)\s*times?\)\s*realtime/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(block)) !== null) {
+    const uid = match[1];
+    const rawName = match[2].trim();
+    // Remove surrounding asterisks: "*alarm*" → "alarm"
+    const name = rawName.replace(/^\*|\*$/g, '');
+    const durationStr = match[3].trim();
+    const count = parseInt(match[4], 10);
+
+    locks.push({
+      name,
+      uid,
+      totalTimeMs: parseDurationToMs(durationStr),
+      count,
+    });
+  }
+
+  // Sort by totalTimeMs descending, return top 20
+  locks.sort((a, b) => b.totalTimeMs - a.totalTimeMs);
+  return locks.slice(0, 20);
+}
+
+// ============================================================
 // Helpers: extract per-service sub-section from large DUMPSYS
 // ============================================================
 
@@ -593,6 +841,9 @@ export function parsePowerSections(
     // BatteryStats: contains "Statistics since last charge:"
     if (!result.batteryStats && section.content.includes('Statistics since last charge:')) {
       result.batteryStats = parseBatteryStats(section.content);
+      result.estimatedPowerUse = parseEstimatedPowerUse(section.content);
+      result.connectivityStats = parseConnectivityStats(section.content);
+      result.partialWakeLocks = parsePartialWakeLocks(section.content);
     }
 
     // Checkin BatteryStats: section name contains "CHECKIN BATTERYSTATS"

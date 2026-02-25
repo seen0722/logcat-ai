@@ -121,7 +121,7 @@ export default function App() {
                 </button>
               </>
             )}
-            {uploadId && <ExportMenu uploadId={uploadId} />}
+            {uploadId && <ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} />}
             <button
               onClick={() => setShowHistory(true)}
               className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"

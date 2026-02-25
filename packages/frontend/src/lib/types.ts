@@ -312,6 +312,34 @@ export interface SuspendStats {
   topWakeupSources: Array<{ name: string; count: number; percentage: number }>;
 }
 
+export interface EstimatedPowerUse {
+  components: Array<{ name: string; mah: number }>;
+  topUids: Array<{ uid: string; name: string; mah: number }>;
+  computedTotal: number;
+}
+
+export interface ConnectivityStats {
+  cellularActiveTimeMs: number;
+  cellularDataRxBytes: number;
+  cellularDataTxBytes: number;
+  cellularSignalDistribution?: Array<{ level: string; percentage: number }>;
+  wifiActiveTimeMs: number;
+  wifiDataRxBytes: number;
+  wifiDataTxBytes: number;
+  wifiSignalDistribution?: Array<{ level: string; percentage: number }>;
+  bluetoothActiveTimeMs: number;
+  gpsActiveTimeMs: number;
+  connectivityChanges: number;
+}
+
+export interface PartialWakeLockStat {
+  name: string;
+  uid: string;
+  ownerApp?: string;
+  totalTimeMs: number;
+  count: number;
+}
+
 export interface PowerParseResult {
   powerManagerState?: PowerManagerState;
   dozeState?: DozeState;
@@ -320,6 +348,9 @@ export interface PowerParseResult {
   kernelWakeLocks: KernelWakeLockStat[];
   alarmWakeups?: AlarmWakeupStat[];
   suspendStats?: SuspendStats;
+  estimatedPowerUse?: EstimatedPowerUse;
+  connectivityStats?: ConnectivityStats;
+  partialWakeLocks?: PartialWakeLockStat[];
 }
 
 export interface AnalysisResult {
