@@ -74,18 +74,19 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
-- `power-parser.ts` — Power management analysis: PowerManager state, DeviceIdle (Doze) state/settings, BatteryStats summary with Deep Doze discharge rate calculation, kernel wakelocks from CHECKIN format, alarm wakeup stats, kernel suspend statistics
+- `power-parser.ts` — Power management analysis: PowerManager state, DeviceIdle (Doze) state/settings, BatteryStats summary with Deep Doze discharge rate calculation, kernel wakelocks from CHECKIN format, alarm wakeup stats, kernel suspend statistics, estimated power use (component/UID-level), connectivity stats (cellular/WiFi/BT/GPS), partial wakelocks (top 20)
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation, timeline↔insight linking
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
 
 ### Backend (`@logcat-ai/backend`)
 
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
-- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering, `export=true` raises limit cap from 500 to 100K for full-result export)
+- **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML/power-html), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering, `export=true` raises limit cap from 500 to 100K for full-result export)
+- **Export** (`export/`): `json-exporter.ts`, `html-exporter.ts`, `power-report-exporter.ts` for JSON/HTML/Power Report self-contained dark-theme HTML generation (11 sections, rule-based findings, summary cards)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
@@ -102,13 +103,13 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `hooks/useAnalysis.ts` — Central state management hook (upload, SSE progress, fetch result via REST, loadFromHistory)
 - `hooks/useComparison.ts` — Comparison mode state management
 - `hooks/useForceSimulation.ts` — D3 force simulation wrapper
-- `lib/api.ts` — API client (upload, SSE via fetch+ReadableStream, chat, history, export, compare, batch, search)
+- `lib/api.ts` — API client (upload, SSE via fetch+ReadableStream, chat, history, export with json/html/power-html formats, compare, batch, search)
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
 - `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/PowerOverview.tsx` — Power management overview: 3-column grid (PowerManager state, Doze status, Battery statistics), Deep Doze discharge rate color coding (green <20, amber 20-40, red >40 mAh/h), alarm wakeups table, suspend statistics
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
-- `components/ExportMenu.tsx` — JSON/HTML export dropdown
+- `components/ExportMenu.tsx` — JSON/HTML/Power Report export dropdown; `hasPowerData?: boolean` prop for conditional Power Report button rendering (indigo text)
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard

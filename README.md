@@ -11,7 +11,7 @@ AI-powered Android bugreport.zip analyzer. Upload a bugreport, get structured di
 - **Agentic chat** — LLM-driven investigation with 5 tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section)
 - **Full-text search** — FTS5 BM25-ranked search for both logcat and kernel logs with in-app Search Modal (Logcat/Kernel tab, buffer filter, adaptive filters, severity color-coding) and CSV/Text export
 - **Analysis history** — SQLite-persisted results with browse, search, and reload
-- **Report export** — JSON and self-contained HTML export
+- **Report export** — JSON, HTML, and Power Report HTML export (self-contained dark-theme reports)
 - **Comparison mode** — Side-by-side diff of two bugreports (health, insights, ANR, HAL)
 - **Batch analysis** — Multi-file upload with statistical aggregation across devices
 - **Lock graph visualization** — D3.js force-directed interactive graph with deadlock highlighting
@@ -90,7 +90,7 @@ GET    /api/history             List analysis history (paginated)
 GET    /api/history/:id         Get historical analysis result
 DELETE /api/history/:id         Delete analysis record
 PATCH  /api/history/:id         Update notes/tags
-GET    /api/export/:id/:format  Export report (json / html)
+GET    /api/export/:id/:format  Export report (json / html / power-html)
 GET    /api/compare             Compare two analyses (?left=id&right=id)
 POST   /api/batch               Batch upload multiple files
 GET    /api/batch/:id/analyze   Start batch analysis (SSE stream)

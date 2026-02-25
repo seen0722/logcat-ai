@@ -1,6 +1,6 @@
 # AI Bugreport Analyzer — TODO
 
-> **更新日期**：2026-02-24
+> **更新日期**：2026-02-25
 
 ---
 
@@ -343,21 +343,52 @@
 
 ---
 
-## 7. Backlog（未排期）
+## 7. Phase 2.5 — Power Report HTML Export（✅ 完成）
+
+- [x] **Parser 擴展** — 3 個新 types
+  - EstimatedPowerUse：component-level + UID-level 電源消耗
+  - ConnectivityStats：cellular/WiFi/BT/GPS 統計
+  - PartialWakeLockStat：partial wakelock 統計
+  - PowerParseResult 擴展 3 個可選欄位
+  - 測試：power-parser-extended.test.ts 新增 13 tests
+
+- [x] **Power Parser 新函式** — 3 個解析函式
+  - parseEstimatedPowerUse()：BATTERYSTATS "Estimated power use (mAh):" 區塊
+  - parseConnectivityStats()：BATTERYSTATS "Statistics since last charge:" cellular/WiFi/BT/GPS
+  - parsePartialWakeLocks()：BATTERYSTATS "All partial wake locks:" top 20 entries
+  - parsePowerSections() 更新呼叫新函式
+
+- [x] **Power Report HTML Exporter** — packages/backend/src/export/power-report-exporter.ts
+  - exportPowerReport(result: AnalysisResult): string
+  - 11 個 sections：Executive Summary + PowerManager + Battery + Suspend/Resume + Kernel Wakelocks + Partial Wakelocks + Alarm Wakeups + Doze + Estimated Power + Findings & Recommendations + Data Sources
+  - Summary cards：time on battery、Deep Doze rate、suspend success、top wakelock
+  - Rule-based findings（P0/P1/P2）+ 建議
+  - Dark-theme CSS、sticky TOC、bar charts、severity badges、優雅降級
+
+- [x] **Backend 整合** — routes/export.ts 新增 power-html format case
+
+- [x] **Frontend 增強** — ExportMenu + App
+  - ExportMenu：新增 hasPowerData? prop，條件渲染 "Power Report" button（indigo）
+  - App.tsx：傳遞 hasPowerData={!!result?.powerStatus?.batteryStats}
+  - api.ts：downloadExport format union 新增 'power-html'
+  - types.ts：mirror 3 個新 types
+
+---
+
+## 8. Backlog（未排期）
 
 - [ ] #26 Docker Compose 部署
 - [ ] #27 端對端測試
 - [ ] CVE/Security 分析（比對 CVE 資料庫）
 - [ ] Jira/GitHub 整合（從 findings 建 issue）
 - [ ] Embedding + Vector Store（RAG 語意搜尋，FTS5 已覆蓋 80% 場景）
-- [ ] PDF 匯出（需 Puppeteer 或 html2canvas + jsPDF）
 
 ---
 
-## 8. Test Summary
+## 9. Test Summary
 
 | Package | Tests | 說明 |
 |---------|-------|------|
-| parser | 163 | unpacker(5) + logcat(23) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(35) + tombstone(15) + integration(5) |
+| parser | 176 | unpacker(5) + logcat(23) + anr(18) + kernel(31) + basic-analyzer(31) + dumpsys(35) + tombstone(15) + power-parser(29) + power-parser-extended(13) + integration(5) |
 | backend | 53 | routes + analyzer + parser integration + prompt tests |
-| **Total** | **216** | `npm test` (Vitest) |
+| **Total** | **229** | `npm test` (Vitest) |

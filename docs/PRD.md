@@ -1,8 +1,8 @@
 # AI Bugreport Analyzer — 產品需求文件 (PRD)
 
-> **版本**：v0.4.0
-> **更新日期**：2026-02-24
-> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter + UX 改善 + 大型 bugreport 記憶體修正），Phase 2.4 進行中（Power Management Analyzer）
+> **版本**：v0.5.0
+> **更新日期**：2026-02-25
+> **狀態**：Phase 1 完成，Phase 1.5 完成（13/13），Phase 2.0 完成（9/9 + Search UI + HTML Export 增強），Phase 2.1 完成（Search Export + Timeline-Insight 連結），Phase 2.2 完成（Kernel Message Search），Phase 2.3 完成（Logcat Buffer Field & Search Filter + UX 改善 + 大型 bugreport 記憶體修正），Phase 2.4 完成（Power Management Analyzer），Phase 2.5 完成（Power Report HTML Export）
 
 ---
 
@@ -157,6 +157,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 - 產出 power category insight cards（8+ 條規則，含 deep doze threshold、suspend 成功率、alarm wakeup 異常等）
 - 前端 PowerOverview 3 欄元件（PowerManager state / Doze status / Battery stats）
 - Phase 3 擴展：Alarm Stats 解析（per-app wakeup 統計）+ Kernel Suspend 統計（成功率、abort sources）
+- **Phase 2.5 新增**：Power Report HTML Export — 規則驅動的自包含 HTML 報告（11 個區塊、summary cards、findings & recommendations）
 
 #### Insight 規則示例
 | 規則 | 觸發條件 | Severity |
@@ -321,7 +322,7 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 
 解析電源管理相關段落，提供 Doze 狀態、suspend 行為、電池放電率等分析：
 
-**7 個核心解析函式：**
+**10 個核心解析函式：**
 - `parsePowerManager()`：從 `DUMPSYS POWER` 提取 wakefulness、active wakelocks、suspend blockers
 - `parseDeviceIdle()`：從 `DUMPSYS DEVICEIDLE` 提取 Deep/Light Doze 狀態與設定參數（idle_to, idle_factor, max_idle_to）
 - `parseBatteryStats()`：從 `DUMPSYS BATTERYSTATS` 的 `Statistics since last charge:` 區塊提取預計算統計值，自動計算 Deep Doze 放電率（mAh/h）
@@ -329,6 +330,9 @@ logcat.ai 是目前唯一提供 AI logcat 分析的雲端產品，我們從中�
 - `parsePowerSections()`：統合上述函式，遍歷 bugreport section list 辨識電源相關段落
 - `parseAlarmStats()`：從 `DUMPSYS ALARM` 的 `Alarm Stats:` 區塊提取 per-app alarm wakeup 統計
 - `parseSuspendStats()`：從 kernel log entries 統計 suspend/resume 事件（成功率、abort sources、wakeup sources）
+- `parseEstimatedPowerUse()`：從 `BATTERYSTATS Estimated power use (mAh):` 區塊提取 component-level + UID-level 電源消耗
+- `parseConnectivityStats()`：從 `BATTERYSTATS Statistics since last charge:` 區塊提取 cellular、WiFi、BT、GPS 統計
+- `parsePartialWakeLocks()`：從 `BATTERYSTATS All partial wake locks:` 區塊提取 top 20 partial wakelocks
 
 **段落辨識策略：**
 - 不靠 section name 精確匹配（段落名稱因廠商而異），靠內容特徵：
@@ -484,7 +488,7 @@ logcat-ai/
 │   │       ├── raw-data-store.ts # 原始資料暫存（for tool access）
 │   │       ├── config.ts
 │   │       ├── routes/          # upload, analyze, chat, settings, history, export, compare, batch, search
-│   │       ├── export/          # JSON/HTML 匯出器
+│   │       ├── export/          # JSON/HTML/Power Report 匯出器
 │   │       ├── search/          # FTS5 全文搜尋索引
 │   │       └── llm-gateway/     # LLM Gateway + Tool Calling
 │   ├── frontend/                # Web UI
@@ -535,7 +539,7 @@ logcat-ai/
 | GET | `/api/history/:id` | 取得歷史分析結果 |
 | DELETE | `/api/history/:id` | 刪除歷史分析 |
 | PATCH | `/api/history/:id` | 更新備註/標籤 |
-| GET | `/api/export/:id/:format` | 匯出報告（json / html） |
+| GET | `/api/export/:id/:format` | 匯出報告（json / html / power-html） |
 | GET | `/api/compare?left=:id&right=:id` | 兩份分析差異比對 |
 | POST | `/api/batch` | 批次上傳多檔 |
 | GET | `/api/batch/:id/analyze` | 批次分析（SSE） |
@@ -695,12 +699,35 @@ Week 5: Deep Analysis + 部署
 - Suspend Stats insight：成功率 < 95%、abort source 分析
 - `PowerOverview.tsx` 擴展 Alarm 和 Suspend 區塊渲染
 
-### 8.7 Phase 3：Backlog（未排期）
+### 8.7 Phase 2.5：Power Report HTML Export ✅
+
+#### 實現內容
+- **Parser 擴展**：`types.ts` 新增 `EstimatedPowerUse`、`ConnectivityStats`、`PartialWakeLockStat`；`PowerParseResult` 擴展 3 個可選欄位
+- **Power Parser 新函式**：
+  - `parseEstimatedPowerUse()`：從 `BATTERYSTATS Estimated power use (mAh):` 區塊解析 component-level + UID-level 電源消耗
+  - `parseConnectivityStats()`：從 `BATTERYSTATS Statistics since last charge:` 區塊解析 cellular、WiFi、BT、GPS 統計
+  - `parsePartialWakeLocks()`：從 `BATTERYSTATS All partial wake locks:` 區塊提取 top 20 partial wakelocks
+- **HTML Report Exporter**：新增 `power-report-exporter.ts`（~500 行），自動生成自包含 dark-theme HTML 報告：
+  - 11 個區塊：Executive Summary、PowerManager State、Battery Stats、Suspend/Resume、Kernel Wakelocks、Partial Wakelocks、Alarm Wakeups、Doze State、Estimated Power、Findings & Recommendations、Data Sources
+  - Summary cards：電池續航時間、Deep Doze 放電率、Suspend 成功率、Top Wakelock
+  - Rule-based findings（P0/P1/P2 優先級）+ 建議行動
+  - Sticky TOC、bar charts、severity badges、優雅降級
+- **Backend 整合**：`routes/export.ts` 新增 `power-html` format case
+- **Frontend 新增**：
+  - `ExportMenu.tsx` 新增 `hasPowerData` prop，條件性渲染 "Power Report" button（indigo 文字）
+  - `App.tsx` 傳遞 `hasPowerData={!!result?.powerStatus?.batteryStats}`
+- **測試**：新建 `power-parser-extended.test.ts`（13 tests）
+
+#### 驗收標準
+- Power Report 按需求格式生成（11 個區塊、rules + findings）
+- 前端 Power Report button 條件顯示（有 power data 才顯示）
+- 報告自包含且在瀏覽器可直接查看（dark theme）
+
+### 8.8 Phase 3：Backlog（未排期）
 
 - CVE/Security 分析（比對 CVE 資料庫）
 - Jira/GitHub 整合（從 findings 建 issue）
 - Embedding + Vector Store（RAG 語意搜尋大型 logcat）
-- PDF 匯出（需 Puppeteer 或 html2canvas + jsPDF）
 - Docker Compose 部署
 - 端對端測試
 
