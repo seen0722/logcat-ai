@@ -116,7 +116,7 @@ function buildHtml(
 <div><span class="meta-label">Build</span><span class="meta-value">${esc(meta.buildFingerprint)}</span></div>
 <div><span class="meta-label">Build Type</span><span class="meta-value">${esc(meta.buildType)}</span></div>
 <div><span class="meta-label">Android</span><span class="meta-value">${esc(meta.androidVersion)} (SDK ${meta.sdkLevel})</span></div>
-<div><span class="meta-label">Bugreport Time</span><span class="meta-value">${esc(meta.bugreportTimestamp?.toString() ?? 'N/A')}</span></div>
+<div><span class="meta-label">Bugreport Time</span><span class="meta-value">${esc(fmtTimestamp(meta.bugreportTimestamp))}</span></div>
 </div>
 </div>
 </header>
@@ -355,6 +355,7 @@ function renderSuspendStats(ss: SuspendStats): string {
   // Abort sources
   if (ss.topAbortSources.length > 0) {
     html += '<h3>4.2 Suspend Abort Source Breakdown</h3>';
+    html += '<div class="callout">Counts reflect kernel log observations per source. A single abort event may produce multiple log entries.</div>';
     html += renderBarChart(ss.topAbortSources.map(s => ({
       label: s.name,
       value: s.percentage,
@@ -502,8 +503,8 @@ function renderEstimatedPower(epu?: EstimatedPowerUse, bs?: BatteryStatsSummary)
   if (epu.topUids.length > 0) {
     html += '<h3>9.2 Top Power UIDs</h3>';
     html += table(
-      ['UID', 'Estimated Power (mAh)'],
-      epu.topUids.map(u => [u.name, u.mah.toFixed(1)]),
+      ['UID', 'Name', 'Estimated Power (mAh)'],
+      epu.topUids.filter(u => u.mah >= 0.05).map(u => [u.uid, resolveUidName(u.uid), u.mah.toFixed(1)]),
     );
   }
 
@@ -656,6 +657,55 @@ function renderDataSources(ps: PowerParseResult): string {
 // Utility Functions
 // ============================================================
 
+const KNOWN_UIDS: Record<string, string> = {
+  '0': 'root / kernel',
+  '1000': 'system_server',
+  '1001': 'radio (telephony)',
+  '1002': 'bluetooth',
+  '1010': 'wifi',
+  '1013': 'mediaserver',
+  '1017': 'shell',
+  '1019': 'DRM service',
+  '1021': 'GPS / GNSS',
+  '1027': 'NFC',
+  '1036': 'logd',
+  '1040': 'MediaDrm',
+  '1041': 'audioserver',
+  '1046': 'cameraserver',
+  '1047': 'network_stack',
+  '1053': 'webview_zygote',
+  '1058': 'vehicle HAL',
+  '1066': 'statsd',
+  '1067': 'incidentd',
+  '1068': 'secure_element',
+  '1069': 'uwb',
+  '1072': 'artd',
+  '1073': 'network_stack',
+  '1082': 'credstore',
+  '1092': 'virtual_device',
+  '2000': 'adb shell',
+  '9999': 'nobody',
+};
+
+function fmtTimestamp(ts?: Date | string | null): string {
+  if (!ts) return 'N/A';
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  // Format: YYYY-MM-DD HH:mm:ss (local timezone offset)
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const oh = pad(Math.floor(Math.abs(offset) / 60));
+  const om = pad(Math.abs(offset) % 60);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} (UTC${sign}${oh}:${om})`;
+}
+
+function resolveUidName(uid: string): string {
+  if (KNOWN_UIDS[uid]) return KNOWN_UIDS[uid];
+  if (uid.startsWith('u0a')) return `app (${uid})`;
+  return uid;
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -682,6 +732,7 @@ function renderBarChart(items: Array<{ label: string; value: number; display: st
 
 function fmtMs(ms: number): string {
   if (ms <= 0) return '0s';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
   const d = Math.floor(ms / 86_400_000);
   const h = Math.floor((ms % 86_400_000) / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
