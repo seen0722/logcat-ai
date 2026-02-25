@@ -765,8 +765,8 @@ export function parsePartialWakeLocks(content: string): PartialWakeLockStat[] {
   const block = content.slice(idx);
   const locks: PartialWakeLockStat[] = [];
 
-  // Match: "Wake lock <uid> <tag>: <duration> (<count> times) realtime"
-  const regex = /Wake lock\s+(\S+)\s+(.+?):\s*(.+?)\s*\((\d+)\s*times?\)\s*realtime/g;
+  // Match: "Wake lock <uid> <tag>: <duration> (<count> times) [max=N actual=N] realtime"
+  const regex = /Wake lock\s+(\S+)\s+(.+?):\s*(.+?)\s*\((\d+)\s*times?\)[^\n]*realtime/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(block)) !== null) {
