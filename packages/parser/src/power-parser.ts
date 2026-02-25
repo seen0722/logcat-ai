@@ -456,16 +456,38 @@ export function parseSuspendStats(entries: KernelLogEntry[]): SuspendStats {
       result.totalSuspendAttempts++;
     }
 
-    // Count suspend aborts
-    if (/suspend abort/i.test(msg) || /Aborting suspend/i.test(msg) || /PM:\s*Some devices failed to suspend/i.test(msg)) {
+    // Count suspend aborts (conservative: only count messages that explicitly say "suspend abort")
+    if (/suspend abort/i.test(msg) || /Aborting suspend/i.test(msg) ||
+        /PM:\s*Some devices failed to suspend/i.test(msg)) {
       result.suspendAbortCount++;
+    }
 
-      // Extract abort source
-      const sourceMatch = msg.match(/abort.*?(?:by|from|due to|source:?)\s*(\S+)/i) ||
-                          msg.match(/Aborting suspend\s*\((\S+)\)/i);
-      if (sourceMatch) {
-        const source = sourceMatch[1];
-        abortSources.set(source, (abortSources.get(source) ?? 0) + 1);
+    // Extract abort sources from both suspend abort messages and kernel "Abort:" messages
+    // These "Abort:" messages identify WHY suspend failed but may appear multiple times per attempt
+    {
+      let abortSource: string | undefined;
+      // "Abort: Pending Wakeup Sources: [timerfd] [timerfd]" → timerfd
+      const pendingMatch = msg.match(/Pending Wakeup Sources:\s*\[([^\]]+)\]/i);
+      if (pendingMatch) {
+        abortSource = pendingMatch[1];
+      }
+      // "Abort: Callback failed on 17a10040.qcom,wcn6750 in ..." → device name
+      if (!abortSource) {
+        const callbackMatch = msg.match(/Callback failed on\s+(\S+)/i);
+        if (callbackMatch) {
+          abortSource = callbackMatch[1];
+        }
+      }
+      // "Aborting suspend (timerfd)" or "abort ... source: xxx"
+      if (!abortSource) {
+        const sourceMatch = msg.match(/Aborting suspend\s*\((\S+)\)/i) ||
+                            msg.match(/abort.*?(?:by|from|due to|source:?)\s+(\S+)/i);
+        if (sourceMatch) {
+          abortSource = sourceMatch[1];
+        }
+      }
+      if (abortSource) {
+        abortSources.set(abortSource, (abortSources.get(abortSource) ?? 0) + 1);
       }
     }
 
@@ -479,10 +501,12 @@ export function parseSuspendStats(entries: KernelLogEntry[]): SuspendStats {
       result.deviceSuspendFailureCount++;
     }
 
-    // Wakeup sources
-    if (/wakeup.*source/i.test(msg) || /wakeup-source/i.test(msg) || /resume.*irq/i.test(msg)) {
-      const srcMatch = msg.match(/wakeup.*?source:?\s*(\S+)/i) ||
-                       msg.match(/resume.*?irq\s*\d+,?\s*(\S+)/i);
+    // Wakeup sources (from successful resume, not abort messages)
+    // "Last active Wakeup Source: qrtr_ws" — specific match to avoid "Pending Wakeup Sources:"
+    if (/last active wakeup source/i.test(msg) || /wakeup-source/i.test(msg) || /resume.*irq/i.test(msg)) {
+      const srcMatch = msg.match(/last active wakeup source:\s*(\S+)/i) ||
+                       msg.match(/wakeup-source:\s*(\S+)/i) ||
+                       msg.match(/resume.*?irq\s+\d+,?\s*(\S+)/i);
       if (srcMatch) {
         const source = srcMatch[1];
         wakeupSources.set(source, (wakeupSources.get(source) ?? 0) + 1);
@@ -496,15 +520,15 @@ export function parseSuspendStats(entries: KernelLogEntry[]): SuspendStats {
     result.suspendSuccessRate = (successCount / result.totalSuspendAttempts) * 100;
   }
 
-  // Top abort sources
-  const totalAborts = result.suspendAbortCount || 1;
+  // Top abort sources — percentages are relative to total source observations
+  const totalAbortSourceObs = [...abortSources.values()].reduce((a, b) => a + b, 0) || 1;
   result.topAbortSources = [...abortSources.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, count]) => ({
       name,
       count,
-      percentage: (count / totalAborts) * 100,
+      percentage: (count / totalAbortSourceObs) * 100,
     }));
 
   // Top wakeup sources
@@ -561,8 +585,8 @@ export function parseEstimatedPowerUse(content: string): EstimatedPowerUse | und
       continue;
     }
 
-    // "Uid u0a123: 8.4 ( cpu=... )" or "Uid 1000: 3.2"
-    const uidMatch = trimmed.match(/^Uid\s+(\S+):\s*([\d.]+)/);
+    // "Uid u0a123: 8.4 ( cpu=... )" or "UID 1000: 3.2" (case-insensitive)
+    const uidMatch = trimmed.match(/^Uid\s+(\S+):\s*([\d.]+)/i);
     if (uidMatch) {
       topUids.push({
         uid: uidMatch[1],

@@ -471,7 +471,7 @@ function renderDozeState(state: DozeState, settings?: DozeSettings): string {
 
     html += '<h3>8.2 Doze Parameters vs AOSP Defaults</h3>';
     const settingsRows = Object.entries(AOSP).map(([key, aospVal]) => {
-      const val = (settings as Record<string, number>)[key] ?? 0;
+      const val = (settings as unknown as Record<string, number>)[key] ?? 0;
       const diff = val !== 0 && val !== aospVal
         ? (key.includes('Factor') ? `${val} vs ${aospVal}` : `${fmtMs(val)} vs ${fmtMs(aospVal)}`)
         : 'Default';
