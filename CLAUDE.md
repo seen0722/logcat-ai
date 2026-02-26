@@ -46,6 +46,15 @@ curl -F "file=@sample-bugreports/phone-anr-bugreport-T70-AQ3A.250408.001-2026-02
 # Then GET /api/analyze/:id to trigger analysis
 ```
 
+### E2E Screenshot Testing
+
+```bash
+npm run e2e -w packages/frontend     # Full e2e: starts servers, uploads sample, screenshots result page
+node packages/frontend/e2e/screenshot-test.mjs --headed   # Run with visible browser
+```
+
+Screenshots saved to `packages/frontend/e2e/screenshots/`. Uses Playwright with 1440×900 viewport. Automatically detects if servers are already running. Validates required sections (System Overview, Insights, Timeline) and health score dimensions.
+
 ## Architecture
 
 TypeScript monorepo (npm workspaces) with four packages: `parser`, `backend`, `frontend`, `mcp-server`.
@@ -107,7 +116,12 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `lib/types.ts` — Frontend type definitions (mirrors parser types, includes AnalysisSummary, batch types)
 - `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
-- `components/PowerOverview.tsx` — Power management overview: 3-column grid (PowerManager state, Doze status, Battery statistics), Deep Doze discharge rate color coding (green <20, amber 20-40, red >40 mAh/h), alarm wakeups table, suspend statistics
+- `components/SectionNav.tsx` — Floating right-side TOC navigation (xl screens only), IntersectionObserver-based active section tracking, collapsible
+- `components/PowerOverview.tsx` — Power management: key metrics summary bar + Deep Doze rate always visible, details collapsible via "Show details" toggle (3-column grid, wakelocks, alarms, suspend stats). Doze settings diff-only format (non-AOSP values highlighted)
+- `components/InsightsCards.tsx` — Insight list with severity filters; info-level insights hidden by default in "All" mode with "Show N more" button; same-type grouping (SELinux denials, normalized titles) into expandable groups
+- `components/BSPQuickReference.tsx` — Conclusion-focused findings (boot issues, HAL problems, Doze rate) instead of raw data; vendor error tags as chips
+- `components/ChatPanel.tsx` — Compact mode when no messages (suggested question buttons + input), expands to h-96 chat after first message
+- `components/SystemOverview.tsx` — Health score rings with pulse animation for low scores (<70), deduction hints below rings, accent border color based on overall score; accepts optional `insights` prop
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
 - `components/ExportMenu.tsx` — JSON/HTML/Power Report export dropdown; `hasPowerData?: boolean` prop for conditional Power Report button rendering (indigo text)
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
@@ -136,6 +150,8 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - **Large array pattern**: Never use `push(...arr)` or `concat` for merging large arrays — use per-element `for (const e of arr) { target.push(e); }` to avoid stack overflow and memory spikes
 - **Large string pattern**: Never use `content.split('\n')` on large strings (100MB+) — use regex exec + `content.slice()` or char-by-char iteration to avoid millions of intermediate string objects and GC pressure
 - **Event bubbling in expandable cards**: `InsightCard` 的整個 div 有 `onClick` 控制展開/收合。內部互動元素（`<details>`、`<a>`、`<button>`）必須加 `e.stopPropagation()` 防止事件冒泡導致 card 意外收合
+- **Result page section IDs**: Each major section in the result page has `id="section-*"` (overview, tags, power, bsp, deep, insights, anr, timeline, chat) for SectionNav anchor navigation. Conditional sections (power, tags, anr, deep) must wrap the `id` div inside the condition to avoid orphan anchors
+- **Collapsible detail pattern**: Power and BSP sections use `useState` toggle for show/hide details. Key metrics always visible, secondary data behind "Show details" button
 - Documentation and PRD are written in Traditional Chinese
 
 ## Android BSP Domain Knowledge
