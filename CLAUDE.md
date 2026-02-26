@@ -253,6 +253,6 @@ KERNEL LOG 段落的 command 可能是 `dmesg`（標準 dmesg 格式，`[timesta
 - **BatteryStats**：從 `DUMPSYS BATTERYSTATS` 的 `Statistics since last charge:` 區塊提取預計算統計值，自動計算 Deep Doze 放電率（mAh/h）
 - **Kernel Wakelocks**：從 `CHECKIN BATTERYSTATS` 的 `9,0,l,kwl` 行提取 top kernel wakelocks（by totalTimeMs）
 - **Alarm Stats**：從 `DUMPSYS ALARM` 的 `Alarm Stats:` 區塊提取 per-app alarm wakeup 統計
-- **Suspend Stats**：從 kernel log entries 統計 suspend/resume 事件（成功率、abort sources、wakeup sources）
+- **Suspend Stats**：優先從 `DUMPSYS SUSPEND_CONTROL_INTERNAL` 的 `----- Suspend Stats -----` 段落解析 kernel `/sys/power/suspend_stats` 計數器（user/userdebug build 均有，不受 log buffer 溢出影響），再與 kernel log entries 的 abort/wakeup source 明細合併（`source: 'merged'`）。僅有 kernel log 時 fallback 為純 kernel log 統計（`source: 'kernel_log'`）
 - **段落辨識**：不靠段落名稱，靠內容特徵（`mWakefulness=`, `DeviceIdleController`, `Statistics since last charge:` 等）
 - **Power 分析腳本**：`analyze-power.mjs` 已移至 `~/.claude/skills/power-analysis/`（GitHub: `seen0722/claude-skills`），需設定 `LOGCAT_AI_ROOT` 環境變數指向本專案根目錄，可從任何目錄執行

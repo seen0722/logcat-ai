@@ -425,6 +425,80 @@ export function parseAlarmStats(content: string): AlarmWakeupStat[] {
 }
 
 // ============================================================
+// Suspend Statistics (from dumpsys suspend_control_internal)
+// ============================================================
+
+/**
+ * Parse "----- Suspend Stats -----" section from dumpsys suspend_control_internal output.
+ * This section contains kernel /sys/power/suspend_stats counters, available in both
+ * user and userdebug builds. Unlike kernel log parsing, these counters are cumulative
+ * and not affected by log buffer overflow.
+ *
+ * Returns null if the section is not found in the content.
+ */
+export function parseSuspendStatsSection(content: string): Partial<SuspendStats> | null {
+  const marker = '----- Suspend Stats -----';
+  const startIdx = content.indexOf(marker);
+  if (startIdx === -1) return null;
+
+  // Find end of section: next "-----" block or end of content
+  const afterMarker = startIdx + marker.length;
+  // Look for next section boundary (e.g. "--------- " duration marker or "----- " next section)
+  let endIdx = content.length;
+  // Search for next "-----" line after skipping current marker line
+  const nextLineStart = content.indexOf('\n', afterMarker);
+  if (nextLineStart !== -1) {
+    const nextDash = content.indexOf('\n-----', nextLineStart + 1);
+    if (nextDash !== -1) {
+      endIdx = nextDash;
+    }
+    // Also look for blank-line-then-DUMP-OF-SERVICE or section boundary
+    const nextDump = content.indexOf('\nDUMP OF SERVICE ', nextLineStart);
+    if (nextDump !== -1 && nextDump < endIdx) endIdx = nextDump;
+    const nextSection = content.indexOf('\n------', nextLineStart);
+    if (nextSection !== -1 && nextSection < endIdx) endIdx = nextSection;
+  }
+
+  const block = content.slice(afterMarker, endIdx);
+
+  // Parse key-value pairs
+  const getInt = (key: string): number => {
+    const m = block.match(new RegExp(`^\\s*${key}:\\s*(\\d+)`, 'm'));
+    return m ? parseInt(m[1], 10) : 0;
+  };
+
+  const success = getInt('success');
+  const fail = getInt('fail');
+  const failedFreeze = getInt('failed_freeze');
+  const failedSuspend = getInt('failed_suspend');
+  const failedSuspendLate = getInt('failed_suspend_late');
+  const failedSuspendNoirq = getInt('failed_suspend_noirq');
+
+  const total = success + fail;
+
+  const result: Partial<SuspendStats> = {
+    totalSuspendAttempts: total,
+    suspendAbortCount: fail,
+    suspendSuccessCount: success,
+    taskFreezeAbortCount: failedFreeze,
+    deviceSuspendFailureCount: failedSuspend + failedSuspendLate + failedSuspendNoirq,
+    suspendSuccessRate: total > 0 ? (success / total) * 100 : 0,
+  };
+
+  // Parse "Last Failures:" block
+  const lastFailedDevMatch = block.match(/last_failed_dev:\s*(\S+)/);
+  if (lastFailedDevMatch) result.lastFailedDev = lastFailedDevMatch[1];
+
+  const lastFailedStepMatch = block.match(/last_failed_step:\s*(\S+)/);
+  if (lastFailedStepMatch) result.lastFailedStep = lastFailedStepMatch[1];
+
+  const lastFailedErrnoMatch = block.match(/last_failed_errno:\s*(-?\d+)/);
+  if (lastFailedErrnoMatch) result.lastFailedErrno = parseInt(lastFailedErrnoMatch[1], 10);
+
+  return result;
+}
+
+// ============================================================
 // Suspend Statistics (from kernel log entries)
 // ============================================================
 
@@ -849,6 +923,8 @@ export function parsePowerSections(
     kernelWakeLocks: [],
   };
 
+  let sectionSuspendStats: Partial<SuspendStats> | null = null;
+
   for (const section of sections) {
     // Power Manager: extract "DUMP OF SERVICE [CRITICAL] power:" sub-section
     if (!result.powerManagerState && section.content.includes('mWakefulness=')) {
@@ -892,11 +968,50 @@ export function parsePowerSections(
       const subSection = extractServiceSubSection(section.content, 'alarm');
       result.alarmWakeups = parseAlarmStats(subSection ?? section.content);
     }
+
+    // Suspend Stats section: "----- Suspend Stats -----" from dumpsys suspend_control_internal
+    if (!sectionSuspendStats && section.content.includes('----- Suspend Stats -----')) {
+      sectionSuspendStats = parseSuspendStatsSection(section.content);
+    }
   }
 
-  // Suspend stats from kernel entries
-  if (kernelEntries && kernelEntries.length > 0) {
-    result.suspendStats = parseSuspendStats(kernelEntries);
+  // Suspend stats: merge section counters with kernel log abort/wakeup sources
+  const kernelLogStats = (kernelEntries && kernelEntries.length > 0)
+    ? parseSuspendStats(kernelEntries)
+    : undefined;
+
+  if (sectionSuspendStats && kernelLogStats) {
+    // Section counters are authoritative; kernel log provides abort/wakeup source details
+    result.suspendStats = {
+      ...kernelLogStats,
+      totalSuspendAttempts: sectionSuspendStats.totalSuspendAttempts!,
+      suspendAbortCount: sectionSuspendStats.suspendAbortCount!,
+      suspendSuccessCount: sectionSuspendStats.suspendSuccessCount,
+      taskFreezeAbortCount: sectionSuspendStats.taskFreezeAbortCount!,
+      deviceSuspendFailureCount: sectionSuspendStats.deviceSuspendFailureCount!,
+      suspendSuccessRate: sectionSuspendStats.suspendSuccessRate!,
+      lastFailedDev: sectionSuspendStats.lastFailedDev,
+      lastFailedStep: sectionSuspendStats.lastFailedStep,
+      lastFailedErrno: sectionSuspendStats.lastFailedErrno,
+      source: 'merged',
+    };
+  } else if (sectionSuspendStats) {
+    result.suspendStats = {
+      totalSuspendAttempts: sectionSuspendStats.totalSuspendAttempts!,
+      suspendAbortCount: sectionSuspendStats.suspendAbortCount!,
+      suspendSuccessCount: sectionSuspendStats.suspendSuccessCount,
+      taskFreezeAbortCount: sectionSuspendStats.taskFreezeAbortCount!,
+      deviceSuspendFailureCount: sectionSuspendStats.deviceSuspendFailureCount!,
+      suspendSuccessRate: sectionSuspendStats.suspendSuccessRate!,
+      topAbortSources: [],
+      topWakeupSources: [],
+      lastFailedDev: sectionSuspendStats.lastFailedDev,
+      lastFailedStep: sectionSuspendStats.lastFailedStep,
+      lastFailedErrno: sectionSuspendStats.lastFailedErrno,
+      source: 'suspend_stats_section',
+    };
+  } else if (kernelLogStats) {
+    result.suspendStats = { ...kernelLogStats, source: 'kernel_log' };
   }
 
   return result;

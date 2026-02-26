@@ -308,8 +308,13 @@ export interface SuspendStats {
   taskFreezeAbortCount: number;
   deviceSuspendFailureCount: number;
   suspendSuccessRate: number;
+  suspendSuccessCount?: number;
   topAbortSources: Array<{ name: string; count: number; percentage: number }>;
   topWakeupSources: Array<{ name: string; count: number; percentage: number }>;
+  lastFailedDev?: string;
+  lastFailedStep?: string;
+  lastFailedErrno?: number;
+  source?: 'suspend_stats_section' | 'kernel_log' | 'merged';
 }
 
 export interface EstimatedPowerUse {

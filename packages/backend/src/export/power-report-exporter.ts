@@ -338,7 +338,13 @@ function renderBatteryStats(bs: BatteryStatsSummary, cs?: ConnectivityStats): st
 
 function renderSuspendStats(ss: SuspendStats): string {
   let html = '<h3>4.1 Suspend Cycle Statistics</h3>';
-  const successCount = ss.totalSuspendAttempts - ss.suspendAbortCount;
+  if (ss.source) {
+    const sourceLabel = ss.source === 'suspend_stats_section' ? 'DUMPSYS SUSPEND_CONTROL_INTERNAL'
+      : ss.source === 'kernel_log' ? 'KERNEL LOG'
+      : 'MERGED (section counters + kernel log sources)';
+    html += `<div class="callout">Data source: <strong>${sourceLabel}</strong></div>`;
+  }
+  const successCount = ss.suspendSuccessCount ?? (ss.totalSuspendAttempts - ss.suspendAbortCount);
   html += table(['Event', 'Count'], [
     ['Suspend Entry', String(ss.totalSuspendAttempts)],
     ['Successful Suspend', String(successCount)],
@@ -347,6 +353,14 @@ function renderSuspendStats(ss: SuspendStats): string {
     ['Device Suspend Failure', String(ss.deviceSuspendFailureCount)],
     ['Success Rate', `${ss.suspendSuccessRate.toFixed(1)}%`],
   ]);
+
+  if (ss.lastFailedDev) {
+    html += '<h4>Last Failed Device</h4>';
+    const rows: string[][] = [['Device', ss.lastFailedDev]];
+    if (ss.lastFailedStep) rows.push(['Failed Step', ss.lastFailedStep]);
+    if (ss.lastFailedErrno != null) rows.push(['Errno', String(ss.lastFailedErrno)]);
+    html += table(['Field', 'Value'], rows);
+  }
 
   if (ss.suspendSuccessRate < 50) {
     html += '<div class="callout callout-danger"><strong>Suspend success rate critically low.</strong> The device is failing to enter deep sleep, leading to severe battery drain.</div>';
@@ -661,7 +675,12 @@ function renderDataSources(ps: PowerParseResult): string {
   if (ps.batteryStats) sources.push(['Battery Statistics', 'DUMPSYS BATTERYSTATS']);
   if (ps.kernelWakeLocks.length > 0) sources.push(['Kernel Wakelocks', 'CHECKIN BATTERYSTATS']);
   if (ps.alarmWakeups) sources.push(['Alarm Stats', 'DUMPSYS ALARM']);
-  if (ps.suspendStats) sources.push(['Suspend Statistics', 'KERNEL LOG']);
+  if (ps.suspendStats) {
+    const src = ps.suspendStats.source === 'suspend_stats_section' ? 'DUMPSYS SUSPEND_CONTROL_INTERNAL'
+      : ps.suspendStats.source === 'merged' ? 'DUMPSYS SUSPEND_CONTROL_INTERNAL + KERNEL LOG'
+      : 'KERNEL LOG';
+    sources.push(['Suspend Statistics', src]);
+  }
   if (ps.estimatedPowerUse) sources.push(['Estimated Power Use', 'DUMPSYS BATTERYSTATS']);
   if (ps.connectivityStats) sources.push(['Connectivity Stats', 'DUMPSYS BATTERYSTATS']);
   if (ps.partialWakeLocks && ps.partialWakeLocks.length > 0) sources.push(['Partial Wake Locks', 'DUMPSYS BATTERYSTATS']);

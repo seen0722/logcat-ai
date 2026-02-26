@@ -425,9 +425,16 @@ export default function PowerOverview({ powerStatus }: Props) {
           )}
 
           {/* Suspend Statistics */}
-          {suspendStats && suspendStats.totalSuspendAttempts > 0 && (
+          {suspendStats && (
             <div className="bg-surface rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-400">Suspend Statistics</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-gray-400">Suspend Statistics</h3>
+                {suspendStats.source && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                    {suspendStats.source === 'suspend_stats_section' ? 'suspend_stats' : suspendStats.source}
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="text-center">
                   <div className="text-lg font-bold text-gray-300">{suspendStats.totalSuspendAttempts}</div>
@@ -450,6 +457,19 @@ export default function PowerOverview({ powerStatus }: Props) {
                   <div className="text-xs text-gray-500">Task Freeze Failures</div>
                 </div>
               </div>
+
+              {suspendStats.lastFailedDev && (
+                <div className="text-xs text-gray-400 pt-1">
+                  <span className="text-gray-500">Last Failed Device: </span>
+                  <span className="text-amber-400 font-mono">{suspendStats.lastFailedDev}</span>
+                  {suspendStats.lastFailedStep && (
+                    <span> (step: <span className="font-mono">{suspendStats.lastFailedStep}</span>)</span>
+                  )}
+                  {suspendStats.lastFailedErrno != null && (
+                    <span> errno: <span className="font-mono">{suspendStats.lastFailedErrno}</span></span>
+                  )}
+                </div>
+              )}
 
               {suspendStats.topAbortSources.length > 0 && (
                 <div className="space-y-1 pt-1">

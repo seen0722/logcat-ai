@@ -8,6 +8,7 @@ import {
   parseDurationToMs,
   parseAlarmStats,
   parseSuspendStats,
+  parseSuspendStatsSection,
 } from '../src/power-parser.js';
 import { BugreportSection, KernelLogEntry } from '../src/types.js';
 
@@ -297,6 +298,166 @@ describe('parseSuspendStats', () => {
     const result = parseSuspendStats([]);
     expect(result.totalSuspendAttempts).toBe(0);
     expect(result.suspendSuccessRate).toBe(0);
+  });
+});
+
+describe('parseSuspendStatsSection', () => {
+  it('parses full format with Last Failures', () => {
+    const content = `some other content before
+----- Suspend Stats -----
+success: 557
+fail: 46
+failed_freeze: 36
+failed_prepare: 0
+failed_suspend: 10
+failed_suspend_late: 0
+failed_suspend_noirq: 0
+failed_resume: 0
+failed_resume_early: 0
+failed_resume_noirq: 0
+
+Last Failures:
+    last_failed_dev: alarmtimer.0.auto
+    last_failed_errno: -16
+    last_failed_step: freeze
+--------- 0.000 was the duration of 'DUMPSYS' ------`;
+
+    const result = parseSuspendStatsSection(content);
+    expect(result).not.toBeNull();
+    expect(result!.totalSuspendAttempts).toBe(603); // 557 + 46
+    expect(result!.suspendSuccessCount).toBe(557);
+    expect(result!.suspendAbortCount).toBe(46);
+    expect(result!.taskFreezeAbortCount).toBe(36);
+    expect(result!.deviceSuspendFailureCount).toBe(10); // 10+0+0
+    expect(result!.suspendSuccessRate).toBeCloseTo(92.37, 1);
+    expect(result!.lastFailedDev).toBe('alarmtimer.0.auto');
+    expect(result!.lastFailedStep).toBe('freeze');
+    expect(result!.lastFailedErrno).toBe(-16);
+  });
+
+  it('parses format without Last Failures', () => {
+    const content = `----- Suspend Stats -----
+success: 100
+fail: 0
+failed_freeze: 0
+failed_prepare: 0
+failed_suspend: 0
+failed_suspend_late: 0
+failed_suspend_noirq: 0
+failed_resume: 0
+failed_resume_early: 0
+failed_resume_noirq: 0
+`;
+
+    const result = parseSuspendStatsSection(content);
+    expect(result).not.toBeNull();
+    expect(result!.totalSuspendAttempts).toBe(100);
+    expect(result!.suspendSuccessCount).toBe(100);
+    expect(result!.suspendAbortCount).toBe(0);
+    expect(result!.suspendSuccessRate).toBe(100);
+    expect(result!.lastFailedDev).toBeUndefined();
+    expect(result!.lastFailedStep).toBeUndefined();
+    expect(result!.lastFailedErrno).toBeUndefined();
+  });
+
+  it('returns null when section not found', () => {
+    const content = 'some random content without suspend stats';
+    expect(parseSuspendStatsSection(content)).toBeNull();
+  });
+
+  it('handles zero success and fail', () => {
+    const content = `----- Suspend Stats -----
+success: 0
+fail: 0
+failed_freeze: 0
+`;
+
+    const result = parseSuspendStatsSection(content);
+    expect(result).not.toBeNull();
+    expect(result!.totalSuspendAttempts).toBe(0);
+    expect(result!.suspendSuccessRate).toBe(0);
+  });
+});
+
+describe('parsePowerSections suspend stats merge', () => {
+  it('uses section data when both section and kernel log available (merged)', () => {
+    const sections: BugreportSection[] = [
+      {
+        name: 'DUMPSYS',
+        command: 'dumpsys suspend_control_internal',
+        content: `----- Suspend Stats -----
+success: 100
+fail: 5
+failed_freeze: 3
+failed_prepare: 0
+failed_suspend: 2
+failed_suspend_late: 0
+failed_suspend_noirq: 0
+
+Last Failures:
+    last_failed_dev: test_dev
+    last_failed_errno: -16
+    last_failed_step: freeze
+`,
+        startLine: 0, endLine: 20,
+      },
+    ];
+    const kernelEntries: KernelLogEntry[] = [
+      { timestamp: 100, level: '<6>', facility: '', message: 'PM: suspend entry (deep)', raw: '' },
+      { timestamp: 101, level: '<6>', facility: '', message: 'PM: suspend exit', raw: '' },
+      { timestamp: 200, level: '<6>', facility: '', message: 'PM: suspend entry (deep)', raw: '' },
+      { timestamp: 201, level: '<4>', facility: '', message: 'Aborting suspend (timerfd)', raw: '' },
+    ];
+
+    const result = parsePowerSections(sections, kernelEntries);
+    expect(result.suspendStats).toBeDefined();
+    expect(result.suspendStats!.source).toBe('merged');
+    // Section counters override kernel log counts
+    expect(result.suspendStats!.totalSuspendAttempts).toBe(105);
+    expect(result.suspendStats!.suspendSuccessCount).toBe(100);
+    expect(result.suspendStats!.suspendAbortCount).toBe(5);
+    expect(result.suspendStats!.lastFailedDev).toBe('test_dev');
+    // Kernel log abort sources are preserved
+    expect(result.suspendStats!.topAbortSources.length).toBeGreaterThan(0);
+    expect(result.suspendStats!.topAbortSources[0].name).toBe('timerfd');
+  });
+
+  it('uses section-only data when no kernel entries', () => {
+    const sections: BugreportSection[] = [
+      {
+        name: 'DUMPSYS',
+        command: 'dumpsys suspend_control_internal',
+        content: `----- Suspend Stats -----
+success: 50
+fail: 2
+failed_freeze: 1
+failed_prepare: 0
+failed_suspend: 1
+failed_suspend_late: 0
+failed_suspend_noirq: 0
+`,
+        startLine: 0, endLine: 10,
+      },
+    ];
+
+    const result = parsePowerSections(sections);
+    expect(result.suspendStats).toBeDefined();
+    expect(result.suspendStats!.source).toBe('suspend_stats_section');
+    expect(result.suspendStats!.totalSuspendAttempts).toBe(52);
+    expect(result.suspendStats!.topAbortSources).toHaveLength(0);
+    expect(result.suspendStats!.topWakeupSources).toHaveLength(0);
+  });
+
+  it('uses kernel-log-only data when no section available', () => {
+    const kernelEntries: KernelLogEntry[] = [
+      { timestamp: 100, level: '<6>', facility: '', message: 'PM: suspend entry (deep)', raw: '' },
+      { timestamp: 101, level: '<6>', facility: '', message: 'PM: suspend exit', raw: '' },
+    ];
+
+    const result = parsePowerSections([], kernelEntries);
+    expect(result.suspendStats).toBeDefined();
+    expect(result.suspendStats!.source).toBe('kernel_log');
+    expect(result.suspendStats!.totalSuspendAttempts).toBe(1);
   });
 });
 
