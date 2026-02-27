@@ -473,7 +473,12 @@ export default function PowerOverview({ powerStatus }: Props) {
 
               {suspendStats.topAbortSources.length > 0 && (
                 <div className="space-y-1 pt-1">
-                  <div className="text-xs text-gray-500">Top Abort Sources</div>
+                  <div className="text-xs text-gray-500">
+                    Top Abort Sources
+                    <span className="text-gray-600 ml-1" title="Counts reflect kernel log observations per source, not abort events. A single abort may produce multiple log entries.">
+                      (log observations)
+                    </span>
+                  </div>
                   {suspendStats.topAbortSources.slice(0, 5).map((src, i) => (
                     <div key={i} className="flex justify-between text-xs">
                       <span className="text-gray-300 truncate mr-2">{src.name}</span>
