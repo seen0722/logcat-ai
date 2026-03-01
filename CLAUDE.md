@@ -46,14 +46,16 @@ curl -F "file=@sample-bugreports/phone-anr-bugreport-T70-AQ3A.250408.001-2026-02
 # Then GET /api/analyze/:id to trigger analysis
 ```
 
-### E2E Screenshot Testing
+### E2E Testing (Playwright Test)
 
 ```bash
-npm run e2e -w packages/frontend     # Full e2e: starts servers, uploads sample, screenshots result page
-node packages/frontend/e2e/screenshot-test.mjs --headed   # Run with visible browser
+npm run e2e -w packages/frontend          # Run all 34 e2e tests (Playwright Test, ~1.5min)
+npm run e2e:headed -w packages/frontend   # Run with visible browser
+npm run e2e:report -w packages/frontend   # View HTML test report
+npm run e2e:legacy -w packages/frontend   # Legacy screenshot-only test
 ```
 
-Screenshots saved to `packages/frontend/e2e/screenshots/`. Uses Playwright with 1440×900 viewport. Automatically detects if servers are already running. Validates required sections (System Overview, Insights, Timeline) and health score dimensions.
+34 Playwright Test specs across 11 files covering: upload/analysis flow, system overview, insights filters, timeline+search integration, search modal (Logcat/Kernel tabs, pagination), history panel, export menu, power overview, section nav, LLM settings, and FTS5 SQL fallback verification. Uses `global-setup.ts` to upload a sample bugreport once and share the analysis across all tests. Config: chromium only, 1440×900 viewport, `workers: 1`, auto-starts backend+frontend via `webServer`. Backend dev-only `POST /api/_test/clear-raw-store/:id` endpoint enables FTS5 fallback path testing.
 
 ## Architecture
 
@@ -104,6 +106,7 @@ Express.js API server. Loads `.env` from repo root (`../../.env` relative to pac
 - **Search** (`search/fts-indexer.ts`): FTS5 full-text search with BM25 ranking for logcat and kernel entries, supports optional `startTime`/`endTime` timestamp range filtering (lexicographic comparison on `MM-DD HH:mm:ss.SSS` format)
 - **Raw Data Store** (`raw-data-store.ts`): In-memory store for raw LogEntry[], sections (for agentic tool access)
 - **Config** (`config.ts`): Environment-based, mutable at runtime via settings API. Includes `dbPath` for SQLite.
+- **Test Utils** (`routes/test-utils.ts`): Dev-only (`NODE_ENV !== 'production'`) route at `/api/_test/` — `POST /clear-raw-store/:id` clears rawDataStore for FTS5 fallback E2E testing
 
 ### Frontend (`@logcat-ai/frontend`)
 
