@@ -116,6 +116,10 @@ function buildHtml(
 <div><span class="meta-label">Build</span><span class="meta-value">${esc(meta.buildFingerprint)}</span></div>
 <div><span class="meta-label">Build Type</span><span class="meta-value">${esc(meta.buildType)}</span></div>
 <div><span class="meta-label">Android</span><span class="meta-value">${esc(meta.androidVersion)} (SDK ${meta.sdkLevel})</span></div>
+${meta.platform || meta.hardware ? `<div><span class="meta-label">Platform</span><span class="meta-value">${esc(meta.platform || '')}${meta.hardware ? ` (${esc(meta.hardware)})` : ''}</span></div>` : ''}
+${meta.kernelVersion && meta.kernelVersion !== 'unknown' ? `<div><span class="meta-label">Kernel</span><span class="meta-value">${esc(meta.kernelVersion)}</span></div>` : ''}
+${meta.basebandVersion ? `<div><span class="meta-label">Baseband</span><span class="meta-value">${esc(meta.basebandVersion)}</span></div>` : ''}
+${meta.securityPatchLevel ? `<div><span class="meta-label">Security Patch</span><span class="meta-value">${esc(meta.securityPatchLevel)}</span></div>` : ''}
 <div><span class="meta-label">Bugreport Time</span><span class="meta-value">${esc(fmtTimestamp(meta.bugreportTimestamp))}</span></div>
 </div>
 </div>

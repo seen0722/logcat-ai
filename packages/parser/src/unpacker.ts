@@ -13,6 +13,13 @@ const MANUFACTURER_RE = /\[ro\.product\.manufacturer\]:\s*\[(.+?)\]/;
 const BUILD_DATE_RE = /\[ro\.build\.date\]:\s*\[(.+?)\]/;
 const KERNEL_VERSION_RE = /Linux version\s+(\S+)/;
 const BUILD_TYPE_RE = /\[ro\.build\.type\]:\s*\[(.+?)\]/;
+const PLATFORM_RE = /\[ro\.board\.platform\]:\s*\[(.+?)\]/;
+const HARDWARE_RE = /\[ro\.hardware\]:\s*\[(.+?)\]/;
+const CPU_ABI_RE = /\[ro\.product\.cpu\.abi\]:\s*\[(.+?)\]/;
+const SERIAL_RE = /\[ro\.boot\.serialno\]:\s*\[(.+?)\]/;
+const BASEBAND_RE = /\[gsm\.version\.baseband\]:\s*\[(.+?)\]/;
+const BOOTLOADER_RE = /\[ro\.bootimage\.build\.fingerprint\]:\s*\[(.+?)\]/;
+const SECURITY_PATCH_RE = /\[ro\.build\.version\.security_patch\]:\s*\[(.+?)\]/;
 
 /**
  * Unpack a bugreport.zip and parse its contents into structured data.
@@ -204,6 +211,15 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
   const manufacturer = matchFirst(propsContent, MANUFACTURER_RE) ?? 'unknown';
   const buildDate = matchFirst(propsContent, BUILD_DATE_RE) ?? 'unknown';
 
+  // Hardware & software properties
+  const platform = matchFirst(propsContent, PLATFORM_RE) ?? undefined;
+  const hardware = matchFirst(propsContent, HARDWARE_RE) ?? undefined;
+  const cpuAbi = matchFirst(propsContent, CPU_ABI_RE) ?? undefined;
+  const serialNumber = matchFirst(propsContent, SERIAL_RE) ?? undefined;
+  const basebandVersion = matchFirst(propsContent, BASEBAND_RE) ?? undefined;
+  const bootloaderVersion = matchFirst(propsContent, BOOTLOADER_RE) ?? undefined;
+  const securityPatchLevel = matchFirst(propsContent, SECURITY_PATCH_RE) ?? undefined;
+
   // Kernel version from KERNEL LOG or dmesg section
   const kernelSection = sections.find(
     (s) => s.name === 'KERNEL LOG' || s.command.includes('dmesg')
@@ -226,6 +242,13 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
     buildDate,
     bugreportTimestamp,
     kernelVersion,
+    platform,
+    hardware,
+    cpuAbi,
+    serialNumber,
+    basebandVersion,
+    bootloaderVersion,
+    securityPatchLevel,
   };
 }
 

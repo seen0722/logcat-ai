@@ -289,6 +289,10 @@ export function exportAsHTML(result: AnalysisResult): string {
       ${m.deviceModel ? `<div>Device: ${escapeHtml(m.deviceModel)} (${escapeHtml(m.manufacturer || '')})</div>` : ''}
       ${m.androidVersion ? `<div>Android ${escapeHtml(m.androidVersion)} (SDK ${m.sdkLevel})</div>` : ''}
       ${m.buildFingerprint ? `<div>Build: ${escapeHtml(m.buildFingerprint)}</div>` : ''}
+      ${m.platform || m.hardware ? `<div>Platform: ${escapeHtml(m.platform || '')}${m.hardware ? ` (${escapeHtml(m.hardware)})` : ''}</div>` : ''}
+      ${m.kernelVersion && m.kernelVersion !== 'unknown' ? `<div>Kernel: ${escapeHtml(m.kernelVersion)}</div>` : ''}
+      ${m.basebandVersion ? `<div>Baseband: ${escapeHtml(m.basebandVersion)}</div>` : ''}
+      ${m.securityPatchLevel ? `<div>Security Patch: ${escapeHtml(m.securityPatchLevel)}</div>` : ''}
       <div>Generated: ${new Date().toISOString()}</div>
     </div>
   </div>

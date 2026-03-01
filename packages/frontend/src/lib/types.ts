@@ -60,6 +60,15 @@ export interface BugreportMetadata {
   buildDate: string;
   bugreportTimestamp: string;
   kernelVersion: string;
+  // Hardware
+  platform?: string;
+  hardware?: string;
+  cpuAbi?: string;
+  serialNumber?: string;
+  // Software
+  basebandVersion?: string;
+  bootloaderVersion?: string;
+  securityPatchLevel?: string;
 }
 
 export interface BinderTargetInfo {

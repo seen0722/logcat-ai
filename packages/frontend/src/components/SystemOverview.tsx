@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { InsightCard } from '../lib/types';
 import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary } from '../lib/types';
 
@@ -88,6 +89,18 @@ function formatUptime(seconds: number): string {
 export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus, insights }: Props) {
   const { breakdown } = healthScore;
   const overallBorderColor = healthScore.overall >= 80 ? 'border-l-green-500' : healthScore.overall >= 50 ? 'border-l-amber-500' : 'border-l-red-500';
+  const [showHwSwDetails, setShowHwSwDetails] = useState(false);
+
+  const hwSwDetails: Array<{ label: string; value: string }> = [];
+  if (metadata.platform && metadata.platform !== 'unknown') hwSwDetails.push({ label: 'Platform', value: metadata.platform });
+  if (metadata.hardware && metadata.hardware !== 'unknown') hwSwDetails.push({ label: 'Hardware', value: metadata.hardware });
+  if (metadata.cpuAbi && metadata.cpuAbi !== 'unknown') hwSwDetails.push({ label: 'CPU', value: metadata.cpuAbi });
+  if (metadata.kernelVersion && metadata.kernelVersion !== 'unknown') hwSwDetails.push({ label: 'Kernel', value: metadata.kernelVersion });
+  if (metadata.basebandVersion && metadata.basebandVersion !== 'unknown') hwSwDetails.push({ label: 'Baseband', value: metadata.basebandVersion });
+  if (metadata.securityPatchLevel && metadata.securityPatchLevel !== 'unknown') hwSwDetails.push({ label: 'Security Patch', value: metadata.securityPatchLevel });
+  if (metadata.serialNumber && metadata.serialNumber !== 'unknown') hwSwDetails.push({ label: 'Serial', value: metadata.serialNumber });
+  if (metadata.buildDate && metadata.buildDate !== 'unknown') hwSwDetails.push({ label: 'Build Date', value: metadata.buildDate });
+  if (metadata.bootloaderVersion && metadata.bootloaderVersion !== 'unknown') hwSwDetails.push({ label: 'Boot Image', value: metadata.bootloaderVersion });
 
   return (
     <div className={`card space-y-4 border-l-4 ${overallBorderColor}`}>
@@ -154,6 +167,28 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
           </>
         )}
       </div>
+
+      {/* HW & SW Details */}
+      {hwSwDetails.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowHwSwDetails(!showHwSwDetails)}
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            {showHwSwDetails ? 'Hide' : 'Show'} HW & SW details ({hwSwDetails.length})
+          </button>
+          {showHwSwDetails && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 mt-2 text-sm">
+              {hwSwDetails.map((d) => (
+                <div key={d.label} className="flex flex-col">
+                  <span className="text-xs text-gray-500">{d.label}</span>
+                  <p className="font-medium text-gray-300 truncate" title={d.value}>{d.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Health Scores */}
       <div className="flex items-center justify-around pt-2">

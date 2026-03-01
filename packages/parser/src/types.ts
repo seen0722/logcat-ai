@@ -12,6 +12,15 @@ export interface BugreportMetadata {
   buildDate: string;
   bugreportTimestamp: Date;
   kernelVersion: string;
+  // Hardware
+  platform?: string;           // ro.board.platform (e.g., "lahaina", "yupik")
+  hardware?: string;           // ro.hardware (e.g., "qcom")
+  cpuAbi?: string;             // ro.product.cpu.abi (e.g., "arm64-v8a")
+  serialNumber?: string;       // ro.boot.serialno
+  // Software
+  basebandVersion?: string;    // gsm.version.baseband (modem firmware)
+  bootloaderVersion?: string;  // ro.bootimage.build.fingerprint (boot image)
+  securityPatchLevel?: string; // ro.build.version.security_patch (e.g., "2025-04-05")
 }
 
 // ============================================================
