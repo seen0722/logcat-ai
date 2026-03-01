@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { rawDataStore } from '../raw-data-store.js';
-import { searchLogcatFTS, searchKernelFTS } from '../search/fts-indexer.js';
+import { searchLogcatFTS, searchKernelFTS, hasLogcatIndex, hasKernelIndex, searchLogcatSQL, searchKernelSQL } from '../search/fts-indexer.js';
 import type { LogEntry, LogLevel, KernelLogEntry } from '@logcat-ai/parser';
 
 const router = Router();
@@ -26,16 +26,35 @@ router.get('/:id', (req: Request, res: Response) => {
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
   const rawData = rawDataStore.get(id);
-  if (!rawData) {
-    return res.status(404).json({ error: 'Analysis not found or data expired from memory' });
-  }
 
   if (source === 'kernel') {
-    return handleKernelSearch(id, rawData.kernelResult.entries, rawData.bootEpochMs, { q, level, startTime, endTime, limit, offset }, res);
+    if (rawData) {
+      return handleKernelSearch(id, rawData.kernelResult.entries, rawData.bootEpochMs, { q, level, startTime, endTime, limit, offset }, res);
+    }
+    // FTS5 SQL fallback for kernel
+    return handleKernelFallback(id, { q, level, startTime, endTime, limit, offset }, res);
   }
 
   // ── Logcat search (default) ──
-  const entries = rawData.logcatEntries;
+  if (rawData) {
+    return handleLogcatInMemory(id, rawData.logcatEntries, { q, tag, level, pid, buffer, startTime, endTime, limit, offset }, res);
+  }
+
+  // FTS5 SQL fallback for logcat
+  return handleLogcatFallback(id, { q, tag, level, pid, buffer, startTime, endTime, limit, offset }, res);
+});
+
+/**
+ * In-memory logcat search (fast path when rawDataStore is available).
+ */
+function handleLogcatInMemory(
+  id: string,
+  entries: LogEntry[],
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  res: Response,
+) {
+  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset } = params;
+
   if (entries.length === 0) {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
   }
@@ -116,7 +135,72 @@ router.get('/:id', (req: Request, res: Response) => {
       buffer: e.buffer,
     })),
   });
-});
+}
+
+/**
+ * FTS5 SQL WHERE fallback for logcat (when rawDataStore is expired).
+ */
+function handleLogcatFallback(
+  id: string,
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  res: Response,
+) {
+  if (!hasLogcatIndex(id)) {
+    return res.status(404).json({ error: 'Analysis not found or data expired' });
+  }
+
+  const result = searchLogcatSQL(id, params);
+  if (!result) {
+    return res.json({ totalMatches: 0, showing: 0, method: 'fts5-sql', entries: [] });
+  }
+
+  return res.json({
+    totalMatches: result.totalMatches,
+    showing: result.entries.length,
+    method: 'fts5-sql',
+    entries: result.entries.map(e => ({
+      lineNumber: e.lineNumber,
+      timestamp: e.timestamp,
+      pid: e.pid,
+      tid: e.tid,
+      level: e.level,
+      tag: e.tag,
+      message: e.message,
+      buffer: e.buffer,
+    })),
+  });
+}
+
+/**
+ * FTS5 SQL WHERE fallback for kernel (when rawDataStore is expired).
+ */
+function handleKernelFallback(
+  id: string,
+  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  res: Response,
+) {
+  if (!hasKernelIndex(id)) {
+    return res.status(404).json({ error: 'Analysis not found or data expired' });
+  }
+
+  const result = searchKernelSQL(id, params);
+  if (!result) {
+    return res.json({ totalMatches: 0, showing: 0, method: 'fts5-sql', entries: [] });
+  }
+
+  return res.json({
+    totalMatches: result.totalMatches,
+    showing: result.entries.length,
+    method: 'fts5-sql',
+    entries: result.entries.map(e => ({
+      entryIndex: e.entryIndex,
+      timestamp: e.timestamp,
+      level: e.level,
+      facility: e.facility,
+      message: e.message,
+    })),
+  });
+}
 
 // ============================================================
 // Kernel Search

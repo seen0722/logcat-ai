@@ -314,3 +314,232 @@ export function deleteKernelIndex(analysisId: string): void {
   const db = getDatabase();
   db.prepare('DELETE FROM kernel_fts WHERE analysis_id = ?').run(analysisId);
 }
+
+// ============================================================
+// FTS5 SQL WHERE Fallback (when rawDataStore is expired)
+// ============================================================
+
+const LOG_LEVELS = ['V', 'D', 'I', 'W', 'E', 'F'];
+const KERNEL_LEVELS = ['<0>', '<1>', '<2>', '<3>', '<4>', '<5>', '<6>', '<7>'];
+
+/**
+ * Check if logcat FTS5 index exists for a given analysis.
+ */
+export function hasLogcatIndex(analysisId: string): boolean {
+  const db = getDatabase();
+  const row = db.prepare('SELECT 1 FROM logcat_fts WHERE analysis_id = ? LIMIT 1').get(analysisId);
+  return row != null;
+}
+
+/**
+ * Check if kernel FTS5 index exists for a given analysis.
+ */
+export function hasKernelIndex(analysisId: string): boolean {
+  const db = getDatabase();
+  const row = db.prepare('SELECT 1 FROM kernel_fts WHERE analysis_id = ? LIMIT 1').get(analysisId);
+  return row != null;
+}
+
+/**
+ * Search logcat entries using SQL WHERE (not FTS5 MATCH).
+ * Used as fallback when rawDataStore is expired but FTS5 index still exists.
+ */
+export function searchLogcatSQL(
+  analysisId: string,
+  params: {
+    q?: string;
+    tag?: string;
+    level?: string;
+    pid?: number;
+    buffer?: string;
+    startTime?: string;
+    endTime?: string;
+    limit: number;
+    offset: number;
+  },
+): FTSPaginatedResult | null {
+  const db = getDatabase();
+  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset } = params;
+
+  const conditions: string[] = ['analysis_id = ?'];
+  const bindParams: (string | number)[] = [analysisId];
+
+  if (q) {
+    conditions.push("(message LIKE ? OR tag LIKE ?)");
+    const like = `%${q}%`;
+    bindParams.push(like, like);
+  }
+
+  if (tag) {
+    conditions.push('tag = ?');
+    bindParams.push(tag);
+  }
+
+  if (level) {
+    const minIdx = LOG_LEVELS.indexOf(level);
+    if (minIdx >= 0) {
+      const allowed = LOG_LEVELS.slice(minIdx);
+      conditions.push(`level IN (${allowed.map(() => '?').join(',')})`);
+      bindParams.push(...allowed);
+    }
+  }
+
+  if (pid !== undefined && !isNaN(pid)) {
+    conditions.push('pid = ?');
+    bindParams.push(String(pid));
+  }
+
+  if (buffer) {
+    conditions.push('buffer = ?');
+    bindParams.push(buffer);
+  }
+
+  if (startTime) {
+    conditions.push('timestamp >= ?');
+    bindParams.push(startTime);
+  }
+
+  if (endTime) {
+    conditions.push('timestamp <= ?');
+    bindParams.push(endTime);
+  }
+
+  const where = conditions.join(' AND ');
+
+  try {
+    const countRow = db
+      .prepare(`SELECT COUNT(*) as cnt FROM logcat_fts WHERE ${where}`)
+      .get(...bindParams) as { cnt: number } | undefined;
+
+    const totalMatches = countRow?.cnt ?? 0;
+    if (totalMatches === 0) {
+      return { totalMatches: 0, entries: [] };
+    }
+
+    const rows = db
+      .prepare(
+        `SELECT line_number, timestamp, pid, tid, level, tag, message, buffer
+         FROM logcat_fts
+         WHERE ${where}
+         ORDER BY timestamp
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...bindParams, limit, offset) as Array<{
+      line_number: number;
+      timestamp: string;
+      pid: string;
+      tid: string;
+      level: string;
+      tag: string;
+      message: string;
+      buffer: string;
+    }>;
+
+    return {
+      totalMatches,
+      entries: rows.map((row) => ({
+        lineNumber: row.line_number,
+        timestamp: row.timestamp,
+        pid: parseInt(row.pid, 10),
+        tid: parseInt(row.tid, 10),
+        level: row.level,
+        tag: row.tag,
+        message: row.message,
+        buffer: row.buffer || undefined,
+        rank: 0,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Search kernel entries using SQL WHERE (not FTS5 MATCH).
+ * Used as fallback when rawDataStore is expired but FTS5 index still exists.
+ */
+export function searchKernelSQL(
+  analysisId: string,
+  params: {
+    q?: string;
+    level?: string;
+    startTime?: string;
+    endTime?: string;
+    limit: number;
+    offset: number;
+  },
+): KernelFTSPaginatedResult | null {
+  const db = getDatabase();
+  const { q, level, startTime, endTime, limit, offset } = params;
+
+  const conditions: string[] = ['analysis_id = ?'];
+  const bindParams: (string | number)[] = [analysisId];
+
+  if (q) {
+    conditions.push('message LIKE ?');
+    bindParams.push(`%${q}%`);
+  }
+
+  if (level) {
+    // level is e.g. "<4>" — show entries with severity <= this number (lower = more severe)
+    const maxIdx = KERNEL_LEVELS.indexOf(level);
+    if (maxIdx >= 0) {
+      const allowed = KERNEL_LEVELS.slice(0, maxIdx + 1);
+      conditions.push(`level IN (${allowed.map(() => '?').join(',')})`);
+      bindParams.push(...allowed);
+    }
+  }
+
+  if (startTime) {
+    conditions.push('timestamp_sec >= ?');
+    bindParams.push(startTime);
+  }
+
+  if (endTime) {
+    conditions.push('timestamp_sec <= ?');
+    bindParams.push(endTime);
+  }
+
+  const where = conditions.join(' AND ');
+
+  try {
+    const countRow = db
+      .prepare(`SELECT COUNT(*) as cnt FROM kernel_fts WHERE ${where}`)
+      .get(...bindParams) as { cnt: number } | undefined;
+
+    const totalMatches = countRow?.cnt ?? 0;
+    if (totalMatches === 0) {
+      return { totalMatches: 0, entries: [] };
+    }
+
+    const rows = db
+      .prepare(
+        `SELECT entry_index, timestamp_sec, level, facility, message
+         FROM kernel_fts
+         WHERE ${where}
+         ORDER BY timestamp_sec
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...bindParams, limit, offset) as Array<{
+      entry_index: number;
+      timestamp_sec: string;
+      level: string;
+      facility: string;
+      message: string;
+    }>;
+
+    return {
+      totalMatches,
+      entries: rows.map((row) => ({
+        entryIndex: row.entry_index,
+        timestamp: row.timestamp_sec,
+        level: row.level,
+        facility: row.facility,
+        message: row.message,
+        rank: 0,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
