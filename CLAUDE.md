@@ -77,7 +77,7 @@ bugreport.zip → [Upload API] → [Unpacker] → sections & raw files
 
 Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP extraction. All exports via `src/index.ts`.
 
-- `unpacker.ts` — ZIP extraction, section splitting (logcat with buffer info, ANR traces, kernel, dumpsys)
+- `unpacker.ts` — ZIP extraction, section splitting (logcat with buffer info, ANR traces, kernel, dumpsys), HW/SW metadata extraction from SYSTEM PROPERTIES (platform, hardware, cpuAbi, serialNumber, basebandVersion, bootloaderVersion, securityPatchLevel)
 - `logcat-parser.ts` — 11 anomaly types (crash, ANR, watchdog, etc.); `parseLogcat(content, buffer?)` accepts optional buffer param; `detectAnomalies()` and `computeTagStats()` are exported for per-section parsing
 - `anr-parser.ts` — 18 ANR case types, lock graph construction, deadlock detection
 - `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format
@@ -88,7 +88,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType/.platform/.hardware/.cpuAbi/.serialNumber/.basebandVersion/.bootloaderVersion/.securityPatchLevel`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
 
 ### Backend (`@logcat-ai/backend`)
 
@@ -121,7 +121,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/InsightsCards.tsx` — Insight list with severity filters; info-level insights hidden by default in "All" mode with "Show N more" button; same-type grouping (SELinux denials, normalized titles) into expandable groups
 - `components/BSPQuickReference.tsx` — Conclusion-focused findings (boot issues, HAL problems, Doze rate) instead of raw data; vendor error tags as chips
 - `components/ChatPanel.tsx` — Compact mode when no messages (suggested question buttons + input), expands to h-96 chat after first message
-- `components/SystemOverview.tsx` — Health score rings with pulse animation for low scores (<70), deduction hints below rings, accent border color based on overall score; accepts optional `insights` prop
+- `components/SystemOverview.tsx` — Health score rings with pulse animation for low scores (<70), deduction hints below rings, accent border color based on overall score; accepts optional `insights` prop; collapsible "HW & SW details" section showing platform/hardware/CPU/kernel/baseband/security patch/serial/build date/boot image
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
 - `components/ExportMenu.tsx` — JSON/HTML/Power Report export dropdown; `hasPowerData?: boolean` prop for conditional Power Report button rendering (indigo text)
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
