@@ -75,7 +75,7 @@ test.describe('Upload & Analysis Result', () => {
     await expect(page.locator('text=Power Management')).toBeVisible();
 
     // Supported formats
-    await expect(page.locator('text=bugreport.zip')).toBeVisible();
+    await expect(page.getByText('bugreport.zip', { exact: true })).toBeVisible();
 
     // CTA navigates to upload
     await page.locator('button', { hasText: 'Start Analyzing' }).click();
