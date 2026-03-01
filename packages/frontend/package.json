@@ -8,10 +8,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "e2e": "node e2e/screenshot-test.mjs",
-    "e2e:screenshot": "node e2e/screenshot-test.mjs"
+    "e2e": "npx playwright test --config e2e/playwright.config.ts",
+    "e2e:headed": "npx playwright test --config e2e/playwright.config.ts --headed",
+    "e2e:report": "npx playwright show-report e2e/playwright-report",
+    "e2e:legacy": "node e2e/screenshot-test.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",

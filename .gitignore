@@ -31,5 +31,8 @@ npm-debug.log*
 # SQLite
 data/
 
-# E2E test screenshots
+# E2E test screenshots and reports
 packages/frontend/e2e/screenshots/
+packages/frontend/e2e/test-results/
+packages/frontend/e2e/playwright-report/
+packages/frontend/e2e/.e2e-state.json

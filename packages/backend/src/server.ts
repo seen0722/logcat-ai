@@ -20,6 +20,7 @@ import exportRouter from './routes/export.js';
 import compareRouter from './routes/compare.js';
 import batchRouter from './routes/batch.js';
 import searchRouter from './routes/search.js';
+import testUtilsRouter from './routes/test-utils.js';
 
 // Initialize SQLite database before anything else
 initDatabase();
@@ -45,6 +46,11 @@ app.use('/api/export', exportRouter);
 app.use('/api/compare', compareRouter);
 app.use('/api/batch', batchRouter);
 app.use('/api/search', searchRouter);
+
+// Dev-only test utilities
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/_test', testUtilsRouter);
+}
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
