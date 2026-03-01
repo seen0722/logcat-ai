@@ -703,15 +703,16 @@ export function analyzeBootStatus(
     }
   }
 
-  // Estimate uptime from last kernel timestamp
+  // 4. Parse UPTIME section first (ground truth from `uptime` command)
   let uptimeSeconds: number | undefined;
-  if (kernelResult.entries.length > 0) {
-    uptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
+  if (uptimeContent) {
+    uptimeSeconds = parseUptimeSection(uptimeContent);
   }
 
-  // 4. Fallback: parse UPTIME section ("up 9 days, 15:31" / "up 23:14" / "up 24 min")
-  if (uptimeSeconds == null && uptimeContent) {
-    uptimeSeconds = parseUptimeSection(uptimeContent);
+  // 5. Fallback: estimate from last kernel dmesg timestamp (only reliable for dmesg format
+  //    where timestamp = seconds since boot; logcat format timestamps are relative to first entry)
+  if (uptimeSeconds == null && kernelResult.entries.length > 0) {
+    uptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
   }
 
   // First boot counts as 1, so restarts = count - 1 (if > 0)
