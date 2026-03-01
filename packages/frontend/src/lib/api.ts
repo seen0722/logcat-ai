@@ -137,7 +137,7 @@ export async function fetchProviders(): Promise<{
 
 export async function switchProvider(
   type: string,
-  opts?: { apiKey?: string; model?: string },
+  opts?: { apiKey?: string; model?: string; baseUrl?: string },
 ): Promise<void> {
   await fetch(`${API_BASE}/settings/provider`, {
     method: 'PUT',
