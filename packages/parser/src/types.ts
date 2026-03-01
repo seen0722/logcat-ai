@@ -280,6 +280,7 @@ export interface KernelParseResult {
   entries: KernelLogEntry[];
   events: KernelEvent[];
   totalLines: number;
+  parseErrors?: number;
 }
 
 // ============================================================

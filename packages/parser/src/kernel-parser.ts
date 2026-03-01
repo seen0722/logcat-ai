@@ -73,23 +73,24 @@ export function parseKernelLog(content: string): KernelParseResult {
   const lines = content.split('\n');
   const format = detectFormat(lines);
 
-  const entries: KernelLogEntry[] =
-    format === 'logcat' ? parseLogcatKernel(lines) : parseDmesgKernel(lines);
+  const parsed = format === 'logcat' ? parseLogcatKernel(lines) : parseDmesgKernel(lines);
 
-  const events = detectKernelEvents(entries);
+  const events = detectKernelEvents(parsed.entries);
 
   return {
-    entries,
+    entries: parsed.entries,
     events,
     totalLines: lines.length,
+    parseErrors: parsed.parseErrors,
   };
 }
 
 /**
  * Parse standard dmesg format lines.
  */
-function parseDmesgKernel(lines: string[]): KernelLogEntry[] {
+function parseDmesgKernel(lines: string[]): { entries: KernelLogEntry[]; parseErrors: number } {
   const entries: KernelLogEntry[] = [];
+  let parseErrors = 0;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -110,23 +111,26 @@ function parseDmesgKernel(lines: string[]): KernelLogEntry[] {
         message,
         raw: line,
       });
+    } else {
+      parseErrors++;
     }
   }
 
-  return entries;
+  return { entries, parseErrors };
 }
 
 /**
  * Parse logcat -b kernel -v threadtime format lines.
  * Timestamps are converted to seconds-since-first-entry to match dmesg convention.
  */
-function parseLogcatKernel(lines: string[]): KernelLogEntry[] {
+function parseLogcatKernel(lines: string[]): { entries: KernelLogEntry[]; parseErrors: number } {
   const entries: KernelLogEntry[] = [];
   let baseMs = -1;
+  let parseErrors = 0;
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    // Skip logcat buffer separator lines
+    // Skip logcat buffer separator lines (not a parse error)
     if (line.startsWith('--------- beginning of')) continue;
 
     const match = line.match(LOGCAT_KERNEL_RE);
@@ -149,10 +153,12 @@ function parseLogcatKernel(lines: string[]): KernelLogEntry[] {
         message,
         raw: line,
       });
+    } else {
+      parseErrors++;
     }
   }
 
-  return entries;
+  return { entries, parseErrors };
 }
 
 // ============================================================

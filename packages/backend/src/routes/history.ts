@@ -46,6 +46,7 @@ router.get('/:id', (req: Request, res: Response) => {
       ? {
           events: result.kernelResult.events,
           totalLines: result.kernelResult.totalLines,
+          parseErrors: result.kernelResult.parseErrors,
         }
       : undefined,
   };

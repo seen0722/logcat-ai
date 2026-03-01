@@ -280,6 +280,45 @@ describe('parseKernelLog', () => {
     expect(result.events[0].type).toBe('driver_error');
   });
 
+  // parseErrors counting
+  it('should count parseErrors for non-matching dmesg lines', () => {
+    const content = [
+      '<6>[    0.000000] Booting Linux on physical CPU 0x0',
+      'this line does not match dmesg format',
+      '<6>[    1.000000] CPU: All CPU(s) started',
+      'another bad line',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.entries).toHaveLength(2);
+    expect(result.parseErrors).toBe(2);
+  });
+
+  it('should count parseErrors for non-matching logcat kernel lines', () => {
+    const content = [
+      '02-08 14:01:56.821  root     0     0 I         : Booting Linux',
+      'garbage line here',
+      '02-08 14:01:57.000  root     0     0 E         : some error',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.entries).toHaveLength(2);
+    expect(result.parseErrors).toBe(1);
+  });
+
+  it('should not count logcat buffer separator as parseError', () => {
+    const content = [
+      '--------- beginning of kernel',
+      '02-08 14:01:56.821  root     0     0 I         : test message',
+      '--------- beginning of kernel',
+      '02-08 14:01:57.821  root     0     0 I         : test message 2',
+    ].join('\n');
+
+    const result = parseKernelLog(content);
+    expect(result.entries).toHaveLength(2);
+    expect(result.parseErrors).toBe(0);
+  });
+
   // No events
   it('should return empty events for clean log', () => {
     const content = [

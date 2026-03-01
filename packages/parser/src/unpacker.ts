@@ -35,6 +35,7 @@ export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
 
   let mainBugreportContent = '';
   let mainBugreportName = '';
+  const allFileNames: string[] = [];
 
   try {
     for await (const entry of zipFile) {
@@ -42,6 +43,8 @@ export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
 
       // Skip directories
       if (fileName.endsWith('/')) continue;
+
+      allFileNames.push(fileName);
 
       // Only read files we actually need for analysis — skip screenshots, misc logs, etc.
       if (isMainBugreportFile(fileName)) {
@@ -67,8 +70,12 @@ export async function unpackBugreport(zipPath: string): Promise<UnpackResult> {
   }
 
   if (!mainBugreportContent) {
+    const maxShow = 10;
+    const shown = allFileNames.slice(0, maxShow);
+    const fileList = shown.join(', ') + (allFileNames.length > maxShow ? `, ...and ${allFileNames.length - maxShow} more` : '');
     throw new Error(
-      `No main bugreport text file found in zip. Files: ${[...rawFiles.keys()].join(', ')}`
+      `No main bugreport text file found in zip. This ZIP does not appear to be an Android bugreport. ` +
+      `Use \`adb bugreport\` to generate a valid bugreport. Files found: ${fileList}`
     );
   }
 
