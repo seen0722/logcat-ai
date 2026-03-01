@@ -55,7 +55,7 @@ npm run e2e:report -w packages/frontend   # View HTML test report
 npm run e2e:legacy -w packages/frontend   # Legacy screenshot-only test
 ```
 
-34 Playwright Test specs across 11 files covering: upload/analysis flow, system overview, insights filters, timeline+search integration, search modal (Logcat/Kernel tabs, pagination), history panel, export menu, power overview, section nav, LLM settings, and FTS5 SQL fallback verification. Uses `global-setup.ts` to upload a sample bugreport once and share the analysis across all tests. Config: chromium only, 1440×900 viewport, `workers: 1`, auto-starts backend+frontend via `webServer`. Backend dev-only `POST /api/_test/clear-raw-store/:id` endpoint enables FTS5 fallback path testing.
+35 Playwright Test specs across 11 files covering: upload/analysis flow, system overview, insights filters, timeline+search integration, search modal (Logcat/Kernel tabs, pagination), history panel, export menu, power overview, section nav, LLM settings, landing page, and FTS5 SQL fallback verification. Uses `global-setup.ts` to upload a sample bugreport once and share the analysis across all tests. Config: chromium only, 1440×900 viewport, `workers: 1`, auto-starts backend+frontend via `webServer`. Backend dev-only `POST /api/_test/clear-raw-store/:id` endpoint enables FTS5 fallback path testing.
 
 ## Architecture
 
@@ -82,7 +82,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `unpacker.ts` — ZIP extraction, section splitting (logcat with buffer info, ANR traces, kernel, dumpsys), HW/SW metadata extraction from SYSTEM PROPERTIES (platform, hardware, cpuAbi, serialNumber, basebandVersion, bootloaderVersion, securityPatchLevel)
 - `logcat-parser.ts` — 11 anomaly types (crash, ANR, watchdog, etc.); `parseLogcat(content, buffer?)` accepts optional buffer param; `detectAnomalies()` and `computeTagStats()` are exported for per-section parsing
 - `anr-parser.ts` — 18 ANR case types, lock graph construction, deadlock detection
-- `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format
+- `kernel-parser.ts` — 12 kernel event types; auto-detects dmesg vs `logcat -b kernel -v threadtime` format; returns `parseErrors` count for non-matching lines
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
 - `power-parser.ts` — Power management analysis: PowerManager state, DeviceIdle (Doze) state/settings, BatteryStats summary with Deep Doze discharge rate calculation, kernel wakelocks from CHECKIN format, alarm wakeup stats, kernel suspend statistics, estimated power use (component/UID-level), connectivity stats (cellular/WiFi/BT/GPS), partial wakelocks (top 20)
@@ -90,7 +90,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType/.platform/.hardware/.cpuAbi/.serialNumber/.basebandVersion/.bootloaderVersion/.securityPatchLevel`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType/.platform/.hardware/.cpuAbi/.serialNumber/.basebandVersion/.bootloaderVersion/.securityPatchLevel`, `KernelParseResult.parseErrors`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
 
 ### Backend (`@logcat-ai/backend`)
 
