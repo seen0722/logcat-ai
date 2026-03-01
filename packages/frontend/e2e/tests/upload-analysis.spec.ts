@@ -39,6 +39,13 @@ test.describe('Upload & Analysis Result', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    // May land on landing page first — click through if so
+    const startBtn = page.locator('button', { hasText: 'Start Analyzing' });
+    if (await startBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await startBtn.click();
+      await page.waitForLoadState('networkidle');
+    }
+
     // Title
     await expect(page.locator('h1')).toContainText('Logcat AI');
 
@@ -48,5 +55,31 @@ test.describe('Upload & Analysis Result', () => {
     // Analysis mode buttons
     await expect(page.locator('button', { hasText: 'Quick Analysis' })).toBeVisible();
     await expect(page.locator('button', { hasText: 'Deep Analysis' })).toBeVisible();
+  });
+
+  test('landing page shows features and navigates to upload', async ({ page }) => {
+    // Clear skipLanding to see landing page
+    await page.goto('/');
+    await page.evaluate(() => localStorage.removeItem('skipLanding'));
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Hero
+    await expect(page.locator('h1')).toContainText('Logcat AI');
+    await expect(page.locator('text=AI-powered bugreport.zip analyzer')).toBeVisible();
+
+    // Feature cards
+    await expect(page.locator('text=ANR Deep Analysis')).toBeVisible();
+    await expect(page.locator('text=Health Score')).toBeVisible();
+    await expect(page.locator('text=Full-text Search & AI Chat')).toBeVisible();
+    await expect(page.locator('text=Power Management')).toBeVisible();
+
+    // Supported formats
+    await expect(page.locator('text=bugreport.zip')).toBeVisible();
+
+    // CTA navigates to upload
+    await page.locator('button', { hasText: 'Start Analyzing' }).click();
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('input[type="file"]')).toBeAttached();
   });
 });
