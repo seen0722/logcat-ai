@@ -21,6 +21,7 @@ import BatchResults from './components/BatchResults';
 import SearchModal from './components/SearchModal';
 import SectionNav from './components/SectionNav';
 import SettingsPanel from './components/SettingsPanel';
+import LandingPage from './components/LandingPage';
 
 export default function App() {
   const { phase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
@@ -116,7 +117,7 @@ export default function App() {
   return (
     <div className="min-h-screen p-6 md:p-10">
       {/* Header (when not in upload phase) */}
-      {phase !== 'upload' && (
+      {phase !== 'upload' && phase !== 'landing' && (
         <div className="flex items-center justify-between mb-6 max-w-5xl mx-auto">
           <h1 className="text-xl font-bold">Logcat AI</h1>
           <div className="flex items-center gap-2">
@@ -161,6 +162,17 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Landing Phase */}
+      {phase === 'landing' && (
+        <LandingPage
+          onStart={() => {
+            try { localStorage.setItem('skipLanding', '1'); } catch {}
+            reset();
+          }}
+          onViewHistory={() => setShowHistory(true)}
+        />
       )}
 
       {/* Upload Phase */}
