@@ -6,10 +6,17 @@ import {
   AnalysisMode,
 } from '../lib/types';
 
-export type AppPhase = 'upload' | 'analyzing' | 'result';
+export type AppPhase = 'landing' | 'upload' | 'analyzing' | 'result';
+
+function getInitialPhase(): AppPhase {
+  try {
+    if (localStorage.getItem('skipLanding') === '1') return 'upload';
+  } catch {}
+  return 'landing';
+}
 
 export function useAnalysis() {
-  const [phase, setPhase] = useState<AppPhase>('upload');
+  const [phase, setPhase] = useState<AppPhase>(getInitialPhase);
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [progress, setProgress] = useState<SSEProgress | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
