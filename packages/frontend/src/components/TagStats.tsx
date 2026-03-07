@@ -67,7 +67,7 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
           {segments.map((s) => (
             <div
               key={s.classification}
-              className={`${classificationConfig[s.classification].bar} transition-all duration-500`}
+              className={`${classificationConfig[s.classification].bar} transition-all duration-500 first:rounded-l-full last:rounded-r-full`}
               style={{ width: `${s.pct}%` }}
               title={`${classificationConfig[s.classification].label}: ${s.count} (${s.pct.toFixed(0)}%)`}
             />

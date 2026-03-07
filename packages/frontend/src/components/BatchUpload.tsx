@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, DragEvent } from 'react';
+import { useState, useRef, useCallback, useEffect, DragEvent } from 'react';
 import { uploadBatchFiles, startBatchAnalysis } from '../lib/api';
 import { BatchAggregation, BatchSSEProgress, BatchFileResult } from '../lib/types';
 
@@ -8,6 +8,7 @@ interface Props {
 }
 
 export default function BatchUpload({ onComplete, onClose }: Props) {
+  const [visible, setVisible] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -97,9 +98,15 @@ export default function BatchUpload({ onComplete, onClose }: Props) {
     }
   }, [files, onComplete]);
 
+  // Fade-in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
   const handleClose = useCallback(() => {
     cleanupRef.current?.();
-    onClose();
+    setVisible(false);
+    setTimeout(onClose, 200);
   }, [onClose]);
 
   const formatSize = (bytes: number): string => {
@@ -108,9 +115,12 @@ export default function BatchUpload({ onComplete, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={handleClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 transition-colors duration-200 ${visible ? 'bg-black/60' : 'bg-black/0'}`}
+      onClick={handleClose}
+    >
       <div
-        className="w-full max-w-3xl bg-background border border-border rounded-xl shadow-2xl mx-4"
+        className={`w-full max-w-3xl bg-background border border-border rounded-xl shadow-2xl mx-4 transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -118,7 +128,7 @@ export default function BatchUpload({ onComplete, onClose }: Props) {
           <h2 className="text-lg font-semibold text-gray-100">Batch Analysis</h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-white text-xl leading-none"
+            className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
           >
             &times;
           </button>

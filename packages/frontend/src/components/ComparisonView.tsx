@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { ComparisonResult, HealthDiffItem, ComparisonInsight, HALChange } from '../hooks/useComparison';
 
 interface Props {
@@ -81,15 +82,28 @@ function HALChangeRow({ change }: { change: HALChange }) {
 
 export default function ComparisonView({ comparison, onClose }: Props) {
   const { healthDiff, insightDiff, anrDiff, halDiff } = comparison;
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
 
   const hasInsightChanges = insightDiff.resolved.length > 0 || insightDiff.newIssues.length > 0;
   const hasANRChanges = anrDiff.resolved.length > 0 || anrDiff.newIssues.length > 0;
   const hasHALChanges = halDiff.changes.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`}
+      onClick={handleClose}
+    >
       <div
-        className="w-full max-w-4xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl mx-4"
+        className={`w-full max-w-4xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl mx-4 transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -100,7 +114,7 @@ export default function ComparisonView({ comparison, onClose }: Props) {
             <span className="font-mono text-indigo-400">{shortId(comparison.rightId)}</span>
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
           >
             &times;
@@ -281,7 +295,7 @@ export default function ComparisonView({ comparison, onClose }: Props) {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex justify-end">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
           >
             Close

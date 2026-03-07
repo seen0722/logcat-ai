@@ -2,6 +2,7 @@ import { SSEProgress } from '../lib/types';
 
 interface Props {
   progress: SSEProgress | null;
+  onCancel?: () => void;
 }
 
 const STAGES = [
@@ -16,34 +17,54 @@ function stageIndex(stage: string): number {
   return idx === -1 ? 0 : idx;
 }
 
-export default function ProgressView({ progress }: Props) {
+export default function ProgressView({ progress, onCancel }: Props) {
   if (!progress) return null;
 
   const currentIdx = stageIndex(progress.stage);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Stage indicators */}
+      {/* Stage indicators with connectors */}
       <div className="flex items-center justify-between">
         {STAGES.map((stage, i) => {
           const isActive = i === currentIdx;
           const isDone = i < currentIdx || progress.stage === 'complete';
           return (
-            <div key={stage.key} className="flex flex-col items-center flex-1">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-colors ${
-                  isDone
-                    ? 'bg-green-600'
-                    : isActive
-                      ? 'bg-indigo-600 animate-pulse'
-                      : 'bg-surface-card border border-border'
-                }`}
-              >
-                {isDone ? '✓' : stage.num}
+            <div key={stage.key} className="flex items-center flex-1">
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all duration-500 ${
+                    isDone
+                      ? 'bg-green-600 text-white'
+                      : isActive
+                        ? 'bg-indigo-600 text-white animate-pulse-subtle shadow-lg shadow-indigo-500/30'
+                        : 'bg-surface-card border border-border text-gray-500'
+                  }`}
+                >
+                  {isDone ? (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : stage.num}
+                </div>
+                <span className={`text-xs mt-1.5 transition-colors ${isActive ? 'text-white font-medium' : isDone ? 'text-green-400' : 'text-gray-500'}`}>
+                  {stage.label}
+                </span>
               </div>
-              <span className={`text-xs mt-1 ${isActive ? 'text-white' : 'text-gray-500'}`}>
-                {stage.label}
-              </span>
+              {/* Connector line */}
+              {i < STAGES.length - 1 && (
+                <div className="flex-1 h-px mx-2 mt-[-1.25rem]">
+                  <div
+                    className={`h-full transition-colors duration-500 ${
+                      i < currentIdx || progress.stage === 'complete'
+                        ? 'bg-green-600'
+                        : i === currentIdx
+                          ? 'bg-gradient-to-r from-indigo-600 to-border'
+                          : 'bg-border'
+                    }`}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -52,13 +73,20 @@ export default function ProgressView({ progress }: Props) {
       {/* Progress bar */}
       <div className="w-full bg-surface-card rounded-full h-2 overflow-hidden">
         <div
-          className="h-full bg-indigo-600 rounded-full transition-all duration-500 ease-out"
+          className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full transition-all duration-500 ease-out"
           style={{ width: `${progress.progress}%` }}
         />
       </div>
 
       {/* Message */}
       <p className="text-center text-sm text-gray-400">{progress.message}</p>
+      {onCancel && (
+        <p className="text-center">
+          <button onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+            Cancel
+          </button>
+        </p>
+      )}
     </div>
   );
 }

@@ -97,7 +97,7 @@ export default function BSPQuickReference({ bootStatus, memInfo, cpuInfo, halSta
   }
 
   return (
-    <div className="card space-y-3">
+    <div className="card space-y-3 border-l-2 border-indigo-500/30">
       <h2 className="text-lg font-semibold">BSP Quick Reference</h2>
 
       {/* Findings as compact list */}

@@ -40,7 +40,7 @@ function deductionHint(dimension: string, score: number, insights?: InsightCard[
   return parts.slice(0, 2).join(', ');
 }
 
-function ScoreRing({ score, label, size = 64, hint }: { score: number; label: string; size?: number; hint?: string }) {
+function ScoreRing({ score, label, size = 64, hint, showMax }: { score: number; label: string; size?: number; hint?: string; showMax?: boolean }) {
   const radius = (size - 8) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
@@ -65,8 +65,9 @@ function ScoreRing({ score, label, size = 64, hint }: { score: number; label: st
             className="transition-all duration-1000 ease-out"
           />
         </svg>
-        <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${scoreColor(score)}`}>
-          {score}
+        <span className={`absolute inset-0 flex flex-col items-center justify-center ${scoreColor(score)}`}>
+          <span className="text-lg font-bold leading-none">{score}</span>
+          {showMax && <span className="text-[9px] text-gray-600 leading-none mt-0.5">/100</span>}
         </span>
       </div>
       <span className={`text-xs mt-1.5 ${isLow ? 'text-amber-400 font-medium' : 'text-gray-500'}`}>{label}</span>
@@ -175,8 +176,11 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
         <div>
           <button
             onClick={() => setShowHwSwDetails(!showHwSwDetails)}
-            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 bg-surface px-3 py-1 rounded-md border border-border hover:border-indigo-500/30 transition-colors"
           >
+            <svg className={`w-3 h-3 transition-transform ${showHwSwDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
             {showHwSwDetails ? 'Hide' : 'Show'} HW & SW details ({hwSwDetails.length})
           </button>
           {showHwSwDetails && (
@@ -194,7 +198,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
 
       {/* Health Scores */}
       <div className="flex items-center justify-around pt-2">
-        <ScoreRing score={healthScore.overall} label="Overall" size={80} />
+        <ScoreRing score={healthScore.overall} label="Overall" size={80} showMax />
         <ScoreRing score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
         <ScoreRing score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
         <ScoreRing score={breakdown.responsiveness} label="Response" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />

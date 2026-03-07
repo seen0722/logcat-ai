@@ -59,8 +59,10 @@ export default function UploadZone({ onStart, error }: Props) {
 
       {/* Drop Zone */}
       <div
-        className={`card border-2 border-dashed cursor-pointer text-center py-12 transition-colors ${
-          dragging ? 'border-indigo-500 bg-indigo-500/5' : 'border-border hover:border-gray-500'
+        className={`card border-2 border-dashed cursor-pointer text-center py-12 transition-all duration-200 ${
+          dragging ? 'border-indigo-500 bg-indigo-500/5 scale-[1.01] shadow-lg shadow-indigo-500/10'
+          : file ? 'border-indigo-500/50 bg-indigo-500/5'
+          : 'border-border hover:border-gray-500 hover:bg-surface-hover/30'
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -76,6 +78,9 @@ export default function UploadZone({ onStart, error }: Props) {
         />
         {file ? (
           <div className="space-y-1">
+            <svg className="w-8 h-8 mx-auto text-green-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <p className="text-lg font-medium text-white">{file.name}</p>
             <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
           </div>
@@ -148,8 +153,11 @@ export default function UploadZone({ onStart, error }: Props) {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
-          {error}
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-start gap-2">
+          <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <span>{error}</span>
         </div>
       )}
 
@@ -159,7 +167,7 @@ export default function UploadZone({ onStart, error }: Props) {
         disabled={!file}
         className="w-full py-3 rounded-lg font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white"
       >
-        Analyze {file ? file.name : 'bugreport.zip'}
+        {file ? `Analyze ${file.name}` : 'Select a file to analyze'}
       </button>
     </div>
   );

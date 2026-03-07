@@ -191,13 +191,18 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     }
   }, []);
 
+  const handleClose = useCallback(() => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [handleClose]);
 
   // Reset state when switching tabs
   const switchSource = (newSource: SearchSource) => {
@@ -319,8 +324,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     if (e.key === 'Enter') doSearch();
   };
 
+  const [visible, setVisible] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Fade-in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
 
   const result = source === 'kernel' ? kernelResult : logcatResult;
   const totalPages = result ? Math.ceil(result.totalMatches / limit) : 0;
@@ -376,11 +387,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`}
+      onClick={handleClose}
     >
       <div
-        className="w-full max-w-6xl 2xl:max-w-7xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[85vh] 2xl:max-h-[90vh]"
+        className={`w-full max-w-6xl 2xl:max-w-7xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[85vh] 2xl:max-h-[90vh] transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Tab */}
@@ -411,7 +422,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
           >
             &times;
@@ -674,9 +685,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   <table className="w-full text-xs font-mono">
                     <thead>
                       <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
-                        <th className="py-1.5 px-2 text-left font-medium">Timestamp</th>
-                        <th className="py-1.5 px-1 text-left font-medium">Level</th>
-                        <th className="py-1.5 px-2 text-left font-medium">Message</th>
+                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Timestamp</th>
+                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Level</th>
+                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Message</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -706,10 +717,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   <table className="w-full text-xs font-mono">
                     <thead>
                       <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
-                        <th className="py-1.5 px-2 text-left font-medium">Timestamp</th>
-                        <th className="py-1.5 px-1 text-left font-medium">PID/TID</th>
-                        <th className="py-1.5 px-1 text-left font-medium">Level/Tag</th>
-                        <th className="py-1.5 px-2 text-left font-medium">Message</th>
+                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Timestamp</th>
+                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">PID/TID</th>
+                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Level/Tag</th>
+                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Message</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -168,11 +168,13 @@ export default function InsightCard({ insight }: Props) {
   return (
     <div
       id={insight.id}
-      className={`card border-l-4 ${styles.border} cursor-pointer transition-colors hover:bg-surface-hover`}
-      onClick={() => setExpanded(!expanded)}
+      className={`border-l-4 ${styles.border} bg-surface-card border border-border rounded-lg overflow-hidden transition-colors`}
     >
-      {/* Header */}
-      <div className="flex items-start gap-3">
+      {/* Header — clickable to expand/collapse */}
+      <div
+        className="flex items-start gap-3 cursor-pointer hover:bg-surface-hover p-4 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
         <span className={`w-6 h-6 shrink-0 rounded flex items-center justify-center text-xs font-bold ${
           insight.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
           insight.severity === 'warning' ? 'bg-amber-500/20 text-amber-400' :
@@ -194,7 +196,7 @@ export default function InsightCard({ insight }: Props) {
 
       {/* Expanded */}
       {expanded && (
-        <div className="mt-3 space-y-3 text-sm">
+        <div className="px-4 pb-4 space-y-3 text-sm border-t border-border/50 pt-3">
           <DescriptionBlock text={insight.description} />
 
           {insight.stackTrace && (

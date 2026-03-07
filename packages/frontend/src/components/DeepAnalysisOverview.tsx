@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { DeepAnalysisOverview as OverviewType } from '../lib/types';
 
 interface Props {
@@ -32,9 +34,13 @@ export default function DeepAnalysisOverview({ overview }: Props) {
             AI Deep Analysis
           </span>
         </div>
-        <p className="text-gray-200 leading-relaxed">{overview.executiveSummary}</p>
+        <div className="prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-code:text-indigo-300 prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs text-gray-200 leading-relaxed">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{overview.executiveSummary}</ReactMarkdown>
+        </div>
         {overview.systemDiagnosis && (
-          <p className="text-gray-400 text-sm mt-2 leading-relaxed">{overview.systemDiagnosis}</p>
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-code:text-indigo-300 prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs text-gray-400 text-sm mt-2 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{overview.systemDiagnosis}</ReactMarkdown>
+          </div>
         )}
       </div>
 

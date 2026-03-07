@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BatchAggregation, BatchFileResult } from '../lib/types';
 
 interface Props {
@@ -29,6 +30,17 @@ function scoreBg(score: number): string {
 }
 
 export default function BatchResults({ aggregation, items, onViewReport, onClose }: Props) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
   const {
     totalReports,
     avgHealthScore,
@@ -41,9 +53,12 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
   } = aggregation;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center overflow-y-auto py-8" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 transition-colors duration-200 ${visible ? 'bg-black/60' : 'bg-black/0'}`}
+      onClick={handleClose}
+    >
       <div
-        className="w-full max-w-5xl bg-background border border-border rounded-xl shadow-2xl mx-4"
+        className={`w-full max-w-5xl bg-background border border-border rounded-xl shadow-2xl mx-4 transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -52,7 +67,7 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
             Batch Analysis Results
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-white text-xl leading-none"
           >
             &times;
@@ -264,7 +279,7 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
         {/* Footer */}
         <div className="px-6 py-4 border-t border-border flex justify-end">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
           >
             Close

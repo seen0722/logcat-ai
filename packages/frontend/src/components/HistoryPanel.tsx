@@ -12,7 +12,15 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState('');
   const pageSize = 10;
+
+  // Slide-in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
 
   useEffect(() => {
     loadPage();
@@ -29,10 +37,20 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
     }
   }
 
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
   async function handleDelete(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm('Delete this analysis?')) return;
-    await deleteHistory(id);
+    setConfirmDeleteId(id);
+  }
+
+  async function confirmDelete() {
+    if (!confirmDeleteId) return;
+    await deleteHistory(confirmDeleteId);
+    setConfirmDeleteId(null);
     loadPage();
   }
 
@@ -54,20 +72,31 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex justify-end" onClick={onClose}>
+    <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
-        className="w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col"
+        className={`w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60 shrink-0">
           <h2 className="text-lg font-semibold text-gray-100">Analysis History</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
           >
             &times;
           </button>
+        </div>
+
+        {/* Search filter */}
+        <div className="px-4 pt-3 pb-0 shrink-0">
+          <input
+            type="text"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Filter by filename..."
+            className="w-full bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/60"
+          />
         </div>
 
         {/* Content */}
@@ -83,7 +112,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              {items.map((item) => (
+              {items.filter((item) => !filterText || item.filename.toLowerCase().includes(filterText.toLowerCase())).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onLoad(item.id)}
@@ -150,6 +179,29 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
             >
               Next
             </button>
+          </div>
+        )}
+
+        {/* Custom Confirm Dialog */}
+        {confirmDeleteId && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={() => setConfirmDeleteId(null)}>
+            <div className="bg-[#161b22] border border-gray-700/60 rounded-xl p-6 max-w-sm mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <p className="text-gray-200 text-sm mb-4">Delete this analysis? This action cannot be undone.</p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-1.5 text-sm border border-gray-700/60 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

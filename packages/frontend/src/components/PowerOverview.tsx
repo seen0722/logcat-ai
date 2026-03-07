@@ -82,9 +82,12 @@ export default function PowerOverview({ powerStatus }: Props) {
         <h2 className="text-lg font-semibold">Power Management</h2>
         <button
           onClick={() => setShowDetails(!showDetails)}
-          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
         >
-          {showDetails ? 'Show less' : 'Show details'}
+          <svg className={`w-3 h-3 transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+          {showDetails ? 'Show less' : `Show details (${[pm, kernelWakeLocks.length > 0, (alarmWakeups ?? []).length > 0, suspendStats].filter(Boolean).length} sections)`}
         </button>
       </div>
 
@@ -163,7 +166,7 @@ export default function PowerOverview({ powerStatus }: Props) {
       {/* Detailed sections - collapsible */}
       {showDetails && (
         <div className="space-y-4 pt-2 border-t border-border">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Left: Power Manager State */}
             <div className="bg-surface rounded-lg p-3 space-y-3">
               <h3 className="text-sm font-semibold text-gray-400">PowerManager State</h3>

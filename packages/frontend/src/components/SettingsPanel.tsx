@@ -24,6 +24,12 @@ export default function SettingsPanel({ onClose }: Props) {
   const [active, setActive] = useState('');
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [visible, setVisible] = useState(false);
+
+  // Slide-in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
 
   // Form state for active provider config
   const [editModel, setEditModel] = useState('');
@@ -54,13 +60,18 @@ export default function SettingsPanel({ onClose }: Props) {
     loadProviders();
   }, [loadProviders]);
 
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, []);
 
   async function handleSelectProvider(type: string) {
     if (type === active) return;
@@ -107,9 +118,9 @@ export default function SettingsPanel({ onClose }: Props) {
   const needsApiKey = active !== 'ollama';
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex justify-end" onClick={onClose}>
+    <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
-        className="w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col"
+        className={`w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -127,7 +138,7 @@ export default function SettingsPanel({ onClose }: Props) {
               </svg>
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
             >
               &times;

@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { streamChat, ChatSSEEvent } from '../lib/api';
 
 interface Props {
@@ -131,7 +133,7 @@ export default function ChatPanel({ uploadId }: Props) {
   }
 
   return (
-    <div className="card flex flex-col h-96">
+    <div className="card flex flex-col min-h-96 max-h-[70vh]">
       <h2 className="text-lg font-semibold mb-3">Ask Follow-up Questions</h2>
 
       {/* Messages */}
@@ -182,12 +184,21 @@ export default function ChatPanel({ uploadId }: Props) {
                   : 'bg-surface text-gray-300 mr-8'
               }`}
             >
-              <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+              <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:text-indigo-300 prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-surface prose-pre:rounded prose-pre:p-2 prose-pre:text-xs">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              </div>
             </div>
           </div>
         ))}
         {streaming && (
-          <div className="text-xs text-gray-500 animate-pulse">AI is thinking...</div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 ml-1">
+            <span>AI is thinking</span>
+            <span className="flex gap-0.5">
+              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+          </div>
         )}
       </div>
 

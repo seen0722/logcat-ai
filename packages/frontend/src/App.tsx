@@ -20,6 +20,7 @@ import BatchUpload from './components/BatchUpload';
 import BatchResults from './components/BatchResults';
 import SearchModal from './components/SearchModal';
 import SectionNav from './components/SectionNav';
+import { downloadExport } from './lib/api';
 import SettingsPanel from './components/SettingsPanel';
 import LandingPage from './components/LandingPage';
 
@@ -30,6 +31,7 @@ export default function App() {
   const [compareMode, setCompareMode] = useState(false);
   const { comparison, loading: compareLoading, error: compareError, compare, reset: resetComparison } = useComparison();
 
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchTag, setSearchTag] = useState<string | null>(null);
   const [searchStartTime, setSearchStartTime] = useState<string | null>(null);
@@ -108,6 +110,10 @@ export default function App() {
     return sections;
   }, [result]);
 
+  const downloadExportFromMenu = () => {
+    if (uploadId) downloadExport(uploadId, 'json');
+  };
+
   const handleBatchViewReport = (id: string) => {
     setBatchAggregation(null);
     setBatchItems([]);
@@ -125,22 +131,23 @@ export default function App() {
               <>
                 <button
                   onClick={() => setCompareMode(true)}
-                  className="px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                  className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
                 >
                   Compare
                 </button>
                 <button
                   onClick={() => setShowSearch(true)}
-                  className="px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                  className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
                 >
                   Search
                 </button>
               </>
             )}
-            {uploadId && <ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} />}
+            {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} /></span>}
+            {/* Desktop: show all buttons */}
             <button
               onClick={() => setShowSettings(true)}
-              className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
               title="LLM Settings"
             >
               <svg className="w-4 h-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -150,16 +157,74 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowHistory(true)}
-              className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
             >
               History
             </button>
             <button
               onClick={reset}
-              className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
             >
               New Analysis
             </button>
+            {/* Mobile: overflow menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+                className="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                </svg>
+              </button>
+              {showHeaderMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-40 bg-surface-card border border-border rounded-lg shadow-xl py-1">
+                    {uploadId && phase === 'result' && (
+                      <>
+                        <button
+                          onClick={() => { setShowHeaderMenu(false); setCompareMode(true); }}
+                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors"
+                        >
+                          Compare
+                        </button>
+                        <button
+                          onClick={() => { setShowHeaderMenu(false); setShowSearch(true); }}
+                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors"
+                        >
+                          Search
+                        </button>
+                        <button
+                          onClick={() => { setShowHeaderMenu(false); downloadExportFromMenu(); }}
+                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors border-b border-border"
+                        >
+                          Export
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => { setShowHeaderMenu(false); setShowSettings(true); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                    >
+                      Settings
+                    </button>
+                    <button
+                      onClick={() => { setShowHeaderMenu(false); setShowHistory(true); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                    >
+                      History
+                    </button>
+                    <button
+                      onClick={() => { setShowHeaderMenu(false); reset(); }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                    >
+                      New Analysis
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -207,7 +272,7 @@ export default function App() {
       {/* Analyzing Phase */}
       {phase === 'analyzing' && (
         <div className="pt-20">
-          <ProgressView progress={progress} />
+          <ProgressView progress={progress} onCancel={reset} />
         </div>
       )}
 

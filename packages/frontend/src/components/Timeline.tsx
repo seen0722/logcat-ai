@@ -102,7 +102,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
       </div>
 
       {/* Event List */}
-      <div className="relative space-y-0 max-h-96 overflow-y-auto pr-2">
+      <div className="relative space-y-0 max-h-[32rem] overflow-y-auto pr-2">
         {filteredEvents.length === 0 && (
           <p className="text-sm text-gray-500 py-4 text-center">No events match current filters.</p>
         )}
@@ -131,7 +131,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
               <div className="flex flex-col items-center">
                 <div className={`w-2.5 h-2.5 rounded-full ${SEVERITY_DOT[event.severity]} shrink-0 mt-1.5`} />
                 {i < filteredEvents.length - 1 && (
-                  <div className="w-px flex-1 bg-border min-h-[20px]" />
+                  <div className="w-0.5 flex-1 bg-gray-700 min-h-[20px]" />
                 )}
               </div>
 

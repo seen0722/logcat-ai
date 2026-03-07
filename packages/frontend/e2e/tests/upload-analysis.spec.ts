@@ -74,8 +74,8 @@ test.describe('Upload & Analysis Result', () => {
     await expect(page.locator('text=Full-text Search & AI Chat')).toBeVisible();
     await expect(page.locator('text=Power Management')).toBeVisible();
 
-    // Supported formats
-    await expect(page.getByText('bugreport.zip', { exact: true })).toBeVisible();
+    // Supported formats (text appears in hero subtitle and format list)
+    await expect(page.getByText('bugreport.zip').first()).toBeVisible();
 
     // CTA navigates to upload
     await page.locator('button', { hasText: 'Start Analyzing' }).click();

@@ -24,12 +24,14 @@ export default function ExportMenu({ uploadId, hasPowerData }: Props) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+        className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+          open ? 'border-indigo-500/50 ring-1 ring-indigo-500/30 bg-indigo-500/5 text-indigo-400' : 'border-border hover:bg-surface-hover'
+        }`}
       >
         Export
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-44 bg-surface border border-border rounded-lg shadow-xl z-10">
+        <div className="absolute right-0 mt-2 w-44 bg-surface border border-border rounded-lg shadow-xl z-10 animate-in fade-in duration-150">
           <button
             onClick={() => { downloadExport(uploadId, 'json'); setOpen(false); }}
             className="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover rounded-t-lg transition-colors"

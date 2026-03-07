@@ -5,7 +5,8 @@ test.describe('Section Navigation', () => {
     const page = analysisPage;
 
     // Config sets viewport to 1440×900 which is >= xl (1280px)
-    const nav = page.locator('nav.fixed');
+    // Desktop side nav is visible at xl+
+    const nav = page.locator('nav.fixed.right-4');
     await expect(nav).toBeVisible({ timeout: 5000 });
   });
 
