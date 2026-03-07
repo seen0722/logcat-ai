@@ -53,6 +53,15 @@
   }
 }
 
+/* Hide scrollbar for nav overflow */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Subtle pulse animation for low-score health rings */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }

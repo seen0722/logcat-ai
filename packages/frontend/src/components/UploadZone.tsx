@@ -132,21 +132,25 @@ export default function UploadZone({ onStart, error }: Props) {
       {/* Analysis Mode */}
       <div className="flex gap-3">
         <button
-          className={`flex-1 card text-center py-3 cursor-pointer transition-colors ${
-            mode === 'quick' ? 'border-indigo-500 bg-indigo-500/10' : 'hover:bg-surface-hover'
+          className={`flex-1 card text-center py-3 cursor-pointer transition-all ${
+            mode === 'quick'
+              ? 'border-indigo-500 bg-indigo-500/15 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
+              : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
           }`}
           onClick={() => setMode('quick')}
         >
-          <div className="font-medium">Quick Analysis</div>
+          <div className={`font-medium ${mode === 'quick' ? 'text-indigo-300' : ''}`}>Quick Analysis</div>
           <div className="text-xs text-gray-400 mt-1">Rule-based, &lt; 5s, no LLM</div>
         </button>
         <button
-          className={`flex-1 card text-center py-3 cursor-pointer transition-colors ${
-            mode === 'deep' ? 'border-indigo-500 bg-indigo-500/10' : 'hover:bg-surface-hover'
+          className={`flex-1 card text-center py-3 cursor-pointer transition-all ${
+            mode === 'deep'
+              ? 'border-indigo-500 bg-indigo-500/15 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
+              : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
           }`}
           onClick={() => setMode('deep')}
         >
-          <div className="font-medium">Deep Analysis</div>
+          <div className={`font-medium ${mode === 'deep' ? 'text-indigo-300' : ''}`}>Deep Analysis</div>
           <div className="text-xs text-gray-400 mt-1">AI-powered, 30s-2min</div>
         </button>
       </div>

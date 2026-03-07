@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useComparison } from './hooks/useComparison';
 import { BatchAggregation, BatchFileResult } from './lib/types';
@@ -40,6 +40,17 @@ export default function App() {
   const [searchFocusTime, setSearchFocusTime] = useState<string | null>(null);
 
   // Batch state
+  const [phaseVisible, setPhaseVisible] = useState(true);
+
+  // Animate phase transitions
+  useEffect(() => {
+    setPhaseVisible(false);
+    const t = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setPhaseVisible(true));
+    });
+    return () => cancelAnimationFrame(t);
+  }, [phase]);
+
   const [showBatchUpload, setShowBatchUpload] = useState(false);
   const [batchAggregation, setBatchAggregation] = useState<BatchAggregation | null>(null);
   const [batchItems, setBatchItems] = useState<BatchFileResult[]>([]);
@@ -97,7 +108,7 @@ export default function App() {
     if (result.powerStatus) {
       sections.push({ id: 'section-power', label: 'Power', icon: '\u{1F50B}' });
     }
-    sections.push({ id: 'section-bsp', label: 'BSP Ref', icon: '\u{1F527}' });
+    sections.push({ id: 'section-bsp', label: 'BSP', icon: '\u{1F527}' });
     if (result.deepAnalysisOverview) {
       sections.push({ id: 'section-deep', label: 'AI Analysis', icon: '\u{1F9E0}' });
     }
@@ -157,13 +168,13 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowHistory(true)}
-              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-gray-400"
             >
               History
             </button>
             <button
               onClick={reset}
-              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="hidden sm:inline-flex px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium"
             >
               New Analysis
             </button>
@@ -242,7 +253,7 @@ export default function App() {
 
       {/* Upload Phase */}
       {phase === 'upload' && (
-        <div className="pt-20">
+        <div className={`pt-20 transition-all duration-300 ease-out ${phaseVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <UploadZone onStart={start} error={error} />
           <div className="text-center mt-4 flex items-center justify-center gap-4">
             <button
@@ -333,7 +344,13 @@ export default function App() {
             </div>
             {uploadId && (
               <div id="section-chat">
-                <ChatPanel uploadId={uploadId} />
+                <ChatPanel
+                  uploadId={uploadId}
+                  criticalInsights={result.insights
+                    .filter(i => i.severity === 'critical' || i.severity === 'warning')
+                    .slice(0, 10)
+                    .map(i => ({ category: i.category, title: i.title }))}
+                />
               </div>
             )}
           </div>

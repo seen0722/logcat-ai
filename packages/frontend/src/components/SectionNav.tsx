@@ -48,10 +48,12 @@ export default function SectionNav({ sections }: Props) {
           {/* Toggle button */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="w-full px-2 py-1.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors border-b border-border flex items-center justify-center gap-1"
+            className="w-full px-2 py-1.5 text-gray-500 hover:text-gray-300 transition-colors border-b border-border flex items-center justify-center"
             title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
           >
-            {collapsed ? '>' : 'NAV'}
+            <svg className={`w-3.5 h-3.5 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
 
           <div className="py-1">
@@ -79,7 +81,7 @@ export default function SectionNav({ sections }: Props) {
 
       {/* Medium screens: bottom bar (md to xl) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 hidden md:flex xl:hidden bg-surface-card/95 backdrop-blur border-t border-border shadow-lg">
-        <div className="flex items-center justify-center gap-1 px-4 py-1.5 mx-auto overflow-x-auto">
+        <div className="flex items-center justify-center gap-1 px-4 py-1.5 mx-auto overflow-x-auto scrollbar-hide">
           {sections.map((s) => {
             const isActive = activeId === s.id;
             return (

@@ -5,6 +5,8 @@ import { streamChat, ChatSSEEvent } from '../lib/api';
 
 interface Props {
   uploadId: string;
+  /** Optional insight summaries to generate contextual suggested questions */
+  criticalInsights?: Array<{ category: string; title: string }>;
 }
 
 interface Message {
@@ -29,14 +31,31 @@ const TOOL_LABELS: Record<string, string> = {
   search_section: 'Searching bugreport sections',
 };
 
-const SUGGESTED_QUESTIONS = [
-  'What is the root cause of the ANR?',
-  'Which HAL is causing issues?',
+const DEFAULT_QUESTIONS = [
   'Summarize all critical findings',
+  'What are the top issues to fix?',
   'Are there any memory leaks?',
+  'Which HAL is causing issues?',
 ];
 
-export default function ChatPanel({ uploadId }: Props) {
+function buildSuggestedQuestions(criticalInsights?: Array<{ category: string; title: string }>): string[] {
+  if (!criticalInsights || criticalInsights.length === 0) return DEFAULT_QUESTIONS;
+  const questions: string[] = [];
+  const categories = new Set(criticalInsights.map(i => i.category));
+  if (categories.has('anr')) questions.push('What is the root cause of the ANR?');
+  if (categories.has('power')) questions.push('Why is the Deep Doze discharge rate so high?');
+  if (categories.has('kernel')) questions.push('Explain the kernel driver errors');
+  if (categories.has('crash') || categories.has('stability')) questions.push('What is causing the crashes?');
+  if (categories.has('memory')) questions.push('Are there memory leaks or OOM issues?');
+  // Fill remaining slots with defaults
+  for (const q of DEFAULT_QUESTIONS) {
+    if (questions.length >= 4) break;
+    if (!questions.includes(q)) questions.push(q);
+  }
+  return questions.slice(0, 4);
+}
+
+export default function ChatPanel({ uploadId, criticalInsights }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -98,7 +117,7 @@ export default function ChatPanel({ uploadId }: Props) {
 
         {/* Suggested questions */}
         <div className="flex flex-wrap gap-2 mb-3">
-          {SUGGESTED_QUESTIONS.map((q) => (
+          {buildSuggestedQuestions(criticalInsights).map((q) => (
             <button
               key={q}
               onClick={() => send(q)}

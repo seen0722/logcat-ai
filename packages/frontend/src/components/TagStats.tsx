@@ -68,12 +68,12 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
             <div
               key={s.classification}
               className={`${classificationConfig[s.classification].bar} transition-all duration-500 first:rounded-l-full last:rounded-r-full`}
-              style={{ width: `${s.pct}%` }}
+              style={{ width: `${Math.max(s.pct, 2)}%` }}
               title={`${classificationConfig[s.classification].label}: ${s.count} (${s.pct.toFixed(0)}%)`}
             />
           ))}
         </div>
-        <div className="flex gap-4 text-xs text-gray-400">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
           {segments.map((s) => {
             const cfg = classificationConfig[s.classification];
             return (
@@ -107,7 +107,7 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
               <span className={`${cfg.bg} ${cfg.text} text-xs font-medium px-1.5 py-0.5 rounded shrink-0 w-20 text-center`}>
                 {cfg.label}
               </span>
-              <span className="truncate text-gray-300 min-w-0 w-56 shrink-0">
+              <span className="truncate text-gray-300 min-w-0 w-24 sm:w-56 shrink-0">
                 {t.tag}
                 {hint && <span className="text-gray-600 text-xs ml-1.5 hidden group-hover:inline">({hint})</span>}
               </span>

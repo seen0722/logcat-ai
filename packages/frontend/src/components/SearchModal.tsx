@@ -546,9 +546,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </div>
 
           {/* Time range row */}
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center flex-wrap">
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">From</label>
+              <label className="text-xs text-gray-500 w-8">From</label>
               <input
                 type="text"
                 value={startTime}
@@ -559,7 +559,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               />
             </div>
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">To</label>
+              <label className="text-xs text-gray-500 w-5">To</label>
               <input
                 type="text"
                 value={endTime}
@@ -594,12 +594,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
           {!loading && !error && !result && (
             <div className="text-center py-16">
-              <p className="text-gray-500 text-sm">
+              <p className="text-gray-400 text-sm">
                 {source === 'kernel'
                   ? 'Click Search to browse all kernel messages, or enter a keyword to filter.'
                   : 'Click Search to browse all logcat entries, or enter a keyword to filter.'}
               </p>
-              <p className="text-gray-600 text-xs mt-1">Supports FTS5 full-text search with BM25 ranking.</p>
+              <p className="text-gray-500 text-xs mt-1">Supports FTS5 full-text search with BM25 ranking.</p>
             </div>
           )}
 

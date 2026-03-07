@@ -32,7 +32,7 @@ function rateBg(rate: number): string {
 function wakefulnessBadge(w: string): { color: string; label: string } {
   switch (w) {
     case 'Awake': return { color: 'bg-green-900/50 text-green-300 border-green-700/50', label: 'Awake' };
-    case 'Dozing': return { color: 'bg-blue-900/50 text-blue-300 border-blue-700/50', label: 'Dozing' };
+    case 'Dozing': return { color: 'bg-indigo-900/60 text-indigo-300 border-indigo-600/50', label: 'Dozing' };
     case 'Asleep': return { color: 'bg-gray-700/50 text-gray-300 border-gray-600/50', label: 'Asleep' };
     default: return { color: 'bg-gray-700/50 text-gray-400 border-gray-600/50', label: w };
   }

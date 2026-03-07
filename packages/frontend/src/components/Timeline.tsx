@@ -12,6 +12,17 @@ const SEVERITY_DOT: Record<Severity, string> = {
   info: 'bg-green-500',
 };
 
+/** Source-aware dot: kernel warnings use a distinct teal, logcat stays amber */
+function dotColor(severity: Severity, source: string): string {
+  if (severity === 'critical') return 'bg-red-500';
+  if (severity === 'info') return 'bg-green-500';
+  // warning — differentiate by source
+  if (source === 'kernel') return 'bg-orange-400';
+  if (source === 'anr') return 'bg-rose-400';
+  if (source === 'tombstone') return 'bg-rose-500';
+  return 'bg-amber-500'; // logcat default
+}
+
 const SEVERITY_BTN: Record<Severity, { active: string; label: string }> = {
   critical: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'Critical' },
   warning: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/50', label: 'Warning' },
@@ -25,11 +36,11 @@ const SOURCE_COLOR: Record<string, string> = {
   tombstone: 'text-rose-500',
 };
 
-const SOURCE_BTN: Record<string, { active: string; label: string }> = {
-  logcat: { active: 'bg-blue-500/20 text-blue-400 border-blue-500/50', label: 'Logcat' },
-  kernel: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/50', label: 'Kernel' },
-  anr: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'ANR' },
-  tombstone: { active: 'bg-rose-500/20 text-rose-500 border-rose-500/50', label: 'Tombstone' },
+const SOURCE_BTN: Record<string, { active: string; label: string; dot: string }> = {
+  logcat: { active: 'bg-blue-500/20 text-blue-400 border-blue-500/50', label: 'Logcat', dot: 'bg-amber-500' },
+  kernel: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/50', label: 'Kernel', dot: 'bg-orange-400' },
+  anr: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'ANR', dot: 'bg-rose-400' },
+  tombstone: { active: 'bg-rose-500/20 text-rose-500 border-rose-500/50', label: 'Tombstone', dot: 'bg-rose-500' },
 };
 
 const INACTIVE_BTN = 'bg-transparent text-gray-500 border-gray-700';
@@ -92,10 +103,11 @@ export default function Timeline({ events, onSearchTime }: Props) {
           <button
             key={s}
             onClick={() => toggleSource(s)}
-            className={`px-2 py-1 rounded border transition-colors ${
+            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1.5 ${
               sourceFilter.has(s) ? SOURCE_BTN[s].active : INACTIVE_BTN
             }`}
           >
+            <span className={`w-2 h-2 rounded-full ${SOURCE_BTN[s].dot} shrink-0`} />
             {SOURCE_BTN[s].label}
           </button>
         ))}
@@ -129,7 +141,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
             >
               {/* Dot + line */}
               <div className="flex flex-col items-center">
-                <div className={`w-2.5 h-2.5 rounded-full ${SEVERITY_DOT[event.severity]} shrink-0 mt-1.5`} />
+                <div className={`w-2.5 h-2.5 rounded-full ${dotColor(event.severity, event.source)} shrink-0 mt-1.5`} />
                 {i < filteredEvents.length - 1 && (
                   <div className="w-0.5 flex-1 bg-gray-700 min-h-[20px]" />
                 )}

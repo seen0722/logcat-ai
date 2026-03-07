@@ -71,7 +71,7 @@ function ScoreRing({ score, label, size = 64, hint, showMax }: { score: number; 
         </span>
       </div>
       <span className={`text-xs mt-1.5 ${isLow ? 'text-amber-400 font-medium' : 'text-gray-500'}`}>{label}</span>
-      {hint && <span className="text-[10px] text-gray-600 mt-0.5 max-w-[80px] text-center truncate" title={hint}>{hint}</span>}
+      {hint && <span className="text-[10px] text-gray-600 mt-0.5 max-w-[120px] text-center leading-tight" title={hint}>{hint}</span>}
     </div>
   );
 }
@@ -197,7 +197,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
       )}
 
       {/* Health Scores */}
-      <div className="flex items-center justify-around pt-2">
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 justify-items-center pt-2">
         <ScoreRing score={healthScore.overall} label="Overall" size={80} showMax />
         <ScoreRing score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
         <ScoreRing score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
@@ -266,8 +266,8 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             const bspDeclared = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'declared');
             const isTruncated = halStatus.truncated;
             return (
-              <div className="bg-surface rounded-lg p-3 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
+              <div className="bg-surface rounded-lg p-3 space-y-2 max-h-[320px] overflow-y-auto">
+                <h3 className="text-sm font-semibold text-gray-400 sticky top-0 bg-surface pb-1">HAL Services</h3>
                 {isTruncated && (
                   <div className="bg-amber-900/30 border border-amber-700/50 rounded px-2 py-1.5 text-xs text-amber-300">
                     <span className="font-semibold">lshal was killed by system</span>

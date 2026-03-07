@@ -18,11 +18,25 @@ function groupKey(insight: InsightCardType): string {
   // Group SELinux denials together
   if (insight.title.toLowerCase().includes('selinux')) return `selinux_${insight.severity}`;
   // Strip process-specific suffixes (pid, count, process name) to allow grouping
-  const normalized = insight.title
+  let normalized = insight.title
     .replace(/\s*\(pid\s+\d+\)/g, '')
     .replace(/\s*\(\u00d7\d+\)/g, '')      // (×N)
     .replace(/\s+in\s+[\w.]+$/g, '')         // " in com.example.app"
     .trim();
+  // Normalize driver_error titles: strip varying addresses and firmware names
+  // e.g. "Driver error: subsys-pil-tz 3700000.qcom,lpass: Direct firmware load for adsp.b02 failed..."
+  //    → "Driver error: subsys-pil-tz qcom,lpass: Direct firmware load failed"
+  if (normalized.startsWith('Driver error:')) {
+    normalized = normalized
+      .replace(/\b[0-9a-f]{4,}\b[.,]?/gi, '')  // hex/numeric addresses
+      .replace(/for\s+\S+/g, 'for firmware')     // specific firmware names
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  // Normalize "Low memory killer event (×N)" variants
+  if (normalized.startsWith('Low memory killer')) {
+    normalized = 'Low memory killer event';
+  }
   return `${insight.category}_${insight.source}_${insight.severity}_${normalized}`;
 }
 
@@ -46,37 +60,39 @@ export default function InsightsCards({ insights }: Props) {
   const countFor = (key: string) =>
     key === 'critical' ? criticalCount : key === 'warning' ? warningCount : key === 'info' ? infoCount : insights.length;
 
+  /** Build grouped insight list from a flat array */
+  function buildGroups(items: InsightCardType[]): InsightGroup[] {
+    const map = new Map<string, InsightCardType[]>();
+    for (const item of items) {
+      const key = groupKey(item);
+      const arr = map.get(key);
+      if (arr) arr.push(item);
+      else map.set(key, [item]);
+    }
+    const groups: InsightGroup[] = [];
+    for (const [key, group] of map) {
+      if (group.length > 2) {
+        const label = group[0].title.toLowerCase().includes('selinux')
+          ? 'SELinux denials'
+          : group[0].title.replace(/\s*\(\u00d7\d+\)/, '');
+        groups.push({ key, label, insights: group });
+      } else {
+        for (const item of group) {
+          groups.push({ key: item.id, label: '', insights: [item] });
+        }
+      }
+    }
+    return groups;
+  }
+
   // Group and organize insights
   const { displayItems, hiddenInfoCount } = useMemo(() => {
     const critical = filtered.filter((i) => i.severity === 'critical');
     const warning = filtered.filter((i) => i.severity === 'warning');
     const info = filtered.filter((i) => i.severity === 'info');
 
-    // Group info-level insights by type
-    const infoGroups = new Map<string, InsightCardType[]>();
-    for (const item of info) {
-      const key = groupKey(item);
-      const arr = infoGroups.get(key);
-      if (arr) arr.push(item);
-      else infoGroups.set(key, [item]);
-    }
-
-    // Build grouped info items
-    const groupedInfo: InsightGroup[] = [];
-    for (const [key, items] of infoGroups) {
-      if (items.length > 2) {
-        // Group items with same type (>2 items)
-        const label = items[0].title.toLowerCase().includes('selinux')
-          ? `SELinux denials`
-          : items[0].title;
-        groupedInfo.push({ key, label, insights: items });
-      } else {
-        // Show individually
-        for (const item of items) {
-          groupedInfo.push({ key: item.id, label: '', insights: [item] });
-        }
-      }
-    }
+    const warningGroups = buildGroups(warning);
+    const infoGrouped = buildGroups(info);
 
     // In "all" filter mode with info items, hide info by default
     const shouldHideInfo = filter === 'all' && !showAllInfo && info.length > 0;
@@ -84,8 +100,8 @@ export default function InsightsCards({ insights }: Props) {
     return {
       displayItems: {
         critical,
-        warning,
-        infoGroups: shouldHideInfo ? [] : groupedInfo,
+        warningGroups,
+        infoGroups: shouldHideInfo ? [] : infoGrouped,
       },
       hiddenInfoCount: shouldHideInfo ? info.length : 0,
     };
@@ -137,10 +153,38 @@ export default function InsightsCards({ insights }: Props) {
           <InsightCard key={insight.id} insight={insight} />
         ))}
 
-        {/* Warning insights - always shown */}
-        {displayItems.warning.map((insight) => (
-          <InsightCard key={insight.id} insight={insight} />
-        ))}
+        {/* Warning insights - grouped when >2 similar */}
+        {displayItems.warningGroups.map((group) => {
+          if (group.insights.length <= 1) {
+            return <InsightCard key={group.insights[0].id} insight={group.insights[0]} />;
+          }
+          const isExpanded = expandedGroups.has(group.key);
+          return (
+            <div key={group.key} className="space-y-2">
+              <button
+                onClick={() => toggleGroup(group.key)}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface-card border border-border rounded-lg text-sm hover:bg-surface-hover transition-colors"
+              >
+                <span className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-xs bg-amber-500/20 text-amber-400">
+                  {group.insights.length}
+                </span>
+                <span className="badge-warning">{group.insights[0].source}</span>
+                <span className="text-gray-300 flex-1 text-left truncate">{group.label}</span>
+                <span className="text-gray-500 text-xs">
+                  {isExpanded ? 'Collapse' : `Show ${group.insights.length} items`}
+                </span>
+                <span className="text-gray-500 text-sm">{isExpanded ? '\u25B2' : '\u25BC'}</span>
+              </button>
+              {isExpanded && (
+                <div className="space-y-2 ml-4 border-l-2 border-amber-500/20 pl-3 max-h-[400px] overflow-y-auto">
+                  {group.insights.map((insight) => (
+                    <InsightCard key={insight.id} insight={insight} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {/* Info insights - grouped and collapsible */}
         {displayItems.infoGroups.map((group) => {
@@ -166,7 +210,7 @@ export default function InsightsCards({ insights }: Props) {
                 <span className="text-gray-500 text-sm">{isExpanded ? '\u25B2' : '\u25BC'}</span>
               </button>
               {isExpanded && (
-                <div className="space-y-2 ml-4 border-l-2 border-green-500/20 pl-3">
+                <div className="space-y-2 ml-4 border-l-2 border-green-500/20 pl-3 max-h-[400px] overflow-y-auto">
                   {group.insights.map((insight) => (
                     <InsightCard key={insight.id} insight={insight} />
                   ))}

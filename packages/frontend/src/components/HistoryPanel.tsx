@@ -64,6 +64,18 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
     return new Date(iso).toLocaleString();
   }
 
+  function relativeTime(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return `${Math.floor(days / 30)}mo ago`;
+  }
+
   function healthColor(score?: number): string {
     if (score == null) return 'text-gray-500';
     if (score >= 80) return 'text-green-400';
@@ -121,7 +133,10 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-100 truncate text-sm">{item.filename}</p>
-                      <p className="text-xs text-gray-500 mt-1">{formatDate(item.createdAt)} · {formatSize(item.fileSize)}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        <span title={formatDate(item.createdAt)}>{relativeTime(item.createdAt)}</span>
+                        {' · '}{formatSize(item.fileSize)}
+                      </p>
                     </div>
                     <button
                       onClick={(e) => handleDelete(item.id, e)}
