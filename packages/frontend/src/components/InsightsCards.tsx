@@ -53,13 +53,16 @@ function findHalCorrelation(insight: InsightCardType, halStatus?: HALStatusSumma
   const text = `${insight.title}\n${insight.description}`;
   const nonAlive = halStatus.families.filter(f => f.highestStatus !== 'alive');
   for (const family of nonAlive) {
+    // Match full familyName (e.g. "vendor.trimble.hardware.trmbkeypad::ITrmbKeypad")
+    if (text.includes(family.familyName)) {
+      return `${family.shortName}@${family.highestVersion}: ${family.highestStatus}`;
+    }
+    // Match interface name with I-prefix and word boundary (e.g. "ITrmbKeypad", "IGnss")
+    // This is the most reliable signal — shortName matching is too prone to false positives
+    // (e.g. "alarm" matches AlarmManager, "cas" matches "broadcast")
     const interfaceMatch = family.familyName.match(/::I(\w+)$/);
     const interfaceName = interfaceMatch ? interfaceMatch[1] : null;
-    if (
-      (interfaceName && text.includes(interfaceName)) ||
-      text.includes(family.shortName) ||
-      text.includes(family.familyName)
-    ) {
+    if (interfaceName && new RegExp(`\\bI${interfaceName}\\b`).test(text)) {
       return `${family.shortName}@${family.highestVersion}: ${family.highestStatus}`;
     }
   }
