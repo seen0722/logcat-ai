@@ -4,6 +4,7 @@ import StackTrace from './StackTrace';
 
 interface Props {
   insight: InsightCardType;
+  halCorrelation?: string | null;
 }
 
 const SEVERITY_STYLES = {
@@ -161,7 +162,7 @@ function DeepAnalysisBlock({ deepAnalysis }: { deepAnalysis: NonNullable<Insight
   );
 }
 
-export default function InsightCard({ insight }: Props) {
+export default function InsightCard({ insight, halCorrelation }: Props) {
   const [expanded, setExpanded] = useState(false);
   const styles = SEVERITY_STYLES[insight.severity];
 
@@ -185,6 +186,11 @@ export default function InsightCard({ insight }: Props) {
             <span className={styles.badge}>{insight.severity}</span>
             <span className="badge-info">{insight.category}</span>
             <span className="badge-info">{insight.source}</span>
+            {halCorrelation && (
+              <span className="text-xs bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded border border-red-800/50 shrink-0" title={halCorrelation}>
+                HAL {halCorrelation.split(': ')[1]}
+              </span>
+            )}
             {insight.timestamp && (
               <span className="text-xs text-gray-500">{insight.timestamp}</span>
             )}

@@ -11,7 +11,6 @@ import ANRDetail from './components/ANRDetail';
 import ChatPanel from './components/ChatPanel';
 import DeepAnalysisOverview from './components/DeepAnalysisOverview';
 import TagStats from './components/TagStats';
-import BSPQuickReference from './components/BSPQuickReference';
 import PowerOverview from './components/PowerOverview';
 import HistoryPanel from './components/HistoryPanel';
 import ExportMenu from './components/ExportMenu';
@@ -108,7 +107,6 @@ export default function App() {
     if (result.powerStatus) {
       sections.push({ id: 'section-power', label: 'Power', icon: '\u{1F50B}' });
     }
-    sections.push({ id: 'section-bsp', label: 'BSP', icon: '\u{1F527}' });
     if (result.deepAnalysisOverview) {
       sections.push({ id: 'section-deep', label: 'AI Analysis', icon: '\u{1F9E0}' });
     }
@@ -316,23 +314,13 @@ export default function App() {
                 <PowerOverview powerStatus={result.powerStatus} />
               </div>
             )}
-            <div id="section-bsp">
-              <BSPQuickReference
-                bootStatus={result.bootStatus}
-                memInfo={result.memInfo}
-                cpuInfo={result.cpuInfo}
-                halStatus={result.halStatus}
-                logTagStats={result.logTagStats}
-                powerStatus={result.powerStatus}
-              />
-            </div>
             {result.deepAnalysisOverview && (
               <div id="section-deep">
                 <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
               </div>
             )}
             <div id="section-insights">
-              <InsightsCards insights={result.insights} />
+              <InsightsCards insights={result.insights} halStatus={result.halStatus} />
             </div>
             {result.anrAnalyses.length > 0 && (
               <div id="section-anr">

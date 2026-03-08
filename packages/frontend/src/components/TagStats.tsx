@@ -133,6 +133,32 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
           {expanded ? 'Show less' : `Show all ${tagStats.length} tags`}
         </button>
       )}
+
+      {/* Vendor Error Tags */}
+      {(() => {
+        const vendorTags = tagStats.filter(t => t.classification === 'vendor');
+        if (vendorTags.length === 0) return null;
+        return (
+          <div className="pt-3 border-t border-border space-y-2">
+            <h3 className="text-sm font-semibold text-gray-400">Vendor Error Tags ({vendorTags.length})</h3>
+            <div className="flex flex-wrap gap-2">
+              {vendorTags.slice(0, 15).map((t) => (
+                <span
+                  key={t.tag}
+                  className={`text-xs bg-amber-900/20 text-amber-400 px-2 py-0.5 rounded font-mono${onTagClick ? ' cursor-pointer hover:bg-amber-900/40 transition-colors' : ''}`}
+                  title={`${t.count} occurrences`}
+                  onClick={onTagClick ? () => onTagClick(t.tag) : undefined}
+                >
+                  {t.tag} <span className="text-amber-500/60">{t.count}</span>
+                </span>
+              ))}
+              {vendorTags.length > 15 && (
+                <span className="text-xs text-gray-600">+{vendorTags.length - 15} more</span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

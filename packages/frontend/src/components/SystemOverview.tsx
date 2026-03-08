@@ -260,95 +260,29 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
           {halStatus && halStatus.families.length > 0 && (() => {
             const aliveFamilies = halStatus.families.filter((f) => f.highestStatus === 'alive').length;
             const totalFamilies = halStatus.families.length;
-            const oemNR = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus === 'non-responsive');
-            const oemDeclared = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus === 'declared');
-            const bspNR = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'non-responsive');
-            const bspDeclared = halStatus.families.filter((f) => f.isVendor && !f.isOem && f.highestStatus === 'declared');
+            const oemIssues = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus !== 'alive');
             const isTruncated = halStatus.truncated;
             return (
-              <div className="bg-surface rounded-lg p-3 space-y-2 max-h-[320px] overflow-y-auto">
-                <h3 className="text-sm font-semibold text-gray-400 sticky top-0 bg-surface pb-1">HAL Services</h3>
+              <div className="bg-surface rounded-lg p-3 space-y-2">
+                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
                 {isTruncated && (
-                  <div className="bg-amber-900/30 border border-amber-700/50 rounded px-2 py-1.5 text-xs text-amber-300">
-                    <span className="font-semibold">lshal was killed by system</span>
-                    <span className="text-amber-400/80"> — Services not yet pinged when lshal was terminated will appear as non-responsive or declared. Only OEM HAL status below is reliable.</span>
-                  </div>
+                  <p className="text-xs text-amber-400">lshal truncated — BSP HAL status unreliable</p>
                 )}
                 <p className="text-sm">
-                  Alive <span className="font-medium text-green-400">{aliveFamilies}</span>
-                  {' / '}
-                  <span className="font-medium text-gray-200">{totalFamilies} families</span>
-                  {oemNR.length > 0 && (
-                    <span className="text-red-400 ml-2">({oemNR.length} OEM non-responsive)</span>
-                  )}
-                  {!isTruncated && bspNR.length > 0 && (
-                    <span className="text-red-400/70 ml-2">({bspNR.length} BSP non-responsive)</span>
+                  <span className="font-medium text-green-400">{aliveFamilies}</span>
+                  <span className="text-gray-400"> / {totalFamilies} families alive</span>
+                  {oemIssues.length > 0 && (
+                    <span className="text-red-400 ml-2">({oemIssues.length} OEM issue{oemIssues.length > 1 ? 's' : ''})</span>
                   )}
                 </p>
-                {oemNR.length > 0 && (
+                {oemIssues.length > 0 && (
                   <div className="space-y-1">
-                    <span className="text-xs text-gray-500">OEM HALs — non-responsive</span>
-                    {oemNR.map((f, i) => (
+                    {oemIssues.map((f, i) => (
                       <div key={i} className="text-xs text-red-400 truncate" title={f.familyName}>
-                        {f.shortName}@{f.highestVersion}
+                        {f.shortName}@{f.highestVersion} — {f.highestStatus}
                       </div>
                     ))}
                   </div>
-                )}
-                {oemDeclared.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500">OEM HALs — declared (not running)</span>
-                    {oemDeclared.map((f, i) => (
-                      <div key={i} className="text-xs text-amber-400 truncate" title={f.familyName}>
-                        {f.shortName}@{f.highestVersion}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {isTruncated && bspNR.length > 0 && (
-                  <details className="text-xs">
-                    <summary className="text-gray-600 cursor-pointer">BSP HALs — {bspNR.length} shown as non-responsive (unreliable — lshal was killed before completion)</summary>
-                    <div className="space-y-1 mt-1">
-                      {bspNR.slice(0, 10).map((f, i) => (
-                        <div key={i} className="text-gray-500 truncate" title={f.familyName}>
-                          {f.shortName}@{f.highestVersion}
-                        </div>
-                      ))}
-                      {bspNR.length > 10 && (
-                        <div className="text-gray-600">...and {bspNR.length - 10} more</div>
-                      )}
-                    </div>
-                  </details>
-                )}
-                {!isTruncated && bspNR.length > 0 && (
-                  <details className="text-xs">
-                    <summary className="text-gray-500 cursor-pointer">BSP HALs — non-responsive ({bspNR.length})</summary>
-                    <div className="space-y-1 mt-1">
-                      {bspNR.slice(0, 10).map((f, i) => (
-                        <div key={i} className="text-red-400/70 truncate" title={f.familyName}>
-                          {f.shortName}@{f.highestVersion}
-                        </div>
-                      ))}
-                      {bspNR.length > 10 && (
-                        <div className="text-gray-500">...and {bspNR.length - 10} more</div>
-                      )}
-                    </div>
-                  </details>
-                )}
-                {!isTruncated && bspDeclared.length > 0 && (
-                  <details className="text-xs">
-                    <summary className="text-gray-500 cursor-pointer">BSP HALs — declared ({bspDeclared.length})</summary>
-                    <div className="space-y-1 mt-1">
-                      {bspDeclared.slice(0, 10).map((f, i) => (
-                        <div key={i} className="text-amber-400/70 truncate" title={f.familyName}>
-                          {f.shortName}@{f.highestVersion}
-                        </div>
-                      ))}
-                      {bspDeclared.length > 10 && (
-                        <div className="text-gray-500">...and {bspDeclared.length - 10} more</div>
-                      )}
-                    </div>
-                  </details>
                 )}
               </div>
             );

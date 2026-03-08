@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { InsightCard as InsightCardType, Severity } from '../lib/types';
+import { InsightCard as InsightCardType, Severity, HALStatusSummary } from '../lib/types';
 import InsightCard from './InsightCard';
 
 interface Props {
   insights: InsightCardType[];
+  halStatus?: HALStatusSummary;
 }
 
 const FILTERS: { key: Severity | 'all'; label: string }[] = [
@@ -46,7 +47,26 @@ interface InsightGroup {
   insights: InsightCardType[];
 }
 
-export default function InsightsCards({ insights }: Props) {
+/** Check if an ANR insight references a HAL that is non-responsive */
+function findHalCorrelation(insight: InsightCardType, halStatus?: HALStatusSummary): string | null {
+  if (!halStatus || insight.source !== 'anr') return null;
+  const text = `${insight.title}\n${insight.description}`;
+  const nonAlive = halStatus.families.filter(f => f.highestStatus !== 'alive');
+  for (const family of nonAlive) {
+    const interfaceMatch = family.familyName.match(/::I(\w+)$/);
+    const interfaceName = interfaceMatch ? interfaceMatch[1] : null;
+    if (
+      (interfaceName && text.includes(interfaceName)) ||
+      text.includes(family.shortName) ||
+      text.includes(family.familyName)
+    ) {
+      return `${family.shortName}@${family.highestVersion}: ${family.highestStatus}`;
+    }
+  }
+  return null;
+}
+
+export default function InsightsCards({ insights, halStatus }: Props) {
   const [filter, setFilter] = useState<Severity | 'all'>('all');
   const [showAllInfo, setShowAllInfo] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -150,13 +170,13 @@ export default function InsightsCards({ insights }: Props) {
       <div className="space-y-3">
         {/* Critical insights - always shown */}
         {displayItems.critical.map((insight) => (
-          <InsightCard key={insight.id} insight={insight} />
+          <InsightCard key={insight.id} insight={insight} halCorrelation={findHalCorrelation(insight, halStatus)} />
         ))}
 
         {/* Warning insights - grouped when >2 similar */}
         {displayItems.warningGroups.map((group) => {
           if (group.insights.length <= 1) {
-            return <InsightCard key={group.insights[0].id} insight={group.insights[0]} />;
+            return <InsightCard key={group.insights[0].id} insight={group.insights[0]} halCorrelation={findHalCorrelation(group.insights[0], halStatus)} />;
           }
           const isExpanded = expandedGroups.has(group.key);
           return (
@@ -178,7 +198,7 @@ export default function InsightsCards({ insights }: Props) {
               {isExpanded && (
                 <div className="space-y-2 ml-4 border-l-2 border-amber-500/20 pl-3 max-h-[400px] overflow-y-auto">
                   {group.insights.map((insight) => (
-                    <InsightCard key={insight.id} insight={insight} />
+                    <InsightCard key={insight.id} insight={insight} halCorrelation={findHalCorrelation(insight, halStatus)} />
                   ))}
                 </div>
               )}
@@ -189,7 +209,7 @@ export default function InsightsCards({ insights }: Props) {
         {/* Info insights - grouped and collapsible */}
         {displayItems.infoGroups.map((group) => {
           if (group.insights.length <= 1) {
-            return <InsightCard key={group.insights[0].id} insight={group.insights[0]} />;
+            return <InsightCard key={group.insights[0].id} insight={group.insights[0]} halCorrelation={findHalCorrelation(group.insights[0], halStatus)} />;
           }
 
           const isExpanded = expandedGroups.has(group.key);
@@ -212,7 +232,7 @@ export default function InsightsCards({ insights }: Props) {
               {isExpanded && (
                 <div className="space-y-2 ml-4 border-l-2 border-green-500/20 pl-3 max-h-[400px] overflow-y-auto">
                   {group.insights.map((insight) => (
-                    <InsightCard key={insight.id} insight={insight} />
+                    <InsightCard key={insight.id} insight={insight} halCorrelation={findHalCorrelation(insight, halStatus)} />
                   ))}
                 </div>
               )}
