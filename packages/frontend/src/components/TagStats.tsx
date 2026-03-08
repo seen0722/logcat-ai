@@ -134,15 +134,16 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
         </button>
       )}
 
-      {/* Vendor Error Tags */}
+      {/* Vendor Error Tags — only show tags not already visible in the top list */}
       {(() => {
-        const vendorTags = tagStats.filter(t => t.classification === 'vendor');
-        if (vendorTags.length === 0) return null;
+        const visibleTags = new Set(displayedTags.map(t => t.tag));
+        const hiddenVendorTags = tagStats.filter(t => t.classification === 'vendor' && !visibleTags.has(t.tag));
+        if (hiddenVendorTags.length === 0) return null;
         return (
           <div className="pt-3 border-t border-border space-y-2">
-            <h3 className="text-sm font-semibold text-gray-400">Vendor Error Tags ({vendorTags.length})</h3>
+            <h3 className="text-sm font-semibold text-gray-400">More Vendor Tags ({hiddenVendorTags.length})</h3>
             <div className="flex flex-wrap gap-2">
-              {vendorTags.slice(0, 15).map((t) => (
+              {hiddenVendorTags.slice(0, 15).map((t) => (
                 <span
                   key={t.tag}
                   className={`text-xs bg-amber-900/20 text-amber-400 px-2 py-0.5 rounded font-mono${onTagClick ? ' cursor-pointer hover:bg-amber-900/40 transition-colors' : ''}`}
@@ -152,8 +153,8 @@ export default function TagStats({ tagStats, onTagClick }: Props) {
                   {t.tag} <span className="text-amber-500/60">{t.count}</span>
                 </span>
               ))}
-              {vendorTags.length > 15 && (
-                <span className="text-xs text-gray-600">+{vendorTags.length - 15} more</span>
+              {hiddenVendorTags.length > 15 && (
+                <span className="text-xs text-gray-600">+{hiddenVendorTags.length - 15} more</span>
               )}
             </div>
           </div>

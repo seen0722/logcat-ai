@@ -188,7 +188,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
             <span className="badge-info">{insight.source}</span>
             {halCorrelation && (
               <span className="text-xs bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded border border-red-800/50 shrink-0" title={halCorrelation}>
-                HAL {halCorrelation.split(': ')[1]}
+                HAL down
               </span>
             )}
             {insight.timestamp && (
