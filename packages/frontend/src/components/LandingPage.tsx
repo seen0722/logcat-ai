@@ -109,7 +109,7 @@ export default function LandingPage({ onStart, onViewHistory }: Props) {
               <span className={f.color}>{f.icon}</span>
               <h3 className="font-semibold text-gray-100">{f.title}</h3>
             </div>
-            <p className="text-sm text-gray-400 leading-relaxed">{f.desc}</p>
+            <p className="text-sm text-gray-300/80 leading-relaxed">{f.desc}</p>
           </div>
         ))}
       </div>

@@ -25,7 +25,7 @@ export default function ExportMenu({ uploadId, hasPowerData }: Props) {
       <button
         onClick={() => setOpen(!open)}
         className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
-          open ? 'border-indigo-500/50 ring-1 ring-indigo-500/30 bg-indigo-500/5 text-indigo-400' : 'border-border hover:bg-surface-hover'
+          open ? 'border-indigo-500/50 ring-1 ring-indigo-500/30 bg-indigo-500/5 text-indigo-400' : 'border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/10'
         }`}
       >
         Export

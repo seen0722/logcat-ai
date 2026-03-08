@@ -71,7 +71,7 @@ export default function InsightsCards({ insights }: Props) {
     }
     const groups: InsightGroup[] = [];
     for (const [key, group] of map) {
-      if (group.length > 2) {
+      if (group.length > 1) {
         const label = group[0].title.toLowerCase().includes('selinux')
           ? 'SELinux denials'
           : group[0].title.replace(/\s*\(\u00d7\d+\)/, '');
