@@ -320,7 +320,7 @@ export default function App() {
               </div>
             )}
             <div id="section-insights">
-              <InsightsCards insights={result.insights} />
+              <InsightsCards insights={result.insights} halStatus={result.halStatus} />
             </div>
             {result.anrAnalyses.length > 0 && (
               <div id="section-anr">
