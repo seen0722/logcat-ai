@@ -319,7 +319,7 @@ describe('analyzeBasic', () => {
     expect(result.healthScore.breakdown.kernel).toBe(0);
   });
 
-  it('should treat idle_main_thread ANR as info severity', () => {
+  it('should treat all ANRs as critical severity', () => {
     const anrAnalyses: ANRTraceAnalysis[] = [{
       pid: 1, processName: 'app',
       threads: [],
@@ -336,7 +336,7 @@ describe('analyzeBasic', () => {
 
     const result = analyzeBasic(makeInput({ anrAnalyses }));
     const anrInsight = result.insights.find((i) => i.source === 'anr');
-    expect(anrInsight!.severity).toBe('info');
+    expect(anrInsight!.severity).toBe('critical');
   });
 
   it('should produce reasonable kernel score with many SELinux denials', () => {

@@ -527,16 +527,11 @@ function generateANRInsights(analyses: ANRTraceAnalysis[]): InsightCard[] {
 }
 
 function anrSeverity(
-  reason: string,
-  confidence: 'high' | 'medium' | 'low',
-  hasSuspectedTargets?: boolean
+  _reason: string,
+  _confidence: 'high' | 'medium' | 'low',
+  _hasSuspectedTargets?: boolean
 ): Severity {
-  if (reason === 'idle_main_thread') {
-    // Upgrade to warning/critical if we found HAL calls stuck on other threads
-    return hasSuspectedTargets ? 'warning' : 'info';
-  }
-  if (reason === 'no_stack_frames' || reason === 'unknown') return 'warning';
-  if (confidence === 'low') return 'warning';
+  // All ANRs are critical — they indicate the system was unresponsive
   return 'critical';
 }
 
@@ -1384,7 +1379,7 @@ export function buildTimeline(
     events.push({
       timestamp: formatDisplayTimestamp(analysis.timestamp ?? 'unknown'),
       source: 'anr',
-      severity: analysis.mainThread.blockReason === 'idle_main_thread' ? 'info' : 'critical',
+      severity: 'critical',
       label: `ANR: ${reasonLabel} in ${analysis.processName}`,
       details: `Confidence: ${analysis.mainThread.confidence}`,
     });
@@ -1694,7 +1689,7 @@ function calcResponsivenessScore(logcat: LogcatParseResult, anrAnalyses: ANRTrac
     if (!analysis.mainThread) continue;
     const reason = analysis.mainThread.blockReason;
     if (reason === 'idle_main_thread') {
-      score -= dampedDeduction(counts, 'anr_idle', 2, 10);
+      score -= dampedDeduction(counts, 'anr_idle', 10, 30);
     } else if (reason === 'deadlock') {
       score -= dampedDeduction(counts, 'anr_deadlock', 25, 50);
     } else {
@@ -1806,8 +1801,10 @@ function mergeDuplicateInsights(insights: InsightCard[]): InsightCard[] {
   for (const [, group] of groups) {
     const first = group[0];
     if (group.length > 1) {
+      const severity = first.severity;
       result.push({
         ...first,
+        severity,
         title: `${first.title} (×${group.length})`,
         description: `${first.description}\nOccurred ${group.length} times.`,
       });
