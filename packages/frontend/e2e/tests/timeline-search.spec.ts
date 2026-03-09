@@ -103,19 +103,15 @@ test.describe('Timeline & Search Integration', () => {
     const modal = page.locator('.fixed.inset-0.z-50');
     await expect(modal).toBeVisible({ timeout: 5000 });
 
-    // Wait for search results to load
-    const rows = modal.locator('tr[data-ts]');
-    await rows.first().waitFor({ timeout: 15_000 });
+    // Wait for focus highlight — the count-based page jump performs an additional
+    // query after initial results, then applies highlight via useEffect + rAF.
+    const highlightedRow = modal.locator('tr[data-focus-highlight="true"]');
+    await expect(highlightedRow).toHaveCount(1, { timeout: 20_000 });
 
     // Verify the time range is pre-filled (±5s around the event)
     const fromInput = modal.locator('input[placeholder="MM-DD HH:mm:ss"]').first();
     const fromValue = await fromInput.inputValue();
     expect(fromValue.length).toBeGreaterThan(0);
-
-    // Check that exactly one row is highlighted (inline background-color) near the focus time
-    // The highlight is applied via inline style and fades after 3s — check promptly
-    const highlightedRow = modal.locator('tr[data-ts][style*="background-color"]');
-    await expect(highlightedRow).toHaveCount(1, { timeout: 5000 });
 
     // The highlighted row's timestamp should be close to the event timestamp
     const highlightTs = await highlightedRow.getAttribute('data-ts') ?? '';

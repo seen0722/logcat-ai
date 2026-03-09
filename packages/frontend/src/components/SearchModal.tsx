@@ -99,26 +99,29 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   const initialSearchDone = useRef(false);
 
-  /** Scroll results container so the row closest to focusTime is centered in view */
+  /** Scroll results container so the row closest to focusTime is centered + highlighted */
   const scrollToFocusTime = useCallback((focusTime: string) => {
-    // Double rAF ensures React has committed DOM updates and browser has painted
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    // Retry until the DOM contains matching rows (React may not have committed yet)
+    let retries = 0;
+    const tryHighlight = () => {
       const container = resultsRef.current;
-      if (!container) return;
+      if (!container) { if (retries++ < 20) setTimeout(tryHighlight, 100); return; }
       const rows = container.querySelectorAll<HTMLElement>('tr[data-ts]');
+      if (rows.length === 0) { if (retries++ < 20) setTimeout(tryHighlight, 100); return; }
       let bestRow: HTMLElement | null = null;
       for (const row of rows) {
         const ts = row.getAttribute('data-ts') ?? '';
-        if (ts <= focusTime) bestRow = row; // pick last row <= focusTime
+        if (ts <= focusTime) bestRow = row;
       }
-      if (bestRow) {
-        bestRow.scrollIntoView({ block: 'center' });
-        // Use background highlight — ring doesn't render on <tr> elements
-        bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
-        bestRow.style.transition = 'background-color 3s ease-out';
-        setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 3000);
-      }
-    }));
+      if (!bestRow) bestRow = rows[0]; // fallback to first row if none <= focusTime
+      bestRow.scrollIntoView({ block: 'center' });
+      bestRow.setAttribute('data-focus-highlight', 'true');
+      bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
+      bestRow.style.transition = 'background-color 3s ease-out';
+      setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 3000);
+    };
+    // Wait for React commit + browser paint
+    requestAnimationFrame(() => requestAnimationFrame(tryHighlight));
   }, []);
 
   /** After initial search, jump to the page containing focusTime, then scroll to it.
