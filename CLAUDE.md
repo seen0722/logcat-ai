@@ -55,7 +55,7 @@ npm run e2e:report -w packages/frontend   # View HTML test report
 npm run e2e:legacy -w packages/frontend   # Legacy screenshot-only test
 ```
 
-36 Playwright Test specs across 11 files covering: upload/analysis flow, system overview, insights filters, timeline+search integration, search modal (Logcat/Kernel tabs, pagination), history panel, export menu, power overview, section nav, LLM settings, landing page, and FTS5 SQL fallback verification. Uses `global-setup.ts` to upload a sample bugreport once and share the analysis across all tests. Config: chromium only, 1440×900 viewport, `workers: 1`, auto-starts backend+frontend via `webServer`. Backend dev-only `POST /api/_test/clear-raw-store/:id` endpoint enables FTS5 fallback path testing.
+36 Playwright Test specs across 11 files covering: upload/analysis flow, system overview, insights filters, timeline+search integration, search modal (Log Viewer with virtual scroll, live filtering, Find navigation), history panel, export menu, power overview, section nav, LLM settings, landing page, and FTS5 SQL fallback verification. Uses `global-setup.ts` to upload a sample bugreport once and share the analysis across all tests. Config: chromium only, 1440×900 viewport, `workers: 1`, auto-starts backend+frontend via `webServer`. Backend dev-only `POST /api/_test/clear-raw-store/:id` endpoint enables FTS5 fallback path testing.
 
 ## Architecture
 
@@ -131,7 +131,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
-- `components/SearchModal.tsx` — Full-width search modal with Logcat/Kernel tab switcher (logcat: keyword, tag, buffer, level, pid filters; kernel: keyword, severity level filter), From/To time range fields (`MM-DD HH:mm:ss`), column headers, empty search to browse all entries, CSV/Text export of all matched results (fetches full dataset via `export=true` API param, not just current page). Accepts `initialStartTime`/`initialEndTime` props to pre-fill time range and auto-trigger search, `initialFocusTime` to scroll-to and highlight the target event row (count-based page jumping via `endTime=focusTime, limit=1` query to find exact offset; persistent `▶` marker + indigo left border on focus row, bg highlight fades after 3s)
+- `components/SearchModal.tsx` — Log Viewer modal with react-window v2 virtual scroll (`FixedSizeList`, ROW_HEIGHT=28). Logcat/Kernel tab switcher. Auto-loads all entries via `export=true` API (up to 50K). Client-side live filtering (level/pid/buffer/tag via useMemo, no server round-trip). Find keyword with `Enter`/`Shift+Enter` for Next/Prev match navigation + `▲▼` buttons + match counter (`3/47`). "Load Range" button for time range changes (only action requiring API call). `initialFocusTime` support: `▶` marker + indigo border on closest entry, auto-scrollToRow. CSV/Text export from client memory (synchronous). No pagination — continuous scroll
 - `components/Timeline.tsx` — Timeline event list with severity/source filters; hover reveals search icon (magnifying glass) that opens SearchModal with ±5s time window around the event timestamp (via `onSearchTime` prop). Original insightId click-to-scroll behavior preserved with `e.stopPropagation()`
 
 ### MCP Server (`@logcat-ai/mcp-server`)
@@ -156,8 +156,7 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - **Event bubbling in expandable cards**: `InsightCard` 的整個 div 有 `onClick` 控制展開/收合。內部互動元素（`<details>`、`<a>`、`<button>`）必須加 `e.stopPropagation()` 防止事件冒泡導致 card 意外收合
 - **Result page section IDs**: Each major section in the result page has `id="section-*"` (overview, tags, power, bsp, deep, insights, anr, timeline, chat) for SectionNav anchor navigation. Conditional sections (power, tags, anr, deep) must wrap the `id` div inside the condition to avoid orphan anchors
 - **Collapsible detail pattern**: Power and BSP sections use `useState` toggle for show/hide details. Key metrics always visible, secondary data behind "Show details" button
-- **React DOM timing for imperative DOM ops**: After `setState` in async callbacks (`.then()`), double `requestAnimationFrame` is NOT reliable for React commit. Use retry polling (`setTimeout` loop with max retries) when imperatively manipulating DOM elements that depend on React-rendered content
-- **z-index layering in SearchModal**: Sticky table headers use `z-10`; dropdowns/menus appearing over the table must use `z-20` or higher
+- **SearchModal virtual scroll**: Uses react-window v2 `List` with `useListRef`. `focusIndex` must be state (not ref) so `rowProps` useMemo dependency triggers re-render for focus marker visibility
 - **ANR severity**: All ANR types are classified as `critical` severity (`anrSeverity()` in `basic-analyzer.ts`), including `idle_main_thread`. Health score deduction for idle_main_thread: 10 per occurrence, cap 30
 - Documentation and PRD are written in Traditional Chinese
 
