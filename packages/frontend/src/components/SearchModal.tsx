@@ -74,7 +74,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Time range filters
   const [startTime, setStartTime] = useState(initialStartTime ?? '');
   const [endTime, setEndTime] = useState(initialEndTime ?? '');
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(100);
   const [page, setPage] = useState(0);
 
   const [logcatResult, setLogcatResult] = useState<LogcatSearchResult | null>(null);
@@ -601,9 +601,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 onChange={(e) => setLimit(Number(e.target.value))}
                 className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
               >
-                <option value={20}>20</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={200}>200</option>
               </select>
             </div>
           </div>
