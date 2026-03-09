@@ -115,11 +115,51 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         bestRow.scrollIntoView({ block: 'center' });
         // Use background highlight — ring doesn't render on <tr> elements
         bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
-        bestRow.style.transition = 'background-color 2s ease-out';
-        setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 2000);
+        bestRow.style.transition = 'background-color 3s ease-out';
+        setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 3000);
       }
     }));
   }, []);
+
+  /** Parse "MM-DD HH:mm:ss.SSS" to ms since epoch (year 2000) for ratio calculation */
+  const parseTimestampMs = useCallback((ts: string): number => {
+    const m = ts.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
+    if (!m) return 0;
+    const [, mo, dd, hh, mm, ss, msStr] = m;
+    return new Date(2000, +mo - 1, +dd, +hh, +mm, +ss, msStr ? +msStr.padEnd(3, '0') : 0).getTime();
+  }, []);
+
+  /** After initial search, jump to the page containing focusTime, then scroll to it */
+  const jumpToFocusPage = useCallback((
+    totalMatches: number,
+    focusTime: string,
+    searchFn: (offset: number) => Promise<void>,
+  ) => {
+    if (totalMatches <= limit) {
+      // All results fit on one page — just scroll
+      scrollToFocusTime(focusTime);
+      return;
+    }
+    // Estimate which entry the focusTime falls on via time ratio
+    const start = parseTimestampMs(initialStartTime ?? '');
+    const end = parseTimestampMs(initialEndTime ?? '');
+    const focus = parseTimestampMs(focusTime);
+    const range = end - start;
+    if (range <= 0) { scrollToFocusTime(focusTime); return; }
+    const ratio = Math.max(0, Math.min(1, (focus - start) / range));
+    const estimatedEntry = Math.floor(ratio * totalMatches);
+    const targetPage = Math.floor(estimatedEntry / limit);
+    if (targetPage === 0) {
+      // Already on page 0
+      scrollToFocusTime(focusTime);
+      return;
+    }
+    // Jump to estimated page
+    setPage(targetPage);
+    searchFn(targetPage * limit).then(() => {
+      scrollToFocusTime(focusTime);
+    });
+  }, [limit, initialStartTime, initialEndTime, scrollToFocusTime, parseTimestampMs]);
 
   useEffect(() => {
     if (initialTag && !initialSearchDone.current) {
@@ -166,7 +206,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         }).then((res) => {
           setKernelResult(res);
           setLoading(false);
-          if (initialFocusTime) scrollToFocusTime(initialFocusTime);
+          if (initialFocusTime) {
+            jumpToFocusPage(res.totalMatches, initialFocusTime, async (offset) => {
+              setLoading(true);
+              const r2 = await searchKernel(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
+              setKernelResult(r2);
+              setLoading(false);
+            });
+          }
         }).catch((err) => {
           setError(err instanceof Error ? err.message : 'Search failed');
           setLoading(false);
@@ -180,7 +227,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         }).then((res) => {
           setLogcatResult(res);
           setLoading(false);
-          if (initialFocusTime) scrollToFocusTime(initialFocusTime);
+          if (initialFocusTime) {
+            jumpToFocusPage(res.totalMatches, initialFocusTime, async (offset) => {
+              setLoading(true);
+              const r2 = await searchLogcat(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
+              setLogcatResult(r2);
+              setLoading(false);
+            });
+          }
         }).catch((err) => {
           setError(err instanceof Error ? err.message : 'Search failed');
           setLoading(false);
