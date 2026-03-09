@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { searchLogcat, LogcatSearchResult, searchKernel, KernelSearchResult } from '../lib/api';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { List, useListRef } from 'react-window';
+import type { RowComponentProps } from 'react-window';
+import { searchLogcat, searchKernel } from '../lib/api';
 import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
 
 interface Props {
@@ -14,6 +16,36 @@ interface Props {
 }
 
 type SearchSource = 'logcat' | 'kernel';
+
+interface LogcatEntry {
+  lineNumber: number;
+  timestamp: string;
+  pid?: number;
+  tid?: number;
+  level: string;
+  tag: string;
+  message: string;
+  buffer?: string;
+}
+
+interface KernelEntry {
+  entryIndex: number;
+  timestamp: string;
+  level: string;
+  facility: string;
+  message: string;
+}
+
+interface RowExtraProps {
+  entries: LogcatEntry[] | KernelEntry[];
+  source: SearchSource;
+  currentMatchIndex: number;
+  matchIndices: Set<number>;
+  focusIdx: number;
+}
+
+const MAX_ENTRIES = 50_000;
+const ROW_HEIGHT = 28;
 
 // ── Logcat helpers ──
 
@@ -62,6 +94,73 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
+// ── Row Component (shared for logcat + kernel) ──
+
+function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx }: RowComponentProps<RowExtraProps>) {
+  const isCurrentMatch = index === currentMatchIndex;
+  const isMatch = matchIndices.has(index);
+  const isFocus = index === focusIdx;
+
+  if (source === 'logcat') {
+    const entry = (entries as LogcatEntry[])[index];
+    if (!entry) return null;
+
+    let rowClass = `flex items-center text-xs font-mono border-b border-gray-800/50 hover:bg-gray-800/30 ${levelBg(entry.level)}`;
+    if (isCurrentMatch) {
+      rowClass += ' bg-indigo-500/20';
+    } else if (isFocus) {
+      rowClass += ' border-l-[3px] border-l-indigo-500';
+    } else if (isMatch) {
+      rowClass += ' border-l-2 border-l-indigo-400/30';
+    }
+
+    return (
+      <div style={style} className={rowClass}>
+        <span className="text-gray-600 py-1 px-2 whitespace-nowrap w-[155px] shrink-0 overflow-hidden">
+          {isFocus && <span className="text-indigo-400 font-bold text-[10px]">{'\u25B6 '}</span>}
+          {entry.timestamp}
+        </span>
+        <span className="text-gray-600 py-1 px-1 whitespace-nowrap w-[80px] shrink-0">
+          {entry.pid ?? '?'}/{entry.tid ?? '?'}
+        </span>
+        <span className={`py-1 px-1 whitespace-nowrap w-[140px] shrink-0 font-semibold truncate ${levelColor(entry.level)}`}>
+          {entry.level}/{entry.tag}
+        </span>
+        <span className={`py-1 px-2 flex-1 truncate ${levelColor(entry.level)}`}>
+          {entry.message}
+        </span>
+      </div>
+    );
+  } else {
+    const entry = (entries as KernelEntry[])[index];
+    if (!entry) return null;
+
+    let rowClass = `flex items-center text-xs font-mono border-b border-gray-800/50 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
+    if (isCurrentMatch) {
+      rowClass += ' bg-indigo-500/20';
+    } else if (isFocus) {
+      rowClass += ' border-l-[3px] border-l-indigo-500';
+    } else if (isMatch) {
+      rowClass += ' border-l-2 border-l-indigo-400/30';
+    }
+
+    return (
+      <div style={style} className={rowClass}>
+        <span className="text-gray-600 py-1 px-2 whitespace-nowrap w-[155px] shrink-0 overflow-hidden">
+          {isFocus && <span className="text-indigo-400 font-bold text-[10px]">{'\u25B6 '}</span>}
+          [{entry.timestamp}]
+        </span>
+        <span className={`py-1 px-1 whitespace-nowrap w-[70px] shrink-0 font-semibold ${kernelLevelColor(entry.level)}`}>
+          {kernelLevelLabel(entry.level)}
+        </span>
+        <span className={`py-1 px-2 flex-1 truncate ${kernelLevelColor(entry.level)}`}>
+          {entry.message}
+        </span>
+      </div>
+    );
+  }
+}
+
 export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource, initialFocusTime }: Props) {
   const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
@@ -74,184 +173,207 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Time range filters
   const [startTime, setStartTime] = useState(initialStartTime ?? '');
   const [endTime, setEndTime] = useState(initialEndTime ?? '');
-  const [limit, setLimit] = useState(100);
-  const [page, setPage] = useState(0);
 
-  const [logcatResult, setLogcatResult] = useState<LogcatSearchResult | null>(null);
-  const [kernelResult, setKernelResult] = useState<KernelSearchResult | null>(null);
+  // Data states
+  const [allEntries, setAllEntries] = useState<LogcatEntry[] | KernelEntry[]>([]);
+  const [totalAvailable, setTotalAvailable] = useState(0);
+  const [method, setMethod] = useState<string>('');
+  const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const lastSearchRef = useRef<{
-    source: SearchSource;
-    q?: string;
-    tag?: string;
-    level?: string;
-    pid?: number;
-    buffer?: string;
-    startTime?: string;
-    endTime?: string;
-    limit: number;
-  } | null>(null);
+  // Find navigation
+  const [currentMatchPos, setCurrentMatchPos] = useState(0);
 
+  // UI states
+  const [visible, setVisible] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Refs
   const inputRef = useRef<HTMLInputElement>(null);
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const listRef = useListRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(500);
+  const initialLoadDone = useRef(false);
+  const focusIndexRef = useRef<number>(-1);
 
-  const initialSearchDone = useRef(false);
+  // ── Data Loading ──
 
-  /** Scroll results container so the row closest to focusTime is centered + highlighted */
-  const scrollToFocusTime = useCallback((focusTime: string) => {
-    // Retry until the DOM contains matching rows (React may not have committed yet)
-    let retries = 0;
-    const tryHighlight = () => {
-      const container = resultsRef.current;
-      if (!container) { if (retries++ < 20) setTimeout(tryHighlight, 100); return; }
-      const rows = container.querySelectorAll<HTMLElement>('tr[data-ts]');
-      if (rows.length === 0) { if (retries++ < 20) setTimeout(tryHighlight, 100); return; }
-      let bestRow: HTMLElement | null = null;
-      for (const row of rows) {
-        const ts = row.getAttribute('data-ts') ?? '';
-        if (ts <= focusTime) bestRow = row;
+  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string }) => {
+    const effectiveSource = opts?.src ?? source;
+    const effectiveTag = opts?.tagOverride ?? tag;
+    const effectiveSt = opts?.st ?? startTime;
+    const effectiveEt = opts?.et ?? endTime;
+
+    setLoading(true);
+    setError('');
+    try {
+      if (effectiveSource === 'kernel') {
+        const res = await searchKernel(uploadId, {
+          startTime: effectiveSt.trim() || undefined,
+          endTime: effectiveEt.trim() || undefined,
+          limit: MAX_ENTRIES,
+          offset: 0,
+          export: true,
+        });
+        setAllEntries(res.entries as KernelEntry[]);
+        setTotalAvailable(res.totalMatches);
+        setMethod(res.method);
+        setTruncated(res.totalMatches > MAX_ENTRIES);
+      } else {
+        const res = await searchLogcat(uploadId, {
+          tag: effectiveTag.trim() || undefined,
+          startTime: effectiveSt.trim() || undefined,
+          endTime: effectiveEt.trim() || undefined,
+          limit: MAX_ENTRIES,
+          offset: 0,
+          export: true,
+        });
+        setAllEntries(res.entries as LogcatEntry[]);
+        setTotalAvailable(res.totalMatches);
+        setMethod(res.method);
+        setTruncated(res.totalMatches > MAX_ENTRIES);
       }
-      if (!bestRow) bestRow = rows[0]; // fallback to first row if none <= focusTime
-      bestRow.scrollIntoView({ block: 'center' });
-      bestRow.setAttribute('data-focus-highlight', 'true');
-      // Persistent left-border marker + brief bg flash
-      bestRow.style.borderLeft = '3px solid rgb(99, 102, 241)';
-      bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
-      bestRow.style.transition = 'background-color 3s ease-out';
-      setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 3000);
-      // Add a ▶ marker in the first cell
-      const firstCell = bestRow.querySelector('td');
-      if (firstCell) {
-        const marker = document.createElement('span');
-        marker.textContent = '▶ ';
-        marker.style.color = 'rgb(129, 140, 248)'; // indigo-400
-        marker.style.fontWeight = '700';
-        marker.style.fontSize = '10px';
-        firstCell.prepend(marker);
-      }
-    };
-    // Wait for React commit + browser paint
-    requestAnimationFrame(() => requestAnimationFrame(tryHighlight));
-  }, []);
-
-  /** After initial search, jump to the page containing focusTime, then scroll to it.
-   *  Uses a count query (limit=1, endTime=focusTime) to find the exact offset. */
-  const jumpToFocusPage = useCallback((
-    totalMatches: number,
-    focusTime: string,
-    searchFn: (offset: number) => Promise<void>,
-    countFn: (endTime: string) => Promise<number>,
-  ) => {
-    if (totalMatches <= limit) {
-      scrollToFocusTime(focusTime);
-      return;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Load failed');
+    } finally {
+      setLoading(false);
     }
-    // Count entries before focusTime to find exact page
-    countFn(focusTime).then((countBefore) => {
-      // Place focus row ~40% from top of page so user sees context before it
-      const targetOffset = Math.max(0, countBefore - Math.floor(limit * 0.4));
-      const targetPage = Math.floor(targetOffset / limit);
-      if (targetPage === 0) {
-        scrollToFocusTime(focusTime);
-        return;
+  }, [uploadId, source, tag, startTime, endTime]);
+
+  // ── Client-side Filtering ──
+  // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
+  // level/pid/buffer filter immediately via useMemo
+
+  const filteredEntries = useMemo(() => {
+    if (source === 'logcat') {
+      let logcat = allEntries as LogcatEntry[];
+      if (level) {
+        const levels = ['V', 'D', 'I', 'W', 'E', 'F'];
+        const minIdx = levels.indexOf(level);
+        if (minIdx >= 0) {
+          logcat = logcat.filter(e => levels.indexOf(e.level) >= minIdx);
+        }
       }
-      setPage(targetPage);
-      searchFn(targetPage * limit).then(() => {
-        scrollToFocusTime(focusTime);
-      });
-    });
-  }, [limit, scrollToFocusTime]);
+      if (pid) {
+        const pidNum = Number(pid);
+        if (!isNaN(pidNum)) logcat = logcat.filter(e => e.pid === pidNum);
+      }
+      if (buffer) {
+        logcat = logcat.filter(e => e.buffer === buffer);
+      }
+      return logcat;
+    } else {
+      let kernel = allEntries as KernelEntry[];
+      if (level) {
+        const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
+        kernel = kernel.filter(e => {
+          const n = parseInt(e.level.replace(/[<>]/g, ''), 10);
+          return n <= levelNum;
+        });
+      }
+      return kernel;
+    }
+  }, [allEntries, source, level, pid, buffer]);
+
+  // ── Find Next/Prev ──
+
+  const matchIndices = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return new Set<number>();
+    const indices = new Set<number>();
+    for (let i = 0; i < filteredEntries.length; i++) {
+      const e = filteredEntries[i] as any;
+      const msg = (e.message ?? '').toLowerCase();
+      const tagStr = (e.tag ?? '').toLowerCase();
+      if (msg.includes(kw) || tagStr.includes(kw)) {
+        indices.add(i);
+      }
+    }
+    return indices;
+  }, [filteredEntries, q]);
+
+  const matchList = useMemo(() => Array.from(matchIndices).sort((a, b) => a - b), [matchIndices]);
+  const currentMatchIndex = matchList.length > 0 ? (matchList[currentMatchPos] ?? -1) : -1;
+
+  const scrollToIndex = useCallback((targetIndex: number) => {
+    listRef.current?.scrollToRow({ index: targetIndex, align: 'center' });
+  }, [listRef]);
+
+  const goToNextMatch = useCallback(() => {
+    if (matchList.length === 0) return;
+    const next = (currentMatchPos + 1) % matchList.length;
+    setCurrentMatchPos(next);
+    scrollToIndex(matchList[next]);
+  }, [matchList, currentMatchPos, scrollToIndex]);
+
+  const goToPrevMatch = useCallback(() => {
+    if (matchList.length === 0) return;
+    const prev = (currentMatchPos - 1 + matchList.length) % matchList.length;
+    setCurrentMatchPos(prev);
+    scrollToIndex(matchList[prev]);
+  }, [matchList, currentMatchPos, scrollToIndex]);
+
+  // Reset match position when matchList changes
+  useEffect(() => {
+    setCurrentMatchPos(0);
+    if (matchList.length > 0) {
+      scrollToIndex(matchList[0]);
+    }
+  }, [matchList.length]);
+
+  // ── FocusTime ──
 
   useEffect(() => {
-    if (initialTag && !initialSearchDone.current) {
-      initialSearchDone.current = true;
-      // Auto-trigger search with the pre-filled tag
-      const params = {
-        source: 'logcat' as SearchSource,
-        tag: initialTag,
-        level: 'E' as string | undefined,
-        limit,
-      };
-      lastSearchRef.current = params;
-      setLoading(true);
-      searchLogcat(uploadId, {
-        tag: initialTag,
-        level: 'E',
-        limit,
-        offset: 0,
-      }).then((res) => {
-        setLogcatResult(res);
-        setLoading(false);
-      }).catch((err) => {
-        setError(err instanceof Error ? err.message : 'Search failed');
-        setLoading(false);
-      });
-    } else if (initialStartTime && !initialSearchDone.current) {
-      initialSearchDone.current = true;
-      // Auto-trigger search with time range (use initialSource to pick logcat vs kernel)
-      const effectiveSource = initialSource ?? 'logcat';
-      const params = {
-        source: effectiveSource,
-        startTime: initialStartTime,
-        endTime: initialEndTime,
-        limit,
-      };
-      lastSearchRef.current = params;
-      setLoading(true);
-      if (effectiveSource === 'kernel') {
-        searchKernel(uploadId, {
-          startTime: initialStartTime,
-          endTime: initialEndTime,
-          limit,
-          offset: 0,
-        }).then((res) => {
-          setKernelResult(res);
-          setLoading(false);
-          if (initialFocusTime) {
-            jumpToFocusPage(res.totalMatches, initialFocusTime, async (offset) => {
-              setLoading(true);
-              const r2 = await searchKernel(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
-              setKernelResult(r2);
-              setLoading(false);
-            }, async (endTime) => {
-              const r = await searchKernel(uploadId, { startTime: initialStartTime, endTime, limit: 1, offset: 0 });
-              return r.totalMatches;
-            });
-          }
-        }).catch((err) => {
-          setError(err instanceof Error ? err.message : 'Search failed');
-          setLoading(false);
-        });
-      } else {
-        searchLogcat(uploadId, {
-          startTime: initialStartTime,
-          endTime: initialEndTime,
-          limit,
-          offset: 0,
-        }).then((res) => {
-          setLogcatResult(res);
-          setLoading(false);
-          if (initialFocusTime) {
-            jumpToFocusPage(res.totalMatches, initialFocusTime, async (offset) => {
-              setLoading(true);
-              const r2 = await searchLogcat(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
-              setLogcatResult(r2);
-              setLoading(false);
-            }, async (endTime) => {
-              const r = await searchLogcat(uploadId, { startTime: initialStartTime, endTime, limit: 1, offset: 0 });
-              return r.totalMatches;
-            });
-          }
-        }).catch((err) => {
-          setError(err instanceof Error ? err.message : 'Search failed');
-          setLoading(false);
-        });
-      }
-    } else {
-      inputRef.current?.focus();
+    if (!initialFocusTime || allEntries.length === 0) return;
+    // Find closest entry <= focusTime
+    let best = 0;
+    for (let i = 0; i < allEntries.length; i++) {
+      const ts = (allEntries[i] as any).timestamp ?? '';
+      if (ts <= initialFocusTime) best = i;
     }
+    focusIndexRef.current = best;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToRow({ index: best, align: 'center' });
+    });
+  }, [allEntries, initialFocusTime, listRef]);
+
+  // ── Initial Load ──
+
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    if (initialTag || initialStartTime) {
+      loadData({
+        src: initialSource ?? 'logcat',
+        tagOverride: initialTag,
+        st: initialStartTime,
+        et: initialEndTime,
+      });
+    } else {
+      loadData();
+    }
+  }, []);
+
+  // ── Container height measurement ──
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // ── Fade-in / close ──
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
   }, []);
 
   const handleClose = useCallback(() => {
@@ -259,15 +381,22 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setTimeout(onClose, 200);
   }, [onClose]);
 
+  // Keyboard shortcuts: Escape to close, Ctrl+F to focus search
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleClose();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleClose]);
 
-  // Reset state when switching tabs
+  // ── Tab switching ──
+
   const switchSource = (newSource: SearchSource) => {
     if (newSource === source) return;
     setSource(newSource);
@@ -278,175 +407,56 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setLevel('');
     setStartTime('');
     setEndTime('');
-    setPage(0);
-    setLogcatResult(null);
-    setKernelResult(null);
+    setAllEntries([]);
+    setTotalAvailable(0);
+    setMethod('');
+    setTruncated(false);
     setError('');
-    lastSearchRef.current = null;
-    setTimeout(() => inputRef.current?.focus(), 0);
+    setCurrentMatchPos(0);
+    focusIndexRef.current = -1;
+    setTimeout(() => {
+      inputRef.current?.focus();
+      loadData({ src: newSource, tagOverride: '', st: '', et: '' });
+    }, 0);
   };
 
-  const doSearchWithOffset = useCallback(async (offset: number) => {
-    const params = lastSearchRef.current;
-    if (!params) return;
+  // ── Export ──
 
-    setLoading(true);
-    setError('');
-    try {
-      if (params.source === 'kernel') {
-        const res = await searchKernel(uploadId, {
-          q: params.q,
-          level: params.level,
-          startTime: params.startTime,
-          endTime: params.endTime,
-          limit: params.limit,
-          offset,
-        });
-        setKernelResult(res);
-      } else {
-        const res = await searchLogcat(uploadId, {
-          q: params.q,
-          tag: params.tag,
-          level: params.level,
-          pid: params.pid,
-          buffer: params.buffer,
-          startTime: params.startTime,
-          endTime: params.endTime,
-          limit: params.limit,
-          offset,
-        });
-        setLogcatResult(res);
-      }
-      resultsRef.current?.scrollTo(0, 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-      setLogcatResult(null);
-      setKernelResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [uploadId]);
-
-  const doSearch = async () => {
-    // Allow empty search to browse all entries
-
-    const params = {
-      source,
-      q: q.trim() || undefined,
-      tag: source === 'logcat' ? (tag.trim() || undefined) : undefined,
-      level: level || undefined,
-      pid: source === 'logcat' && pid ? Number(pid) : undefined,
-      buffer: source === 'logcat' && buffer ? buffer : undefined,
-      startTime: startTime.trim() || undefined,
-      endTime: endTime.trim() || undefined,
-      limit,
-    };
-    lastSearchRef.current = params;
-    setPage(0);
-
-    setLoading(true);
-    setError('');
-    try {
-      if (source === 'kernel') {
-        const res = await searchKernel(uploadId, {
-          q: params.q,
-          level: params.level,
-          startTime: params.startTime,
-          endTime: params.endTime,
-          limit: params.limit,
-          offset: 0,
-        });
-        setKernelResult(res);
-        setLogcatResult(null);
-      } else {
-        const res = await searchLogcat(uploadId, {
-          q: params.q,
-          tag: params.tag,
-          level: params.level,
-          pid: params.pid,
-          buffer: params.buffer,
-          startTime: params.startTime,
-          endTime: params.endTime,
-          limit: params.limit,
-          offset: 0,
-        });
-        setLogcatResult(res);
-        setKernelResult(null);
-      }
-      resultsRef.current?.scrollTo(0, 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-      setLogcatResult(null);
-      setKernelResult(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') doSearch();
-  };
-
-  const [visible, setVisible] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  // Fade-in on mount
-  useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
-  }, []);
-
-  const result = source === 'kernel' ? kernelResult : logcatResult;
-  const totalPages = result ? Math.ceil(result.totalMatches / limit) : 0;
-
-  const handleExport = async (format: 'csv' | 'text') => {
-    if (!result || result.totalMatches === 0) return;
+  const handleExport = (format: 'csv' | 'text') => {
     const keyword = q.trim() || (source === 'logcat' ? tag.trim() : '') || 'search';
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const prefix = source === 'kernel' ? 'kernel-search' : 'logcat-search';
-    const params = lastSearchRef.current;
-    if (!params) return;
 
-    setShowExportMenu(false);
-    setExporting(true);
-
-    try {
-      // Fetch ALL matching entries for export (not just current page)
-      if (source === 'kernel') {
-        const all = await searchKernel(uploadId, {
-          q: params.q, level: params.level,
-          startTime: params.startTime, endTime: params.endTime,
-          limit: result.totalMatches, offset: 0, export: true,
-        });
-        if (format === 'csv') {
-          downloadBlob(kernelEntriesToCSV(all.entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
-        } else {
-          downloadBlob(kernelEntriesToDmesgText(all.entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
-        }
+    if (source === 'kernel') {
+      const entries = filteredEntries as KernelEntry[];
+      if (format === 'csv') {
+        downloadBlob(kernelEntriesToCSV(entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
       } else {
-        const all = await searchLogcat(uploadId, {
-          q: params.q, tag: params.tag, level: params.level,
-          pid: params.pid, buffer: params.buffer,
-          startTime: params.startTime, endTime: params.endTime,
-          limit: result.totalMatches, offset: 0, export: true,
-        });
-        if (format === 'csv') {
-          downloadBlob(entriesToCSV(all.entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
-        } else {
-          downloadBlob(entriesToLogcatText(all.entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
-        }
+        downloadBlob(kernelEntriesToDmesgText(entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
+    } else {
+      const entries = filteredEntries as LogcatEntry[];
+      if (format === 'csv') {
+        downloadBlob(entriesToCSV(entries), `${prefix}-${keyword}-${ts}.csv`, 'text/csv;charset=utf-8');
+      } else {
+        downloadBlob(entriesToLogcatText(entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
+      }
     }
+    setShowExportMenu(false);
   };
 
-  const goToPage = (newPage: number) => {
-    setPage(newPage);
-    doSearchWithOffset(newPage * limit);
-  };
+  // ── Row props (passed to RowComponent via react-window rowProps) ──
+
+  const rowProps = useMemo<RowExtraProps>(() => ({
+    entries: filteredEntries,
+    source,
+    currentMatchIndex,
+    matchIndices,
+    focusIdx: focusIndexRef.current,
+  }), [filteredEntries, source, currentMatchIndex, matchIndices]);
+
+  // Effective list height: subtract column header height (~30px)
+  const listHeight = Math.max(containerHeight - 30, 200);
 
   return (
     <div
@@ -494,27 +504,46 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
         {/* Search Form */}
         <div className="px-6 pt-4 pb-4 border-b border-gray-700/60 space-y-3 shrink-0">
-          {/* Keyword row */}
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={source === 'kernel' ? 'Search kernel message...' : 'Search keyword...'}
-              className="flex-1 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
-            />
+          {/* Find keyword row with nav buttons */}
+          <div className="flex gap-2 items-center">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setCurrentMatchPos(0); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); goToNextMatch(); }
+                  if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); goToPrevMatch(); }
+                }}
+                placeholder={source === 'kernel' ? 'Find in kernel logs...' : 'Find in logs...'}
+                className="w-full bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-2.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+              />
+              {q.trim() && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                  {matchList.length > 0 ? `${currentMatchPos + 1} / ${matchList.length}` : '0 / 0'}
+                </span>
+              )}
+            </div>
             <button
-              onClick={doSearch}
-              disabled={loading}
-              className="px-5 py-2.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+              onClick={goToPrevMatch}
+              disabled={matchList.length === 0}
+              title="Previous match (Shift+Enter)"
+              className="px-2.5 py-2.5 text-sm rounded-lg border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors bg-[#161b22]"
             >
-              {loading ? 'Searching...' : 'Search'}
+              {'\u25B2'}
+            </button>
+            <button
+              onClick={goToNextMatch}
+              disabled={matchList.length === 0}
+              title="Next match (Enter)"
+              className="px-2.5 py-2.5 text-sm rounded-lg border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors bg-[#161b22]"
+            >
+              {'\u25BC'}
             </button>
           </div>
 
-          {/* Filters row — adaptive based on source */}
+          {/* Filters row */}
           <div className="flex gap-3 flex-wrap items-center">
             {source === 'logcat' && (
               <>
@@ -524,7 +553,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                     type="text"
                     value={tag}
                     onChange={(e) => setTag(e.target.value)}
-                    onKeyDown={handleKeyDown}
                     placeholder="e.g. ActivityManager"
                     className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
                   />
@@ -566,7 +594,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                     type="number"
                     value={pid}
                     onChange={(e) => setPid(e.target.value)}
-                    onKeyDown={handleKeyDown}
                     placeholder="—"
                     className="w-20 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
                   />
@@ -593,19 +620,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 </select>
               </div>
             )}
-
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-gray-500">Per page</label>
-              <select
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-indigo-500"
-              >
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-            </div>
           </div>
 
           {/* Time range row */}
@@ -616,7 +630,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 type="text"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                onKeyDown={handleKeyDown}
                 placeholder="MM-DD HH:mm:ss"
                 className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
               />
@@ -627,11 +640,17 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 type="text"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                onKeyDown={handleKeyDown}
                 placeholder="MM-DD HH:mm:ss"
                 className="w-40 bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
+            <button
+              onClick={() => loadData()}
+              disabled={loading}
+              className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+            >
+              {loading ? 'Loading...' : 'Load Range'}
+            </button>
             {(startTime || endTime) && (
               <button
                 onClick={() => { setStartTime(''); setEndTime(''); }}
@@ -643,8 +662,70 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </div>
         </div>
 
-        {/* Results */}
-        <div ref={resultsRef} className="flex-1 overflow-y-auto min-h-0">
+        {/* Status bar */}
+        {allEntries.length > 0 && !loading && (
+          <div className="flex items-center gap-3 px-6 py-2 text-xs text-gray-400 bg-[#161b22] border-b border-gray-700/40 shrink-0">
+            <span className="font-medium text-gray-300">{allEntries.length.toLocaleString()}</span>
+            <span>loaded</span>
+            <span className="text-gray-600">|</span>
+            <span className="font-medium text-gray-300">{filteredEntries.length.toLocaleString()}</span>
+            <span>shown</span>
+            {q.trim() && matchList.length > 0 && (
+              <>
+                <span className="text-gray-600">|</span>
+                <span className="font-medium text-indigo-400">{matchList.length.toLocaleString()}</span>
+                <span>matches</span>
+              </>
+            )}
+            {method && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
+                method === 'fts5'
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                  : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
+              }`}>
+                {method}
+              </span>
+            )}
+
+            {truncated && (
+              <span className="text-yellow-400 text-[11px]">
+                Showing first 50,000 of {totalAvailable.toLocaleString()} — narrow time range for full data
+              </span>
+            )}
+
+            {/* Export dropdown */}
+            <div className="relative ml-auto">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors flex items-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export
+              </button>
+              {showExportMenu && (
+                <div className="absolute top-full right-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
+                  <button
+                    onClick={() => handleExport('csv')}
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
+                  >
+                    Export CSV ({filteredEntries.length.toLocaleString()} rows)
+                  </button>
+                  <button
+                    onClick={() => handleExport('text')}
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
+                  >
+                    {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'} ({filteredEntries.length.toLocaleString()} rows)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Results area */}
+        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col">
           {error && (
             <p className="text-red-400 text-sm px-6 pt-4">{error}</p>
           )}
@@ -655,199 +736,55 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </div>
           )}
 
-          {!loading && !error && !result && (
+          {!loading && !error && allEntries.length === 0 && (
             <div className="text-center py-16">
               <p className="text-gray-400 text-sm">
                 {source === 'kernel'
-                  ? 'Click Search to browse all kernel messages, or enter a keyword to filter.'
-                  : 'Click Search to browse all logcat entries, or enter a keyword to filter.'}
+                  ? 'Loading kernel messages...'
+                  : 'Loading logcat entries...'}
               </p>
-              <p className="text-gray-500 text-xs mt-1">Supports FTS5 full-text search with BM25 ranking.</p>
             </div>
           )}
 
-          {!loading && result && (
+          {!loading && allEntries.length > 0 && filteredEntries.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-gray-500 text-sm">
+                No entries match the current filters.
+              </p>
+            </div>
+          )}
+
+          {!loading && filteredEntries.length > 0 && (
             <>
-              {/* Status bar */}
-              <div className="flex items-center gap-3 px-6 py-2.5 text-xs text-gray-400 bg-[#161b22] border-b border-gray-700/40 sticky top-0">
-                <span className="font-medium text-gray-300">{result.totalMatches.toLocaleString()}</span>
-                <span>matched</span>
-                <span className="text-gray-600">|</span>
-                <span>
-                  {result.totalMatches > 0 ? `${page * limit + 1}–${Math.min((page + 1) * limit, result.totalMatches)}` : '0'} of {result.totalMatches.toLocaleString()}
-                </span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
-                  result.method === 'fts5'
-                    ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
-                    : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
-                }`}>
-                  {result.method}
-                </span>
-
-                {/* Export dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => !exporting && setShowExportMenu(!showExportMenu)}
-                    disabled={exporting}
-                    className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-50 transition-colors flex items-center gap-1"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    {exporting ? 'Exporting...' : 'Export'}
-                  </button>
-                  {showExportMenu && (
-                    <div className="absolute top-full left-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
-                      <button
-                        onClick={() => handleExport('csv')}
-                        className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
-                      >
-                        Export CSV ({result.totalMatches.toLocaleString()} rows)
-                      </button>
-                      <button
-                        onClick={() => handleExport('text')}
-                        className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
-                      >
-                        {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'} ({result.totalMatches.toLocaleString()} rows)
-                      </button>
-                    </div>
-                  )}
+              {/* Column headers */}
+              {source === 'logcat' ? (
+                <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-gray-700/60 bg-[#0d1117] shrink-0 px-4">
+                  <span className="py-1.5 px-2 w-[155px] shrink-0">Timestamp</span>
+                  <span className="py-1.5 px-1 w-[80px] shrink-0">PID/TID</span>
+                  <span className="py-1.5 px-1 w-[140px] shrink-0">Level/Tag</span>
+                  <span className="py-1.5 px-2 flex-1">Message</span>
                 </div>
-
-                {/* Pagination controls in status bar */}
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-1 ml-auto">
-                    <button
-                      onClick={() => goToPage(page - 1)}
-                      disabled={page === 0}
-                      className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-gray-300 px-2">
-                      {page + 1} / {totalPages}
-                    </span>
-                    <button
-                      onClick={() => goToPage(page + 1)}
-                      disabled={page >= totalPages - 1}
-                      className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {result.entries.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-12">
-                  No matching entries found.
-                </p>
-              ) : source === 'kernel' && kernelResult ? (
-                /* Kernel results table */
-                <div className="px-4 py-2 overflow-x-auto">
-                  <table className="w-full text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
-                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Timestamp</th>
-                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Level</th>
-                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Message</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {kernelResult.entries.map((entry, i) => (
-                        <tr
-                          key={i}
-                          data-ts={entry.timestamp}
-                          className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`}
-                        >
-                          <td className="text-gray-600 py-1 px-2 whitespace-nowrap align-top">
-                            [{entry.timestamp}]
-                          </td>
-                          <td className={`py-1 px-1 whitespace-nowrap align-top font-semibold ${kernelLevelColor(entry.level)}`}>
-                            {kernelLevelLabel(entry.level)}
-                          </td>
-                          <td className={`py-1 px-2 align-top break-all ${kernelLevelColor(entry.level)}`}>
-                            {entry.message}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : logcatResult ? (
-                /* Logcat results table */
-                <div className="px-4 py-2 overflow-x-auto">
-                  <table className="w-full text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-gray-700/60 text-gray-500 text-[10px] uppercase tracking-wider">
-                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Timestamp</th>
-                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">PID/TID</th>
-                        <th className="py-1.5 px-1 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Level/Tag</th>
-                        <th className="py-1.5 px-2 text-left font-medium sticky top-0 bg-[#0d1117] z-10">Message</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logcatResult.entries.map((entry, i) => (
-                        <tr
-                          key={i}
-                          data-ts={entry.timestamp}
-                          className={`border-b border-gray-800/50 hover:bg-gray-800/30 ${levelBg(entry.level)}`}
-                        >
-                          <td className="text-gray-600 py-1 px-2 whitespace-nowrap align-top">
-                            {entry.timestamp}
-                          </td>
-                          <td className="text-gray-600 py-1 px-1 whitespace-nowrap align-top">
-                            {entry.pid ?? '?'}/{entry.tid ?? '?'}
-                          </td>
-                          <td className={`py-1 px-1 whitespace-nowrap align-top font-semibold ${levelColor(entry.level)}`}>
-                            {entry.level}/{entry.tag}
-                          </td>
-                          <td className={`py-1 px-2 align-top break-all ${levelColor(entry.level)}`}>
-                            {entry.message}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {/* Bottom pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 px-6 py-3 border-t border-gray-700/40">
-                  <button
-                    onClick={() => goToPage(0)}
-                    disabled={page === 0}
-                    className="px-2.5 py-1 text-xs rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
-                  >
-                    First
-                  </button>
-                  <button
-                    onClick={() => goToPage(page - 1)}
-                    disabled={page === 0}
-                    className="px-2.5 py-1 text-xs rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <span className="text-xs text-gray-400 px-3">
-                    Page <span className="text-gray-200 font-medium">{page + 1}</span> of <span className="text-gray-200 font-medium">{totalPages}</span>
-                  </span>
-                  <button
-                    onClick={() => goToPage(page + 1)}
-                    disabled={page >= totalPages - 1}
-                    className="px-2.5 py-1 text-xs rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
-                  >
-                    Next
-                  </button>
-                  <button
-                    onClick={() => goToPage(totalPages - 1)}
-                    disabled={page >= totalPages - 1}
-                    className="px-2.5 py-1 text-xs rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
-                  >
-                    Last
-                  </button>
+              ) : (
+                <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-gray-700/60 bg-[#0d1117] shrink-0 px-4">
+                  <span className="py-1.5 px-2 w-[155px] shrink-0">Timestamp</span>
+                  <span className="py-1.5 px-1 w-[70px] shrink-0">Level</span>
+                  <span className="py-1.5 px-2 flex-1">Message</span>
                 </div>
               )}
+
+              {/* Virtual scroll list */}
+              <div className="flex-1 min-h-0">
+                <List
+                  listRef={listRef}
+                  rowCount={filteredEntries.length}
+                  rowHeight={ROW_HEIGHT}
+                  rowComponent={RowComponent}
+                  rowProps={rowProps}
+                  overscanCount={20}
+                  className="px-4"
+                  style={{ height: listHeight }}
+                />
+              </div>
             </>
           )}
         </div>
