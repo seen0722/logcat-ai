@@ -121,45 +121,33 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     }));
   }, []);
 
-  /** Parse "MM-DD HH:mm:ss.SSS" to ms since epoch (year 2000) for ratio calculation */
-  const parseTimestampMs = useCallback((ts: string): number => {
-    const m = ts.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
-    if (!m) return 0;
-    const [, mo, dd, hh, mm, ss, msStr] = m;
-    return new Date(2000, +mo - 1, +dd, +hh, +mm, +ss, msStr ? +msStr.padEnd(3, '0') : 0).getTime();
-  }, []);
-
-  /** After initial search, jump to the page containing focusTime, then scroll to it */
+  /** After initial search, jump to the page containing focusTime, then scroll to it.
+   *  Uses a count query (limit=1, endTime=focusTime) to find the exact offset. */
   const jumpToFocusPage = useCallback((
     totalMatches: number,
     focusTime: string,
     searchFn: (offset: number) => Promise<void>,
+    countFn: (endTime: string) => Promise<number>,
   ) => {
     if (totalMatches <= limit) {
-      // All results fit on one page — just scroll
       scrollToFocusTime(focusTime);
       return;
     }
-    // Estimate which entry the focusTime falls on via time ratio
-    const start = parseTimestampMs(initialStartTime ?? '');
-    const end = parseTimestampMs(initialEndTime ?? '');
-    const focus = parseTimestampMs(focusTime);
-    const range = end - start;
-    if (range <= 0) { scrollToFocusTime(focusTime); return; }
-    const ratio = Math.max(0, Math.min(1, (focus - start) / range));
-    const estimatedEntry = Math.floor(ratio * totalMatches);
-    const targetPage = Math.floor(estimatedEntry / limit);
-    if (targetPage === 0) {
-      // Already on page 0
-      scrollToFocusTime(focusTime);
-      return;
-    }
-    // Jump to estimated page
-    setPage(targetPage);
-    searchFn(targetPage * limit).then(() => {
-      scrollToFocusTime(focusTime);
+    // Count entries before focusTime to find exact page
+    countFn(focusTime).then((countBefore) => {
+      // Place focus row ~40% from top of page so user sees context before it
+      const targetOffset = Math.max(0, countBefore - Math.floor(limit * 0.4));
+      const targetPage = Math.floor(targetOffset / limit);
+      if (targetPage === 0) {
+        scrollToFocusTime(focusTime);
+        return;
+      }
+      setPage(targetPage);
+      searchFn(targetPage * limit).then(() => {
+        scrollToFocusTime(focusTime);
+      });
     });
-  }, [limit, initialStartTime, initialEndTime, scrollToFocusTime, parseTimestampMs]);
+  }, [limit, scrollToFocusTime]);
 
   useEffect(() => {
     if (initialTag && !initialSearchDone.current) {
@@ -212,6 +200,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               const r2 = await searchKernel(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
               setKernelResult(r2);
               setLoading(false);
+            }, async (endTime) => {
+              const r = await searchKernel(uploadId, { startTime: initialStartTime, endTime, limit: 1, offset: 0 });
+              return r.totalMatches;
             });
           }
         }).catch((err) => {
@@ -233,6 +224,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               const r2 = await searchLogcat(uploadId, { startTime: initialStartTime, endTime: initialEndTime, limit, offset });
               setLogcatResult(r2);
               setLoading(false);
+            }, async (endTime) => {
+              const r = await searchLogcat(uploadId, { startTime: initialStartTime, endTime, limit: 1, offset: 0 });
+              return r.totalMatches;
             });
           }
         }).catch((err) => {
