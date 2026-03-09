@@ -116,9 +116,21 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       if (!bestRow) bestRow = rows[0]; // fallback to first row if none <= focusTime
       bestRow.scrollIntoView({ block: 'center' });
       bestRow.setAttribute('data-focus-highlight', 'true');
+      // Persistent left-border marker + brief bg flash
+      bestRow.style.borderLeft = '3px solid rgb(99, 102, 241)';
       bestRow.style.backgroundColor = 'rgba(79, 70, 229, 0.25)';
       bestRow.style.transition = 'background-color 3s ease-out';
       setTimeout(() => { bestRow!.style.backgroundColor = ''; }, 3000);
+      // Add a ▶ marker in the first cell
+      const firstCell = bestRow.querySelector('td');
+      if (firstCell) {
+        const marker = document.createElement('span');
+        marker.textContent = '▶ ';
+        marker.style.color = 'rgb(129, 140, 248)'; // indigo-400
+        marker.style.fontWeight = '700';
+        marker.style.fontSize = '10px';
+        firstCell.prepend(marker);
+      }
     };
     // Wait for React commit + browser paint
     requestAnimationFrame(() => requestAnimationFrame(tryHighlight));
