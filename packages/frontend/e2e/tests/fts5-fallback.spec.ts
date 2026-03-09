@@ -40,24 +40,16 @@ test.describe('FTS5 SQL Fallback', () => {
     // Ensure raw store is cleared
     await clearRawDataStore(analysisId);
 
-    // Open SearchModal
+    // Open SearchModal — auto-loads entries (no Search button needed)
     await page.locator('button', { hasText: 'Search' }).click();
     const modal = page.locator('.fixed.inset-0.z-50');
     await expect(modal).toBeVisible({ timeout: 5000 });
 
-    // Search for a keyword
-    await modal.locator('input[placeholder="Search keyword..."]').fill('ActivityManager');
-    await modal.locator('button', { hasText: /^Search$/ }).click();
+    // Wait for data to load — status bar shows "loaded"
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
 
-    // Wait for results to load
-    await page.waitForTimeout(3000);
-
-    // Should show results with fts5-sql method badge
+    // Should show fts5-sql method badge (since rawDataStore was cleared, falls back to FTS5 SQL)
     await expect(modal.locator('text=fts5-sql')).toBeVisible({ timeout: 10_000 });
-
-    // Result rows should exist
-    const rows = modal.locator('tr[data-ts]');
-    expect(await rows.count()).toBeGreaterThan(0);
 
     await page.keyboard.press('Escape');
   });

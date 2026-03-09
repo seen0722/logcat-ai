@@ -195,7 +195,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerHeight, setContainerHeight] = useState(500);
   const initialLoadDone = useRef(false);
-  const focusIndexRef = useRef<number>(-1);
+  const [focusIndex, setFocusIndex] = useState(-1);
 
   // ── Data Loading ──
 
@@ -332,7 +332,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       const ts = (allEntries[i] as any).timestamp ?? '';
       if (ts <= initialFocusTime) best = i;
     }
-    focusIndexRef.current = best;
+    setFocusIndex(best);
     requestAnimationFrame(() => {
       listRef.current?.scrollToRow({ index: best, align: 'center' });
     });
@@ -413,7 +413,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setTruncated(false);
     setError('');
     setCurrentMatchPos(0);
-    focusIndexRef.current = -1;
+    setFocusIndex(-1);
     setTimeout(() => {
       inputRef.current?.focus();
       loadData({ src: newSource, tagOverride: '', st: '', et: '' });
@@ -452,8 +452,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     source,
     currentMatchIndex,
     matchIndices,
-    focusIdx: focusIndexRef.current,
-  }), [filteredEntries, source, currentMatchIndex, matchIndices]);
+    focusIdx: focusIndex,
+  }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex]);
 
   // Effective list height: subtract column header height (~30px)
   const listHeight = Math.max(containerHeight - 30, 200);
