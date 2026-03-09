@@ -112,15 +112,16 @@ test.describe('Timeline & Search Integration', () => {
     const fromValue = await fromInput.inputValue();
     expect(fromValue.length).toBeGreaterThan(0);
 
-    // Check that the visible results include timestamps near the event time
-    // Get the first visible row's timestamp
-    const firstRowTs = await rows.first().getAttribute('data-ts') ?? '';
-    // The first row's timestamp should be within the ±5s window and close to the event
-    // Parse both timestamps to compare — they should be within 10s of each other
+    // Check that exactly one row is highlighted (inline background-color) near the focus time
+    // The highlight is applied via inline style and fades after 3s — check promptly
+    const highlightedRow = modal.locator('tr[data-ts][style*="background-color"]');
+    await expect(highlightedRow).toHaveCount(1, { timeout: 5000 });
+
+    // The highlighted row's timestamp should be close to the event timestamp
+    const highlightTs = await highlightedRow.getAttribute('data-ts') ?? '';
     const eventSec = parseTimeSec(eventTs);
-    const rowSec = parseTimeSec(firstRowTs);
-    // The row should be within 10 seconds of the event timestamp
-    expect(Math.abs(eventSec - rowSec)).toBeLessThanOrEqual(10);
+    const highlightSec = parseTimeSec(highlightTs);
+    expect(Math.abs(eventSec - highlightSec)).toBeLessThanOrEqual(10);
 
     // If there are many results, we should NOT be on page 1
     const matchedLabel = modal.locator('text=matched');
