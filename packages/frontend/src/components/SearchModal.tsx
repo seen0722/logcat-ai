@@ -697,7 +697,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                     {exporting ? 'Exporting...' : 'Export'}
                   </button>
                   {showExportMenu && (
-                    <div className="absolute top-full left-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-10 py-1 min-w-[180px]">
+                    <div className="absolute top-full left-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
                       <button
                         onClick={() => handleExport('csv')}
                         className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
