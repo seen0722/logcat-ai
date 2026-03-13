@@ -86,7 +86,7 @@ export interface RilError {
 export interface CallEvent {
   timestamp: string;
   type: 'call_start' | 'call_end' | 'call_drop' | 'call_fail';
-  number?: string;                    // 遮蔽處理
+  number?: string;                    // 完全遮蔽（redact），不保留任何部分
   duration?: number;
   failReason?: string;
 }
@@ -169,11 +169,32 @@ export function parseTelephonySections(
 
 ## 3. Insight 生成（basic-analyzer.ts）
 
-### 新增 InsightCategory
+### 新增型別聯合值
 
 ```typescript
+// InsightCategory
 export type InsightCategory = '...' | 'telephony';
+
+// InsightCard.source — 新增 'telephony'，context-builder 據此 dispatch
+export type InsightSource = '...' | 'telephony';
+
+// TimelineEvent.source — 新增 'telephony'，OOS/modem crash 加入時間軸
+export type TimelineEventSource = '...' | 'telephony';
+
+// BasicAnalyzerInput — 新增 telephonyStatus 欄位
+export interface BasicAnalyzerInput {
+  // ... 現有欄位
+  telephonyStatus?: TelephonyParseResult;
+}
+
+// AnalysisResult — 新增 telephonyStatus 欄位
+export interface AnalysisResult {
+  // ... 現有欄位
+  telephonyStatus?: TelephonyParseResult;
+}
 ```
+
+所有 telephony insight 的 `source` 值為 `'telephony'`。
 
 ### Insight 規則
 
@@ -196,6 +217,14 @@ export type InsightCategory = '...' | 'telephony';
 - OOS / 斷訊 → **stability** 扣分
 - RIL / modem crash → **stability** 扣分
 - 通話 / SMS 失敗 → **responsiveness** 扣分
+
+### Timeline 整合
+
+OOS 事件和 modem crash/restart 加入 `buildTimeline()`，source 為 `'telephony'`：
+
+- `oos_start` → severity `warning`（累計多次時 `critical`）
+- `radio_crash` / `modem_restart` → severity `critical`
+- `call_drop` → severity `warning`
 
 ---
 
@@ -258,15 +287,23 @@ if (result.telephonyStatus) {
 
 ### context-builder.ts
 
-新增 `collectTelephonyContext()` 函式，`source === 'telephony'` 時觸發：
+在 `buildInsightContexts()` 的 `if/else if` dispatch chain 中新增分支：
+
+```typescript
+} else if (insight.source === 'telephony') {
+  collectTelephonyContext(ctx, insight, result);
+}
+```
+
+`collectTelephonyContext()` 收集的內容：
 
 - 當前 ServiceState 快照
 - OOS 事件列表（時間、持續時間、domain）
 - RIL 錯誤列表
-- Insight 時間戳 **±10 秒**內的 radio log entries（原始 log）
+- Insight 時間戳 **±10 秒**內的 **radio buffer** log entries（原始 log）
 - 相關 kernel log（modem/ril 相關，若有）
 
-±10 秒窗口大於一般 logcat insight 的 ±2 秒，因為 telephony 事件牽涉較長的狀態機轉換。
+±10 秒窗口大於一般 logcat insight 的 ±2 秒，因為 telephony 事件牽涉較長的狀態機轉換。注意：一般的 `collectTemporalContext()` 仍會為 critical/warning insight 收集 ±2 秒的 W/E/F 日誌，兩者互補。
 
 ### analysis.ts prompt 擴充
 
@@ -287,17 +324,16 @@ When analyzing telephony insights, focus on:
 
 ### Tool Calling 擴充
 
-新增 `search_radio_log` tool，讓 chat 時 LLM 可查詢 radio log：
+不新增獨立 tool。現有 `search_logcat` tool 已可搜尋 logcat entries，且 backend search API 已支援 `buffer=radio` 過濾。只需在 `search_logcat` 的 LLM tool schema 中新增 `buffer` 參數，讓 LLM 知道可以指定 buffer 過濾。
 
 ```typescript
-{
-  name: 'search_radio_log',
-  description: 'Search radio log entries by keyword, tag, or time range',
-  parameters: { keyword, tag, startTime, endTime }
+// tool-definitions.ts — 在 search_logcat parameters 中新增：
+buffer: {
+  type: 'string',
+  enum: ['main', 'system', 'events', 'crash', 'radio'],
+  description: 'Filter by logcat buffer (e.g. "radio" for telephony logs)'
 }
 ```
-
-透過現有 FTS5 search 實現，radio entries 已在 `logcat_fts` 中，加 `buffer='radio'` 過濾即可。
 
 ---
 
@@ -310,15 +346,6 @@ When analyzing telephony insights, focus on:
 ```typescript
 const radioEntries = allEntries.filter(e => e.buffer === 'radio');
 const telephonyStatus = parseTelephonySections(unpackResult.sections, radioEntries);
-```
-
-### AnalysisResult 擴充
-
-```typescript
-export interface AnalysisResult {
-  // ... 現有欄位
-  telephonyStatus?: TelephonyParseResult;
-}
 ```
 
 ### 匯出支援
@@ -355,18 +382,19 @@ export interface AnalysisResult {
 | `packages/parser/src/telephony-parser.ts` | Telephony 解析模組 |
 | `packages/parser/tests/telephony-parser.test.ts` | Parser 單元測試 |
 | `packages/frontend/src/components/TelephonyOverview.tsx` | 前端顯示元件 |
+| `packages/frontend/e2e/tests/telephony.spec.ts` | E2E 測試 |
 
 ### 修改
 
 | 檔案 | 變更 |
 |------|------|
-| `packages/parser/src/types.ts` | 新增 telephony 相關型別、InsightCategory 加 `'telephony'` |
+| `packages/parser/src/types.ts` | 新增 telephony 型別、`InsightCategory` 加 `'telephony'`、`InsightCard.source` 加 `'telephony'`、`TimelineEvent.source` 加 `'telephony'`、`BasicAnalyzerInput` 加 `telephonyStatus`、`AnalysisResult` 加 `telephonyStatus` |
 | `packages/parser/src/index.ts` | 匯出 telephony-parser |
-| `packages/parser/src/basic-analyzer.ts` | 新增 `generateTelephonyInsights()`、健康評分扣分 |
+| `packages/parser/src/basic-analyzer.ts` | 新增 `generateTelephonyInsights()`、健康評分扣分、`buildTimeline()` 加 telephony 事件 |
 | `packages/backend/src/routes/analyze.ts` | 呼叫 `parseTelephonySections()`、結果存入 AnalysisResult |
-| `packages/backend/src/llm-gateway/prompt-templates/context-builder.ts` | 新增 `collectTelephonyContext()` |
+| `packages/backend/src/llm-gateway/prompt-templates/context-builder.ts` | `buildInsightContexts()` 加 telephony dispatch 分支、新增 `collectTelephonyContext()` |
 | `packages/backend/src/llm-gateway/prompt-templates/analysis.ts` | Prompt 加 telephony 區塊 |
-| `packages/backend/src/llm-gateway/tool-definitions.ts` | 新增 `search_radio_log` tool |
-| `packages/backend/src/llm-gateway/tool-executor.ts` | 實作 `search_radio_log` |
+| `packages/backend/src/llm-gateway/tool-definitions.ts` | `search_logcat` tool schema 加 `buffer` 參數 |
 | `packages/frontend/src/App.tsx` | 新增 section-telephony nav + 渲染 |
 | `packages/frontend/src/lib/types.ts` | Mirror telephony 型別 |
+| `CLAUDE.md` | 新增 telephony-parser 說明 |
