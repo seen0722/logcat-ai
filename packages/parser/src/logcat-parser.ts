@@ -14,8 +14,9 @@ import {
 // MM-DD HH:mm:ss.SSS  PID  TID LEVEL TAG: MESSAGE
 // With -v uid format (Android 8+):
 // MM-DD HH:mm:ss.SSS  UID  PID  TID LEVEL TAG: MESSAGE
+// UID can be numeric (e.g. 1001) or string (e.g. root, system) in radio log
 const LOGCAT_LINE_RE =
-  /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(.+?):\s+(.*)/;
+  /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\S+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(.+?):\s+(.*)/;
 const LOGCAT_LINE_NO_UID_RE =
   /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(.+?):\s+(.*)/;
 

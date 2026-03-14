@@ -137,13 +137,25 @@ function filterIntMax(value: number): number | undefined {
  * Parse SignalStrength from dumpsys content.
  */
 export function parseSignalStrengthSnapshot(content: string): SignalStrengthSnapshot | undefined {
-  const sigMatch = content.match(/mSignalStrength=SignalStrength:\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/s);
-  if (!sigMatch) return undefined;
-
-  const sigContent = sigMatch[1];
+  // Extract content between outermost braces, handling one level of nesting (e.g. mNr={...})
+  const sigStart = content.indexOf('mSignalStrength=SignalStrength:{');
+  if (sigStart < 0) return undefined;
+  const braceStart = content.indexOf('{', sigStart);
+  let depth = 0;
+  let braceEnd = -1;
+  for (let i = braceStart; i < content.length; i++) {
+    if (content[i] === '{') depth++;
+    else if (content[i] === '}') {
+      depth--;
+      if (depth === 0) { braceEnd = i; break; }
+    }
+  }
+  if (braceEnd < 0) return undefined;
+  const sigContent = content.slice(braceStart + 1, braceEnd);
 
   // Determine primary technology
-  const primaryMatch = sigContent.match(/primary=CellSignalStrength(\w+):/);
+  // Format: "primary=CellSignalStrengthLte}" or at end of content "primary=CellSignalStrengthLte"
+  const primaryMatch = sigContent.match(/primary=CellSignalStrength(\w+)/);
   if (!primaryMatch) return undefined;
 
   const techName = primaryMatch[1]; // Lte, Nr, Wcdma, Gsm, Cdma
@@ -158,10 +170,17 @@ export function parseSignalStrengthSnapshot(content: string): SignalStrengthSnap
   const technology = techMap[techName];
   if (!technology) return undefined;
 
-  // Extract the primary line
-  const primaryLineMatch = sigContent.match(new RegExp(`primary=CellSignalStrength${techName}:\\s*([^\\n]+)`));
-  if (!primaryLineMatch) return undefined;
-  const primaryLine = primaryLineMatch[1];
+  // Extract the primary technology's data section
+  // Format 1 (real): "mLte=CellSignalStrengthLte: rssi=-55 rsrp=-77 ... level=4,mNr=...,primary=CellSignalStrengthLte"
+  // Format 2 (alt):  "primary=CellSignalStrengthLte: rssi=-89 rsrp=-105 ... level=2 parametersUseForLevel=0"
+  const techKey = `m${techName}=CellSignalStrength${techName}`;
+  let techLineMatch = sigContent.match(new RegExp(`${techKey}:\\s*(.+?)(?:,m[A-Z]|,primary|$)`));
+  if (!techLineMatch) {
+    // Fallback: data inline after primary= declaration
+    techLineMatch = sigContent.match(new RegExp(`primary=CellSignalStrength${techName}:\\s*(.+?)(?:\\n|$)`));
+  }
+  if (!techLineMatch) return undefined;
+  const primaryLine = techLineMatch[1];
 
   // Parse level
   const levelMatch = primaryLine.match(/level=(\d+)/);
@@ -223,51 +242,82 @@ function parseTimestampToMs(ts: string): number {
     parseInt(hour), parseInt(min), parseInt(sec), parseInt(ms)).getTime();
 }
 
+const SS_REG_PATTERN = /mVoiceRegState=\d+\((\w+)\),\s*mDataRegState=\d+\((\w+)\)/;
+
 function detectOosEvents(entries: LogEntry[]): OosEvent[] {
   const events: OosEvent[] = [];
   let oosStartTimestamp: string | undefined;
 
-  const OOS_PATTERN = /\[\d+\] Poll ServiceState done:.*?oldSS=\{mVoiceRegState=\d+\((\w+)\),\s*mDataRegState=\d+\((\w+)\)\}.*?newSS=\{mVoiceRegState=\d+\((\w+)\),\s*mDataRegState=\d+\((\w+)\)\}/;
+  // In real bugreports, oldSS and newSS are on separate log entries (same timestamp).
+  // We need to pair them: first see oldSS line, then newSS line.
+  let pendingOldVoice: string | undefined;
+  let pendingOldData: string | undefined;
+  let pendingTimestamp: string | undefined;
 
   for (const entry of entries) {
     if (entry.tag.trim() !== 'SST') continue;
+    if (!entry.message.includes('Poll ServiceState done:')) continue;
 
-    const match = entry.message.match(OOS_PATTERN);
-    if (!match) continue;
-
-    const [, oldVoice, oldData, newVoice, newData] = match;
-
-    const wasOos = oldVoice === 'OUT_OF_SERVICE' || oldData === 'OUT_OF_SERVICE';
-    const isOos = newVoice === 'OUT_OF_SERVICE' || newData === 'OUT_OF_SERVICE';
-    const wasInService = oldVoice === 'IN_SERVICE' && oldData === 'IN_SERVICE';
-    const isInService = newVoice === 'IN_SERVICE' && newData === 'IN_SERVICE';
-
-    if (!wasOos && isOos) {
-      // Transition to OOS
-      const domain = (newVoice === 'OUT_OF_SERVICE' && newData === 'OUT_OF_SERVICE')
-        ? 'both'
-        : newVoice === 'OUT_OF_SERVICE' ? 'voice' : 'data';
-
-      oosStartTimestamp = entry.timestamp;
-      events.push({
-        timestamp: entry.timestamp,
-        type: 'oos_start',
-        domain,
-      });
-    } else if (wasOos && isInService && oosStartTimestamp) {
-      // Transition back to service
-      const durationMs = parseTimestampToMs(entry.timestamp) - parseTimestampToMs(oosStartTimestamp);
-      events.push({
-        timestamp: entry.timestamp,
-        type: 'oos_end',
-        domain: 'both',
-        durationMs,
-      });
-      oosStartTimestamp = undefined;
+    if (entry.message.includes('oldSS=')) {
+      const match = entry.message.match(SS_REG_PATTERN);
+      if (match) {
+        pendingOldVoice = match[1];
+        pendingOldData = match[2];
+        pendingTimestamp = entry.timestamp;
+      }
+      // Also check if newSS is on the same line (single-line format from some devices)
+      const newSSIdx = entry.message.indexOf('newSS=');
+      if (newSSIdx >= 0) {
+        const newSSPart = entry.message.slice(newSSIdx);
+        const newMatch = newSSPart.match(SS_REG_PATTERN);
+        if (newMatch && pendingOldVoice && pendingOldData) {
+          processTransition(events, pendingOldVoice, pendingOldData,
+            newMatch[1], newMatch[2], entry.timestamp, oosStartTimestamp,
+            (ts) => { oosStartTimestamp = ts; });
+          pendingOldVoice = undefined;
+          pendingOldData = undefined;
+        }
+      }
+    } else if (entry.message.includes('newSS=') && pendingOldVoice && pendingOldData) {
+      const match = entry.message.match(SS_REG_PATTERN);
+      if (match) {
+        processTransition(events, pendingOldVoice, pendingOldData,
+          match[1], match[2], pendingTimestamp ?? entry.timestamp, oosStartTimestamp,
+          (ts) => { oosStartTimestamp = ts; });
+      }
+      pendingOldVoice = undefined;
+      pendingOldData = undefined;
     }
   }
 
   return events;
+}
+
+function processTransition(
+  events: OosEvent[],
+  oldVoice: string, oldData: string,
+  newVoice: string, newData: string,
+  timestamp: string,
+  oosStartTimestamp: string | undefined,
+  setOosStart: (ts: string | undefined) => void,
+): void {
+  const wasOos = oldVoice === 'OUT_OF_SERVICE' || oldData === 'OUT_OF_SERVICE';
+  const isOos = newVoice === 'OUT_OF_SERVICE' || newData === 'OUT_OF_SERVICE';
+  const wasInService = oldVoice === 'IN_SERVICE' && oldData === 'IN_SERVICE';
+  const isInService = newVoice === 'IN_SERVICE' && newData === 'IN_SERVICE';
+
+  if (!wasOos && isOos) {
+    const domain = (newVoice === 'OUT_OF_SERVICE' && newData === 'OUT_OF_SERVICE')
+      ? 'both'
+      : newVoice === 'OUT_OF_SERVICE' ? 'voice' : 'data';
+
+    setOosStart(timestamp);
+    events.push({ timestamp, type: 'oos_start', domain });
+  } else if (wasOos && isInService && oosStartTimestamp) {
+    const durationMs = parseTimestampToMs(timestamp) - parseTimestampToMs(oosStartTimestamp);
+    events.push({ timestamp, type: 'oos_end', domain: 'both', durationMs });
+    setOosStart(undefined);
+  }
 }
 
 // ============================================================
