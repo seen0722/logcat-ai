@@ -48,7 +48,7 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent, powerStatus } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent, powerStatus, telephonyStatus } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties, uptimeContent);
 
@@ -67,6 +67,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
 
   const tagInsights = generateTagInsights(logcatResult.tagStats);
   const powerInsights = generatePowerInsights(powerStatus);
+  const telephonyInsights = generateTelephonyInsights(telephonyStatus);
 
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
@@ -84,6 +85,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...tombstoneInsights,
     ...tagInsights,
     ...powerInsights,
+    ...telephonyInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -97,8 +99,8 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     card.id = `insight-${i + 1}`;
   });
 
-  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs);
-  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses, powerStatus);
+  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs, telephonyStatus);
+  const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses, powerStatus, telephonyStatus);
 
   // Link timeline events to their corresponding insights
   linkTimelineToInsights(timeline, insights);
@@ -118,6 +120,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(tombstoneAnalyses && tombstoneAnalyses.length > 0 ? { tombstoneAnalyses } : {}),
     ...(logcatResult.tagStats && logcatResult.tagStats.length > 0 ? { logTagStats: logcatResult.tagStats } : {}),
     ...(powerStatus ? { powerStatus } : {}),
+    ...(telephonyStatus ? { telephonyStatus } : {}),
   };
 }
 
@@ -1213,6 +1216,167 @@ function generatePowerInsights(power?: PowerParseResult): InsightCard[] {
 }
 
 // ============================================================
+// Telephony Insights
+// ============================================================
+
+const TELEPHONY_DEBUG_COMMANDS = [
+  'adb shell dumpsys telephony.registry',
+  'adb shell dumpsys phone',
+  'adb shell logcat -b radio -d | grep -E "SST|RIL|RILJ"',
+];
+
+function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCard[] {
+  if (!telephony) return [];
+  const insights: InsightCard[] = [];
+
+  // 1. Current OOS
+  if (telephony.serviceState) {
+    const { voiceState, dataState } = telephony.serviceState;
+    if (voiceState === 'OUT_OF_SERVICE' || dataState === 'OUT_OF_SERVICE') {
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'telephony',
+        title: `Device currently out of service (voice: ${voiceState}, data: ${dataState})`,
+        description: `The device is currently out of service. Voice: ${voiceState}, Data: ${dataState}. ` +
+          `This may indicate modem failure, SIM issue, or network problem.`,
+        source: 'telephony',
+        debugCommands: TELEPHONY_DEBUG_COMMANDS,
+      });
+    }
+  }
+
+  // 2. Frequent OOS
+  const oosStarts = telephony.oosEvents.filter(e => e.type === 'oos_start');
+  const totalOosDurationMs = telephony.oosEvents
+    .filter(e => e.type === 'oos_end')
+    .reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  if (oosStarts.length >= 3 || totalOosDurationMs > 5 * 60 * 1000) {
+    insights.push({
+      id: '',
+      severity: 'critical',
+      category: 'telephony',
+      title: `Frequent service outage: ${oosStarts.length} times, total ${Math.round(totalOosDurationMs / 60000)} min`,
+      description: `Device experienced ${oosStarts.length} OOS events with total duration of ${Math.round(totalOosDurationMs / 60000)} minutes. ` +
+        `Frequent service outages indicate modem instability or persistent network issues.`,
+      source: 'telephony',
+      debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  // 3. Long OOS (each oos_end with durationMs > 30s)
+  for (const oos of telephony.oosEvents) {
+    if (oos.type === 'oos_end' && oos.durationMs && oos.durationMs > 30000) {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'telephony',
+        title: `Service outage lasted ${Math.round(oos.durationMs / 1000)} seconds (${oos.domain})`,
+        description: `A ${oos.domain} service outage lasted ${Math.round(oos.durationMs / 1000)} seconds at ${oos.timestamp}. ` +
+          `Extended outages may indicate modem recovery issues or weak signal area.`,
+        timestamp: oos.timestamp,
+        source: 'telephony',
+        debugCommands: TELEPHONY_DEBUG_COMMANDS,
+      });
+    }
+  }
+
+  // 4. Modem crash/restart
+  for (const err of telephony.rilErrors) {
+    if (err.errorType === 'radio_crash' || err.errorType === 'modem_restart') {
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'telephony',
+        title: `Modem ${err.errorType === 'radio_crash' ? 'crash' : 'restart'} detected`,
+        description: `Modem ${err.errorType.replace('_', ' ')} at ${err.timestamp}: ${err.message.slice(0, 200)}. ` +
+          `This is a critical hardware/firmware issue that causes service disruption.`,
+        timestamp: err.timestamp,
+        source: 'telephony',
+        debugCommands: TELEPHONY_DEBUG_COMMANDS,
+      });
+    }
+  }
+
+  // 5. Frequent modem errors
+  const modemErrCount = telephony.rilErrors.filter(e => e.errorType === 'modem_err').length;
+  if (modemErrCount >= 5) {
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'telephony',
+      title: `Frequent RIL modem errors (${modemErrCount} times)`,
+      description: `${modemErrCount} modem errors detected in radio logs. ` +
+        `Frequent modem errors may indicate baseband firmware issues or hardware problems.`,
+      source: 'telephony',
+      debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  // 6. Call drop
+  for (const call of telephony.callEvents) {
+    if (call.type === 'call_drop') {
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'telephony',
+        title: 'Call drop detected',
+        description: `Call dropped at ${call.timestamp}${call.failReason ? `: ${call.failReason}` : ''}. ` +
+          `Call drops may be caused by weak signal, modem issues, or network handover failure.`,
+        timestamp: call.timestamp,
+        source: 'telephony',
+        debugCommands: TELEPHONY_DEBUG_COMMANDS,
+      });
+    }
+  }
+
+  // 7. SMS failure
+  const smsFailCount = telephony.smsEvents.filter(e => e.type === 'sms_send_fail').length;
+  if (smsFailCount > 0) {
+    insights.push({
+      id: '',
+      severity: 'warning',
+      category: 'telephony',
+      title: `SMS send failure (${smsFailCount} times)`,
+      description: `${smsFailCount} SMS send failure(s) detected. ` +
+        `This may indicate network registration issues or SMS center configuration problems.`,
+      source: 'telephony',
+      debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  // 8. Weak signal
+  if (telephony.signalStrength && telephony.signalStrength.level <= 1) {
+    insights.push({
+      id: '',
+      severity: 'info',
+      category: 'telephony',
+      title: `Weak signal quality (level=${telephony.signalStrength.level}, ${telephony.signalStrength.technology})`,
+      description: `Signal strength level is ${telephony.signalStrength.level}/4 on ${telephony.signalStrength.technology}. ` +
+        `Weak signal can cause increased power consumption, call drops, and data connection issues.`,
+      source: 'telephony',
+      debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  // 9. Frequent RAT changes
+  if (telephony.ratChanges.length >= 5) {
+    insights.push({
+      id: '',
+      severity: 'info',
+      category: 'telephony',
+      title: `Frequent RAT switching (${telephony.ratChanges.length} times)`,
+      description: `${telephony.ratChanges.length} radio access technology changes detected. ` +
+        `Frequent RAT switching increases power consumption and may indicate weak or unstable network coverage.`,
+      source: 'telephony',
+      debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  return insights;
+}
+
+// ============================================================
 // Timeline ↔ Insight Linking
 // ============================================================
 
@@ -1343,6 +1507,7 @@ export function buildTimeline(
   anrAnalyses: ANRTraceAnalysis[],
   tombstoneAnalyses?: TombstoneAnalysis[],
   bootEpochMs?: number,
+  telephonyStatus?: TelephonyParseResult,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -1397,6 +1562,41 @@ export function buildTimeline(
         label: analysis.summary,
         details: analysis.crashedInBinary ?? undefined,
       });
+    }
+  }
+
+  // Telephony events
+  if (telephonyStatus) {
+    for (const oos of telephonyStatus.oosEvents) {
+      if (oos.type === 'oos_start') {
+        events.push({
+          timestamp: oos.timestamp,
+          source: 'telephony',
+          severity: 'warning',
+          label: `OOS start (${oos.domain})`,
+        });
+      }
+    }
+    for (const err of telephonyStatus.rilErrors) {
+      if (err.errorType === 'radio_crash' || err.errorType === 'modem_restart') {
+        events.push({
+          timestamp: err.timestamp,
+          source: 'telephony',
+          severity: 'critical',
+          label: `Modem ${err.errorType === 'radio_crash' ? 'crash' : 'restart'}`,
+          details: err.message.slice(0, 100),
+        });
+      }
+    }
+    for (const call of telephonyStatus.callEvents) {
+      if (call.type === 'call_drop') {
+        events.push({
+          timestamp: call.timestamp,
+          source: 'telephony',
+          severity: 'warning',
+          label: 'Call drop',
+        });
+      }
     }
   }
 
@@ -1544,6 +1744,7 @@ export function calculateHealthScore(
   cpuInfo?: CpuInfoSummary,
   tombstoneAnalyses?: TombstoneAnalysis[],
   powerStatus?: PowerParseResult,
+  telephonyStatus?: TelephonyParseResult,
 ): SystemHealthScore {
   let stability = calcStabilityScore(logcatResult, kernelResult, tombstoneAnalyses);
   let memory = calcMemoryScore(logcatResult, kernelResult);
@@ -1579,6 +1780,33 @@ export function calculateHealthScore(
     else if (cpuInfo.totalCpuPercent > 80) responsiveness -= 8;
     if (cpuInfo.ioWaitPercent > 30) responsiveness -= 10;
     else if (cpuInfo.ioWaitPercent > 20) responsiveness -= 5;
+    responsiveness = clamp(responsiveness, 0, 100);
+  }
+
+  // Factor in telephony issues
+  if (telephonyStatus) {
+    const oosStarts = telephonyStatus.oosEvents.filter(e => e.type === 'oos_start');
+    for (let i = 0; i < oosStarts.length && i < 5; i++) {
+      const factor = i === 0 ? 1 : i === 1 ? 0.5 : i === 2 ? 0.25 : 0.1;
+      stability -= 8 * factor;
+    }
+    const modemCrashes = telephonyStatus.rilErrors.filter(
+      e => e.errorType === 'radio_crash' || e.errorType === 'modem_restart'
+    );
+    for (let i = 0; i < modemCrashes.length && i < 3; i++) {
+      const factor = i === 0 ? 1 : i === 1 ? 0.5 : 0.25;
+      stability -= 10 * factor;
+    }
+    stability = clamp(stability, 0, 100);
+
+    const callDrops = telephonyStatus.callEvents.filter(e => e.type === 'call_drop');
+    for (let i = 0; i < callDrops.length && i < 3; i++) {
+      responsiveness -= 5 * (i === 0 ? 1 : 0.5);
+    }
+    const smsFails = telephonyStatus.smsEvents.filter(e => e.type === 'sms_send_fail');
+    for (let i = 0; i < smsFails.length && i < 3; i++) {
+      responsiveness -= 3 * (i === 0 ? 1 : 0.5);
+    }
     responsiveness = clamp(responsiveness, 0, 100);
   }
 
