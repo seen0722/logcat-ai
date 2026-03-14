@@ -13,6 +13,7 @@ import {
   parseLshal,
   parseTombstones,
   parsePowerSections,
+  parseTelephonySections,
   detectLogFormat,
   AnalysisResult,
   DeepAnalysisOverview,
@@ -204,6 +205,13 @@ router.get('/:id', async (req: Request, res: Response) => {
       // Parse power management sections (dumpsys power, deviceidle, batterystats, alarm)
       const powerStatus = parsePowerSections(unpackResult.sections, kernelResult.entries);
 
+      // Parse telephony sections (dumpsys telephony.registry + radio log entries)
+      const radioEntries: LogEntry[] = [];
+      for (const entry of logcatResult.entries) {
+        if (entry.buffer === 'radio') radioEntries.push(entry);
+      }
+      const telephonyStatus = parseTelephonySections(unpackResult.sections, radioEntries);
+
       if (aborted) return;
       sendSSE(res, { stage: 'parsing', progress: 65, message: 'Parsing complete' });
 
@@ -264,6 +272,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         systemProperties,
         uptimeContent,
         powerStatus,
+        telephonyStatus,
       });
 
       // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
