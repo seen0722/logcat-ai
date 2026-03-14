@@ -20,6 +20,7 @@ import {
   TagStat,
   TombstoneAnalysis,
   PowerParseResult,
+  TelephonyParseResult,
 } from './types.js';
 import { generateSELinuxAllowRule } from './kernel-parser.js';
 
@@ -39,6 +40,7 @@ export interface BasicAnalyzerInput {
   systemProperties?: string;
   uptimeContent?: string;
   powerStatus?: PowerParseResult;
+  telephonyStatus?: TelephonyParseResult;
 }
 
 /**

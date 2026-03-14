@@ -407,7 +407,7 @@ export interface TombstoneParseResult {
 
 export type Severity = 'critical' | 'warning' | 'info';
 
-export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability' | 'power';
+export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability' | 'power' | 'telephony';
 
 export interface InsightCard {
   id: string;
@@ -418,7 +418,7 @@ export interface InsightCard {
   relatedLogSnippet?: string;       // relevant log excerpt
   stackTrace?: string;              // relevant stack trace
   timestamp?: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone' | 'power';
+  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone' | 'power' | 'telephony';
   suggestedAllowRule?: string;      // SELinux allow rule suggestion
   debugCommands?: string[];         // suggested debug commands
   deepAnalysis?: {                  // filled by LLM in Deep Analysis mode
@@ -436,7 +436,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;                // normalized ISO timestamp or relative
-  source: 'logcat' | 'anr' | 'kernel' | 'tombstone';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony';
   severity: Severity;
   label: string;
   details?: string;
@@ -487,6 +487,7 @@ export interface AnalysisResult {
   logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
   powerStatus?: PowerParseResult;
+  telephonyStatus?: TelephonyParseResult;
 }
 
 // ============================================================
@@ -626,6 +627,80 @@ export interface PowerParseResult {
   estimatedPowerUse?: EstimatedPowerUse;
   connectivityStats?: ConnectivityStats;
   partialWakeLocks?: PartialWakeLockStat[];
+}
+
+// ============================================================
+// Telephony
+// ============================================================
+
+export interface TelephonyParseResult {
+  serviceState?: ServiceStateSnapshot;
+  signalStrength?: SignalStrengthSnapshot;
+  oosEvents: OosEvent[];
+  rilErrors: RilError[];
+  callEvents: CallEvent[];
+  smsEvents: SmsEvent[];
+  ratChanges: RatChangeEvent[];
+  simSlotCount: number;
+}
+
+export interface ServiceStateSnapshot {
+  slotId: number;
+  voiceState: 'IN_SERVICE' | 'OUT_OF_SERVICE' | 'EMERGENCY_ONLY' | 'POWER_OFF';
+  dataState: 'IN_SERVICE' | 'OUT_OF_SERVICE' | 'EMERGENCY_ONLY' | 'POWER_OFF';
+  operator?: string;
+  mccMnc?: string;
+  rat?: string;
+  roaming: boolean;
+}
+
+export interface SignalStrengthSnapshot {
+  slotId: number;
+  technology: 'WCDMA' | 'LTE' | 'NR' | 'GSM' | 'CDMA';
+  rsrp?: number;
+  rsrq?: number;
+  sinr?: number;
+  rscp?: number;
+  ecno?: number;
+  rssi?: number;
+  level: number;
+}
+
+export interface OosEvent {
+  timestamp: string;
+  type: 'oos_start' | 'oos_end';
+  domain: 'voice' | 'data' | 'both';
+  durationMs?: number;
+  previousRat?: string;
+}
+
+export interface RilError {
+  timestamp: string;
+  errorType: 'modem_err' | 'timeout' | 'radio_crash' | 'ril_restart'
+           | 'request_not_supported' | 'modem_restart' | 'radio_not_available';
+  request?: string;
+  errorCode?: number;
+  message: string;
+}
+
+export interface CallEvent {
+  timestamp: string;
+  type: 'call_start' | 'call_end' | 'call_drop' | 'call_fail';
+  number?: string;
+  duration?: number;
+  failReason?: string;
+}
+
+export interface SmsEvent {
+  timestamp: string;
+  type: 'sms_send_success' | 'sms_send_fail' | 'sms_receive';
+  failReason?: string;
+}
+
+export interface RatChangeEvent {
+  timestamp: string;
+  fromRat: string;
+  toRat: string;
 }
 
 // ============================================================

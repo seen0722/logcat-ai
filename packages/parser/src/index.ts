@@ -10,3 +10,4 @@ export * from './format-detector.js';
 export * from './comparison.js';
 export * from './batch-analyzer.js';
 export * from './power-parser.js';
+export * from './telephony-parser.js';
