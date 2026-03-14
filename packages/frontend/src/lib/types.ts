@@ -427,6 +427,12 @@ export interface RatChangeEvent {
   toRat: string;
 }
 
+export interface DumpsysOosPeriod {
+  start: string;
+  end?: string;
+  durationMs?: number;
+}
+
 export interface TelephonyParseResult {
   serviceState?: ServiceStateSnapshot;
   signalStrength?: SignalStrengthSnapshot;
@@ -436,6 +442,9 @@ export interface TelephonyParseResult {
   smsEvents: SmsEvent[];
   ratChanges: RatChangeEvent[];
   simSlotCount: number;
+  dumpsysOosPeriods?: DumpsysOosPeriod[];
+  modemRestartCount?: number;
+  radioLogTimeRange?: { start: string; end: string };
 }
 
 export interface AnalysisResult {

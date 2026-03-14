@@ -642,6 +642,21 @@ export interface TelephonyParseResult {
   smsEvents: SmsEvent[];
   ratChanges: RatChangeEvent[];
   simSlotCount: number;
+  /** Cumulative OOS periods from dumpsys phone (covers full uptime, not just radio log buffer) */
+  dumpsysOosPeriods?: DumpsysOosPeriod[];
+  /** Modem restart count from dumpsys isub SIM state UNKNOWN cycles */
+  modemRestartCount?: number;
+  /** Radio log buffer time coverage */
+  radioLogTimeRange?: { start: string; end: string };
+}
+
+export interface DumpsysOosPeriod {
+  /** ISO timestamp of OOS start (from dumpsys phone updateDataRoamingStatus NOT_IN_SERVICE) */
+  start: string;
+  /** ISO timestamp of OOS end (dataAllowed=true) */
+  end?: string;
+  /** Duration in milliseconds */
+  durationMs?: number;
 }
 
 export interface ServiceStateSnapshot {

@@ -1246,19 +1246,27 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCar
     }
   }
 
-  // 2. Frequent OOS
+  // 2. OOS summary — prefer dumpsys (full uptime) over radio log (buffer only)
+  const dumpsysPeriods = telephony.dumpsysOosPeriods ?? [];
   const oosStarts = telephony.oosEvents.filter(e => e.type === 'oos_start');
-  const totalOosDurationMs = telephony.oosEvents
-    .filter(e => e.type === 'oos_end')
-    .reduce((sum, e) => sum + (e.durationMs || 0), 0);
-  if (oosStarts.length >= 3 || totalOosDurationMs > 5 * 60 * 1000) {
+  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : oosStarts.length;
+  const totalOosDurationMs = dumpsysPeriods.length > 0
+    ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
+    : telephony.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  const modemRestarts = telephony.modemRestartCount ?? 0;
+
+  if (oosCount >= 3 || totalOosDurationMs > 5 * 60 * 1000) {
+    const totalMin = Math.round(totalOosDurationMs / 60000);
+    const label = oosCount >= 4 ? 'Frequent' : oosCount >= 2 ? 'Recurring' : 'Extended';
+    const modemNote = modemRestarts > 0 ? `, ${modemRestarts} modem restarts` : '';
     insights.push({
       id: '',
       severity: 'critical',
       category: 'telephony',
-      title: `Frequent service outage: ${oosStarts.length} times, total ${Math.round(totalOosDurationMs / 60000)} min`,
-      description: `Device experienced ${oosStarts.length} OOS events with total duration of ${Math.round(totalOosDurationMs / 60000)} minutes. ` +
-        `Frequent service outages indicate modem instability or persistent network issues.`,
+      title: `${label} service outage: ${oosCount} times, total ${totalMin} min${modemNote}`,
+      description: `Device experienced ${oosCount} OOS periods with total duration of ${totalMin} minutes${modemNote}. ` +
+        (dumpsysPeriods.length > 0 ? `(Source: dumpsys phone, covers full uptime) ` : '') +
+        `${label === 'Frequent' ? 'Frequent' : 'Recurring'} service outages indicate modem instability or persistent network issues.`,
       source: 'telephony',
       debugCommands: TELEPHONY_DEBUG_COMMANDS,
     });
@@ -1783,17 +1791,21 @@ export function calculateHealthScore(
     responsiveness = clamp(responsiveness, 0, 100);
   }
 
-  // Factor in telephony issues
+  // Factor in telephony issues — prefer dumpsys counts (full uptime)
   if (telephonyStatus) {
-    const oosStarts = telephonyStatus.oosEvents.filter(e => e.type === 'oos_start');
-    for (let i = 0; i < oosStarts.length && i < 5; i++) {
+    const dumpsysOosCount = telephonyStatus.dumpsysOosPeriods?.length ?? 0;
+    const radioOosCount = telephonyStatus.oosEvents.filter(e => e.type === 'oos_start').length;
+    const oosCount = dumpsysOosCount > 0 ? dumpsysOosCount : radioOosCount;
+    for (let i = 0; i < oosCount && i < 5; i++) {
       const factor = i === 0 ? 1 : i === 1 ? 0.5 : i === 2 ? 0.25 : 0.1;
       stability -= 8 * factor;
     }
-    const modemCrashes = telephonyStatus.rilErrors.filter(
+    const modemRestartCount = telephonyStatus.modemRestartCount ?? 0;
+    const rilModemCrashes = telephonyStatus.rilErrors.filter(
       e => e.errorType === 'radio_crash' || e.errorType === 'modem_restart'
-    );
-    for (let i = 0; i < modemCrashes.length && i < 3; i++) {
+    ).length;
+    const modemCrashCount = Math.max(modemRestartCount, rilModemCrashes);
+    for (let i = 0; i < modemCrashCount && i < 3; i++) {
       const factor = i === 0 ? 1 : i === 1 ? 0.5 : 0.25;
       stability -= 10 * factor;
     }

@@ -36,10 +36,14 @@ export default function TelephonyOverview({ telephonyStatus }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const tel = telephonyStatus;
 
-  const oosStarts = tel.oosEvents.filter(e => e.type === 'oos_start');
-  const totalOosMs = tel.oosEvents
-    .filter(e => e.type === 'oos_end')
-    .reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  // Prefer dumpsys OOS data (full uptime) over radio log (buffer only)
+  const dumpsysPeriods = tel.dumpsysOosPeriods ?? [];
+  const radioOosStarts = tel.oosEvents.filter(e => e.type === 'oos_start');
+  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : radioOosStarts.length;
+  const totalOosMs = dumpsysPeriods.length > 0
+    ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
+    : tel.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  const hasDumpsysData = dumpsysPeriods.length > 0;
 
   const criticalRilErrors = tel.rilErrors.filter(
     e => e.errorType === 'radio_crash' || e.errorType === 'modem_restart'
@@ -86,10 +90,10 @@ export default function TelephonyOverview({ telephonyStatus }: Props) {
         </div>
 
         {/* OOS Count */}
-        <div className={`rounded-lg p-3 border ${oosStarts.length > 0 ? 'bg-amber-900/20 border-amber-700/30' : 'bg-surface border-border'}`}>
+        <div className={`rounded-lg p-3 border ${oosCount > 0 ? 'bg-amber-900/20 border-amber-700/30' : 'bg-surface border-border'}`}>
           <div className="text-xs text-gray-500 mb-1">OOS Count</div>
-          <div className={`text-lg font-bold ${oosStarts.length >= 3 ? 'text-red-400' : oosStarts.length > 0 ? 'text-amber-400' : 'text-gray-300'}`}>
-            {oosStarts.length}
+          <div className={`text-lg font-bold ${oosCount >= 3 ? 'text-red-400' : oosCount > 0 ? 'text-amber-400' : 'text-gray-300'}`}>
+            {oosCount}
           </div>
           {totalOosMs > 0 && (
             <div className="text-xs text-gray-500">{formatDuration(totalOosMs)} total</div>
@@ -124,7 +128,12 @@ export default function TelephonyOverview({ telephonyStatus }: Props) {
       </div>
 
       {/* Alert badges */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        {(tel.modemRestartCount ?? 0) > 0 && (
+          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-300 border border-red-700/50">
+            {tel.modemRestartCount} modem restart{(tel.modemRestartCount ?? 0) > 1 ? 's' : ''}
+          </span>
+        )}
         {callDrops.length > 0 && (
           <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-amber-900/50 text-amber-300 border border-amber-700/50">
             {callDrops.length} call drop{callDrops.length > 1 ? 's' : ''}
@@ -145,40 +154,79 @@ export default function TelephonyOverview({ telephonyStatus }: Props) {
             Operator: <span className="text-gray-300">{tel.serviceState.operator}</span>
           </span>
         )}
+        {tel.radioLogTimeRange && (
+          <span className="text-xs text-gray-500 ml-auto" title="Radio log buffer only covers a limited time window">
+            Radio log: {tel.radioLogTimeRange.start} ~ {tel.radioLogTimeRange.end}
+          </span>
+        )}
       </div>
 
       {/* Detailed sections - collapsible */}
       {showDetails && (
         <div className="space-y-4 pt-2 border-t border-border">
-          {/* OOS Event History */}
-          {tel.oosEvents.length > 0 && (
+          {/* OOS Event History — prefer dumpsys (full uptime) over radio log */}
+          {(hasDumpsysData || tel.oosEvents.length > 0) && (
             <div className="bg-surface rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-400">OOS Event History</h3>
+              <h3 className="text-sm font-semibold text-gray-400">
+                OOS Event History
+                {hasDumpsysData && (
+                  <span className="ml-2 text-xs font-normal text-indigo-400">(dumpsys — full uptime)</span>
+                )}
+              </h3>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-gray-500 border-b border-gray-700">
-                      <th className="text-left py-1 pr-2">Timestamp</th>
-                      <th className="text-left py-1 px-2">Type</th>
-                      <th className="text-left py-1 px-2">Domain</th>
-                      <th className="text-right py-1 pl-2">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tel.oosEvents.map((oos, i) => (
-                      <tr key={i} className="border-b border-gray-800">
-                        <td className="py-1 pr-2 text-gray-300 font-mono whitespace-nowrap">{oos.timestamp}</td>
-                        <td className={`py-1 px-2 ${oos.type === 'oos_start' ? 'text-red-400' : 'text-green-400'}`}>
-                          {oos.type === 'oos_start' ? 'OOS Start' : 'OOS End'}
-                        </td>
-                        <td className="py-1 px-2 text-gray-400">{oos.domain}</td>
-                        <td className="py-1 pl-2 text-right text-gray-400">
-                          {oos.durationMs ? formatDuration(oos.durationMs) : oos.type === 'oos_start' ? '' : 'ongoing'}
-                        </td>
+                {hasDumpsysData ? (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-500 border-b border-gray-700">
+                        <th className="text-left py-1 pr-2">#</th>
+                        <th className="text-left py-1 px-2">OOS Start</th>
+                        <th className="text-left py-1 px-2">OOS End</th>
+                        <th className="text-right py-1 pl-2">Duration</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {dumpsysPeriods.map((p, i) => (
+                        <tr key={i} className="border-b border-gray-800">
+                          <td className="py-1 pr-2 text-gray-500">{i + 1}</td>
+                          <td className="py-1 px-2 text-red-400 font-mono whitespace-nowrap">
+                            {p.start.replace('T', ' ').slice(5, 19)}
+                          </td>
+                          <td className="py-1 px-2 text-green-400 font-mono whitespace-nowrap">
+                            {p.end ? p.end.replace('T', ' ').slice(5, 19) : <span className="text-amber-400">ongoing</span>}
+                          </td>
+                          <td className="py-1 pl-2 text-right text-gray-400">
+                            {p.durationMs ? formatDuration(p.durationMs) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-500 border-b border-gray-700">
+                        <th className="text-left py-1 pr-2">Timestamp</th>
+                        <th className="text-left py-1 px-2">Type</th>
+                        <th className="text-left py-1 px-2">Domain</th>
+                        <th className="text-right py-1 pl-2">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tel.oosEvents.map((oos, i) => (
+                        <tr key={i} className="border-b border-gray-800">
+                          <td className="py-1 pr-2 text-gray-300 font-mono whitespace-nowrap">{oos.timestamp}</td>
+                          <td className={`py-1 px-2 ${oos.type === 'oos_start' ? 'text-red-400' : 'text-green-400'}`}>
+                            {oos.type === 'oos_start' ? 'OOS Start' : 'OOS End'}
+                          </td>
+                          <td className="py-1 px-2 text-gray-400">{oos.domain}</td>
+                          <td className="py-1 pl-2 text-right text-gray-400">
+                            {oos.durationMs ? formatDuration(oos.durationMs) : oos.type === 'oos_start' ? '' : 'ongoing'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}

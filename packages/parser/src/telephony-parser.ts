@@ -7,6 +7,7 @@ import {
   CallEvent,
   SmsEvent,
   RatChangeEvent,
+  DumpsysOosPeriod,
   BugreportSection,
   LogEntry,
 } from './types.js';
@@ -54,6 +55,30 @@ export function parseTelephonySections(
     result.ratChanges = detectRatChanges(radioLogEntries);
     result.callEvents = detectCallEvents(radioLogEntries);
     result.smsEvents = detectSmsEvents(radioLogEntries);
+
+    // Radio log buffer time coverage
+    const first = radioLogEntries[0];
+    const last = radioLogEntries[radioLogEntries.length - 1];
+    if (first && last) {
+      result.radioLogTimeRange = { start: first.timestamp, end: last.timestamp };
+    }
+  }
+
+  // Parse dumpsys for cumulative statistics (covers full uptime)
+  for (const section of sections) {
+    const c = section.content;
+    if (c.includes('DUMP OF SERVICE phone') || c.includes('updateDataRoamingStatus')) {
+      const periods = parseDumpsysOosPeriods(c);
+      if (periods.length > 0) {
+        result.dumpsysOosPeriods = periods;
+      }
+    }
+    if (c.includes('DUMP OF SERVICE isub') || c.includes('updateSimState:')) {
+      const count = parseModemRestartCount(c);
+      if (count > 0) {
+        result.modemRestartCount = count;
+      }
+    }
   }
 
   return result;
@@ -62,6 +87,16 @@ export function parseTelephonySections(
 // ============================================================
 // ServiceState Snapshot (DUMPSYS TELEPHONY)
 // ============================================================
+
+// Common MCC/MNC → operator name lookup (Taiwan, China, US, Japan, Korea, etc.)
+const MCCMNC_OPERATOR_MAP: Record<string, string> = {
+  '46601': '遠傳電信', '46692': '中華電信', '46697': '台灣大哥大',
+  '46693': '台灣之星', '46689': '台灣之星', '46605': 'APT',
+  '46000': '中國移動', '46001': '中國聯通', '46003': '中國電信', '46011': '中國電信',
+  '310260': 'T-Mobile', '311480': 'Verizon', '310410': 'AT&T',
+  '44010': 'NTT docomo', '44020': 'SoftBank', '44051': 'KDDI',
+  '45005': 'SKT', '45008': 'KT', '45006': 'LG U+',
+};
 
 const REG_STATE_MAP: Record<string, ServiceStateSnapshot['voiceState']> = {
   'IN_SERVICE': 'IN_SERVICE',
@@ -82,9 +117,12 @@ export function parseServiceStateSnapshot(content: string): ServiceStateSnapshot
   const voiceState = REG_STATE_MAP[stateMatch[1]] ?? 'OUT_OF_SERVICE';
   const dataState = REG_STATE_MAP[stateMatch[2]] ?? 'OUT_OF_SERVICE';
 
-  // Operator
+  // Operator — fallback to MCC/MNC lookup if dumpsys reports "null"
   const opMatch = content.match(/mOperatorAlphaLong=([^,\n]+)/);
-  const operator = opMatch?.[1]?.trim() || undefined;
+  let operator = opMatch?.[1]?.trim() || undefined;
+  if (!operator || operator === 'null' || operator === '') {
+    operator = undefined; // will be resolved via MCC/MNC below
+  }
 
   // RAT
   const ratMatch = content.match(/getRilVoiceRadioTechnology=\d+\((\w+)\)/);
@@ -111,6 +149,11 @@ export function parseServiceStateSnapshot(content: string): ServiceStateSnapshot
   // SlotId
   const slotMatch = content.match(/Phone Id=(\d+)/);
   const slotId = slotMatch ? parseInt(slotMatch[1], 10) : 0;
+
+  // Resolve operator name from MCC/MNC if not available from dumpsys
+  if (!operator && mccMnc) {
+    operator = MCCMNC_OPERATOR_MAP[mccMnc];
+  }
 
   return {
     slotId,
@@ -446,4 +489,89 @@ function detectSmsEvents(entries: LogEntry[]): SmsEvent[] {
   }
 
   return events;
+}
+
+// ============================================================
+// Dumpsys Phone — Cumulative OOS Period Detection
+// ============================================================
+
+// Pattern: 2026-02-25T20:31:02.101718 - updateDataRoamingStatus dataAllowed=false, disallowReasons=[NOT_IN_SERVICE, ...]
+const DUMPSYS_ROAMING_RE = /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)\s+-\s+updateDataRoamingStatus\s+dataAllowed=(\w+),\s*disallowReasons=\[([^\]]*)\]/;
+
+/**
+ * Parse OOS periods from dumpsys phone updateDataRoamingStatus history.
+ * This covers the full device uptime, unlike radio log which only has ~2h buffer.
+ */
+export function parseDumpsysOosPeriods(content: string): DumpsysOosPeriod[] {
+  const periods: DumpsysOosPeriod[] = [];
+  let currentOosStart: string | undefined;
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const m = line.match(DUMPSYS_ROAMING_RE);
+    if (!m) continue;
+
+    const [, timestamp, allowed, reasons] = m;
+    const isOos = reasons.includes('NOT_IN_SERVICE');
+
+    if (isOos && !currentOosStart) {
+      currentOosStart = timestamp;
+    } else if (!isOos && allowed === 'true' && currentOosStart) {
+      const startMs = new Date(currentOosStart).getTime();
+      const endMs = new Date(timestamp).getTime();
+      const durationMs = endMs - startMs;
+      // Skip very short OOS periods (<30s) — typically boot initialization
+      if (durationMs >= 30000) {
+        periods.push({
+          start: currentOosStart,
+          end: timestamp,
+          durationMs,
+        });
+      }
+      currentOosStart = undefined;
+    }
+  }
+
+  // If still in OOS at dump time, record open period
+  if (currentOosStart) {
+    periods.push({ start: currentOosStart });
+  }
+
+  return periods;
+}
+
+// ============================================================
+// Dumpsys iSub — Modem Restart Count
+// ============================================================
+
+/**
+ * Count modem restarts from dumpsys isub SIM state transitions.
+ * Each UNKNOWN → READY cycle after initial boot indicates a modem restart.
+ */
+export function parseModemRestartCount(content: string): number {
+  const SIM_STATE_RE = /updateSimState:\s*slot\s+\d+\s+(\w+)/;
+  let restarts = 0;
+  let seenFirstLoaded = false;
+  let lastState = '';
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const m = line.match(SIM_STATE_RE);
+    if (!m) continue;
+
+    const state = m[1];
+    if (state === 'LOADED' && !seenFirstLoaded) {
+      seenFirstLoaded = true;
+      lastState = state;
+      continue;
+    }
+
+    // After initial boot, UNKNOWN = modem restart
+    if (seenFirstLoaded && state === 'UNKNOWN' && lastState !== 'UNKNOWN') {
+      restarts++;
+    }
+    lastState = state;
+  }
+
+  return restarts;
 }
