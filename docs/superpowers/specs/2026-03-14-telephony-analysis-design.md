@@ -17,6 +17,7 @@
 - 全套：Parser + 前端 TelephonyOverview + LLM Deep Analysis 整合
 - 資料來源：radio logcat buffer（事件歷史）+ dumpsys 段落（當下快照）
 - SIM 支援：MVP 單 SIM，資料結構預留多 SIM（`slotId` 欄位）
+- 驗證樣本：`/Users/chenzeming/bugreport-samples/0226_bugreport/bugreport-T70-AQ3A.250408.001-2026-02-26-08-47-46/`（含 3 次 OOS、1 次 modem restart、21 次 REQUEST_NOT_SUPPORTED）
 
 ---
 
@@ -77,7 +78,7 @@ export interface OosEvent {
 export interface RilError {
   timestamp: string;
   errorType: 'modem_err' | 'timeout' | 'radio_crash' | 'ril_restart'
-           | 'request_not_supported' | 'modem_restart';
+           | 'request_not_supported' | 'modem_restart' | 'radio_not_available';
   request?: string;                   // e.g. "OPERATOR"
   errorCode?: number;
   message: string;
@@ -138,32 +139,48 @@ export function parseTelephonySections(
 
 | 功能 | 來源段落 | 辨識方式 |
 |------|----------|----------|
-| ServiceState 快照 | `DUMPSYS TELEPHONY REGISTRY` | content 含 `mServiceState` |
-| SignalStrength 快照 | `DUMPSYS TELEPHONY REGISTRY` | content 含 `mSignalStrength` |
+| ServiceState 快照 | `DUMP OF SERVICE telephony.registry`（DUMPSYS 子段落） | content 含 `mServiceState=`；以 `mVoiceRegState=N(STATE)` 和 `mDataRegState=N(STATE)` 提取狀態 |
+| SignalStrength 快照 | `DUMPSYS TELEPHONY REGISTRY` | content 含 `mSignalStrength`；`primary=CellSignalStrengthLte` 決定 technology；`Integer.MAX_VALUE` (2147483647) 為無效值需過濾 |
 | OOS 事件 | Radio logcat buffer | `OUT_OF_SERVICE` / `IN_SERVICE` 狀態切換 |
 | RIL 錯誤 | Radio logcat buffer | tag=`RIL`/`RILJ` + error patterns |
 | 通話事件 | Radio logcat buffer | tag=`Telephony`/`GsmCallTracker`/`ImsCallSession` |
 | SMS 事件 | Radio logcat buffer | tag=`SmsTracker`/`ImsSms`/`SMSDispatcher` |
-| RAT 切換 | Radio logcat buffer | `ServiceStateTracker` + RAT 變更 |
+| RAT 切換 | Radio logcat buffer | tag=`SST`，pattern: `RAT switched {from} -> {to} at cell {id}` |
 
 ### OOS 偵測邏輯
 
-1. 掃描 radio log 中 `ServiceStateTracker` / `NetworkRegistrationInfo` 的狀態變化
-2. 遇到 `OUT_OF_SERVICE` → 記錄 `oos_start`
-3. 遇到 `IN_SERVICE` → 配對最近的 `oos_start`，計算 `durationMs` → 記錄 `oos_end`
-4. 若 bugreport 結束時仍 OOS → `durationMs = undefined`（進行中）
-5. 區分 voice/data domain（CS vs PS）
+**主要來源**：radio log 中 tag=`SST`（ServiceStateTracker 縮寫）的 Poll 事件。
+
+偵測 pattern：
+```
+SST     : [slotId] Poll ServiceState done: oldSS={...mVoiceRegState=N(STATE)...} newSS={...mVoiceRegState=N(STATE)...}
+```
+- oldSS 和 newSS 各佔一行（連續兩行，同 timestamp）
+- 從 `mVoiceRegState=N(STATE)` 和 `mDataRegState=N(STATE)` 提取狀態
+
+**補充來源**：`DUMP OF SERVICE telephony.registry` 的 `local logs:` 區塊，包含從開機起完整的 ServiceState 歷史（可補充 radio buffer rotate 後遺失的早期事件）。
+
+邏輯：
+1. 掃描 `SST` tag 的 `Poll ServiceState done: newSS=` 行
+2. 比較 oldSS 與 newSS 的 voice/data regState
+3. 狀態從 IN_SERVICE → OUT_OF_SERVICE → 記錄 `oos_start`
+4. 狀態從 OUT_OF_SERVICE → IN_SERVICE → 配對最近的 `oos_start`，計算 `durationMs` → 記錄 `oos_end`
+5. 若 bugreport 結束時仍 OOS → `durationMs = undefined`（進行中）
+6. 區分 voice/data domain（CS vs PS）
+
+**注意**：其他 tag（`DefaultPhoneNotifier`、`DNC-0`、`NetworkTypeController`）也含 OOS/IN_SERVICE 字串，不應作為偵測依據（避免重複計算）。
 
 ### RIL 錯誤偵測規則
 
-| errorType | Pattern |
-|-----------|---------|
-| `modem_err` | `E_MODEM_ERR` 或 `MODEM_ERR` |
-| `timeout` | `RIL_REQUEST_TIMED_OUT` 或 `TIMEOUT` |
-| `radio_crash` | `Radio.*crash` 或 `RILD.*died` |
-| `ril_restart` | `RIL.*restart` 或 `rild.*start` |
-| `request_not_supported` | `REQUEST_NOT_SUPPORTED` |
-| `modem_restart` | `modem.*restart` 或 `baseband.*reset` |
+| errorType | Pattern | Tag |
+|-----------|---------|-----|
+| `modem_err` | `E_MODEM_ERR`（native）/ `CommandException: MODEM_ERR`（Java） | `RIL` / `RILJ` |
+| `timeout` | `RIL_REQUEST_TIMED_OUT` 或 `TIMEOUT` | `RIL` / `RILJ` |
+| `radio_crash` | `Radio.*crash` 或 `RILD.*died` | `RIL` |
+| `ril_restart` | `RIL.*restart` 或 `rild.*start` | `RIL` |
+| `request_not_supported` | `E_REQUEST_NOT_SUPPORTED`（native）/ `CommandException: REQUEST_NOT_SUPPORTED`（Java） | `RIL` / `RILJ` |
+| `modem_restart` | `UNSOL_MODEM_RESTART`（主要 anchor）/ `modem.*restart` / `baseband.*reset` | `RILJ` |
+| `radio_not_available` | `RADIO_NOT_AVAILABLE` | `RILJ` |
 
 ---
 
