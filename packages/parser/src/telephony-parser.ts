@@ -283,7 +283,7 @@ interface RilErrorRule {
 }
 
 const RIL_ERROR_RULES: RilErrorRule[] = [
-  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART/, tags: new Set(['RILJ']) },
+  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|modem.*restart|baseband.*reset/i, tags: new Set(['RILJ']) },
   { errorType: 'radio_crash', pattern: /Radio.*crash|RILD.*died/i, tags: new Set(['RIL', 'RILJ']) },
   { errorType: 'ril_restart', pattern: /RIL.*restart|rild.*start/i, tags: new Set(['RIL']) },
   { errorType: 'modem_err', pattern: /E_MODEM_ERR|CommandException:\s*MODEM_ERR/, tags: new Set(['RIL', 'RILJ']) },
