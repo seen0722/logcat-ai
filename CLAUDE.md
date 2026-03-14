@@ -86,11 +86,12 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 - `dumpsys-parser.ts` — meminfo, cpuinfo, lshal parsing
 - `tombstone-parser.ts` — Native crash backtrace, signal info, vendor crash detection
 - `power-parser.ts` — Power management analysis: PowerManager state, DeviceIdle (Doze) state/settings, BatteryStats summary with Deep Doze discharge rate calculation, kernel wakelocks from CHECKIN format, alarm wakeup stats, kernel suspend statistics, estimated power use (component/UID-level), connectivity stats (cellular/WiFi/BT/GPS), partial wakelocks (top 20)
+- `telephony-parser.ts` — Telephony analysis: ServiceState snapshot (voice/data reg state, operator, RAT, roaming), SignalStrength snapshot (LTE/NR/WCDMA/GSM/CDMA metrics with Integer.MAX_VALUE filtering), OOS event detection (start/end pairing with duration calculation), RIL error detection (7 types: modem_err, timeout, radio_crash, ril_restart, request_not_supported, modem_restart, radio_not_available), call events (start/end/drop/fail), SMS events, RAT change tracking
 - `basic-analyzer.ts` — Rule-based analysis, health scoring (stability/memory/responsiveness/kernel), insight card generation, timeline↔insight linking
 - `format-detector.ts` — Auto-detect standalone file format (logcat vs dmesg)
 - `comparison.ts` — Compare two AnalysisResult objects (health, insights, ANR, HAL diff)
 - `batch-analyzer.ts` — Aggregate statistics across multiple analyses
-- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType/.platform/.hardware/.cpuAbi/.serialNumber/.basebandVersion/.bootloaderVersion/.securityPatchLevel`, `KernelParseResult.parseErrors`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`)
+- `types.ts` — All shared type definitions used across packages (includes `LogcatBuffer`, `LogcatSection`, `LogEntry.buffer?`, `BugreportMetadata.buildType/.platform/.hardware/.cpuAbi/.serialNumber/.basebandVersion/.bootloaderVersion/.securityPatchLevel`, `KernelParseResult.parseErrors`, `PowerManagerState`, `DozeState`, `DozeSettings`, `BatteryStatsSummary`, `KernelWakeLockStat`, `AlarmWakeupStat`, `SuspendStats`, `PowerParseResult`, `EstimatedPowerUse`, `ConnectivityStats`, `PartialWakeLockStat`, `TelephonyParseResult`, `ServiceStateSnapshot`, `SignalStrengthSnapshot`, `OosEvent`, `RilError`, `CallEvent`, `SmsEvent`, `RatChangeEvent`)
 
 ### Backend (`@logcat-ai/backend`)
 
@@ -122,6 +123,7 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/SectionNav.tsx` — Floating right-side TOC navigation (xl screens only), IntersectionObserver-based active section tracking, collapsible
 - `components/PowerOverview.tsx` — Power management: key metrics summary bar + Deep Doze rate always visible, details collapsible via "Show details" toggle (3-column grid, wakelocks, alarms, suspend stats). Doze settings diff-only format (non-AOSP values highlighted)
+- `components/TelephonyOverview.tsx` — Telephony analysis: summary cards (Voice State, OOS Count, RIL Errors, Signal Level) always visible, details collapsible via "Show details" toggle (OOS event history, RIL/Modem errors table, call/SMS events, signal & network details with RAT change history). Voice State card red bg when OOS
 - `components/InsightsCards.tsx` — Insight list with severity filters; info-level insights hidden by default in "All" mode with "Show N more" button; same-type grouping (SELinux denials, normalized titles) into expandable groups
 - `components/BSPQuickReference.tsx` — Conclusion-focused findings (boot issues, HAL problems, Doze rate) instead of raw data; vendor error tags as chips
 - `components/ChatPanel.tsx` — Compact mode when no messages (suggested question buttons + input), expands to h-96 chat after first message

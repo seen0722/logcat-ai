@@ -12,6 +12,7 @@ import ChatPanel from './components/ChatPanel';
 import DeepAnalysisOverview from './components/DeepAnalysisOverview';
 import TagStats from './components/TagStats';
 import PowerOverview from './components/PowerOverview';
+import TelephonyOverview from './components/TelephonyOverview';
 import HistoryPanel from './components/HistoryPanel';
 import ExportMenu from './components/ExportMenu';
 import ComparisonView from './components/ComparisonView';
@@ -106,6 +107,9 @@ export default function App() {
     }
     if (result.powerStatus) {
       sections.push({ id: 'section-power', label: 'Power', icon: '\u{1F50B}' });
+    }
+    if (result.telephonyStatus) {
+      sections.push({ id: 'section-telephony', label: 'Telephony', icon: '\u{1F4F6}' });
     }
     if (result.deepAnalysisOverview) {
       sections.push({ id: 'section-deep', label: 'AI Analysis', icon: '\u{1F9E0}' });
@@ -312,6 +316,11 @@ export default function App() {
             {result.powerStatus && (
               <div id="section-power">
                 <PowerOverview powerStatus={result.powerStatus} />
+              </div>
+            )}
+            {result.telephonyStatus && (
+              <div id="section-telephony">
+                <TelephonyOverview telephonyStatus={result.telephonyStatus} />
               </div>
             )}
             {result.deepAnalysisOverview && (

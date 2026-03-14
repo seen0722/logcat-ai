@@ -2,7 +2,7 @@
 // We duplicate a slim subset to avoid depending on the Node.js parser package.
 
 export type Severity = 'critical' | 'warning' | 'info';
-export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability' | 'power';
+export type InsightCategory = 'anr' | 'crash' | 'memory' | 'kernel' | 'performance' | 'stability' | 'power' | 'telephony';
 
 export interface InsightCard {
   id: string;
@@ -13,7 +13,7 @@ export interface InsightCard {
   relatedLogSnippet?: string;
   stackTrace?: string;
   timestamp?: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone' | 'power';
+  source: 'logcat' | 'anr' | 'kernel' | 'cross' | 'tombstone' | 'power' | 'telephony';
   suggestedAllowRule?: string;
   debugCommands?: string[];
   deepAnalysis?: {
@@ -31,7 +31,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'tombstone';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony';
   severity: Severity;
   label: string;
   details?: string;
@@ -368,6 +368,76 @@ export interface PowerParseResult {
   partialWakeLocks?: PartialWakeLockStat[];
 }
 
+// ============================================================
+// Telephony
+// ============================================================
+
+export interface ServiceStateSnapshot {
+  slotId: number;
+  voiceState: 'IN_SERVICE' | 'OUT_OF_SERVICE' | 'EMERGENCY_ONLY' | 'POWER_OFF';
+  dataState: 'IN_SERVICE' | 'OUT_OF_SERVICE' | 'EMERGENCY_ONLY' | 'POWER_OFF';
+  operator?: string;
+  mccMnc?: string;
+  rat?: string;
+  roaming: boolean;
+}
+
+export interface SignalStrengthSnapshot {
+  slotId: number;
+  technology: 'WCDMA' | 'LTE' | 'NR' | 'GSM' | 'CDMA';
+  rsrp?: number;
+  rsrq?: number;
+  sinr?: number;
+  rscp?: number;
+  ecno?: number;
+  rssi?: number;
+  level: number;
+}
+
+export interface OosEvent {
+  timestamp: string;
+  type: 'oos_start' | 'oos_end';
+  domain: 'voice' | 'data' | 'both';
+  durationMs?: number;
+}
+
+export interface RilError {
+  timestamp: string;
+  errorType: 'modem_err' | 'timeout' | 'radio_crash' | 'ril_restart'
+           | 'request_not_supported' | 'modem_restart' | 'radio_not_available';
+  request?: string;
+  message: string;
+}
+
+export interface CallEvent {
+  timestamp: string;
+  type: 'call_start' | 'call_end' | 'call_drop' | 'call_fail';
+  failReason?: string;
+}
+
+export interface SmsEvent {
+  timestamp: string;
+  type: 'sms_send_success' | 'sms_send_fail' | 'sms_receive';
+  failReason?: string;
+}
+
+export interface RatChangeEvent {
+  timestamp: string;
+  fromRat: string;
+  toRat: string;
+}
+
+export interface TelephonyParseResult {
+  serviceState?: ServiceStateSnapshot;
+  signalStrength?: SignalStrengthSnapshot;
+  oosEvents: OosEvent[];
+  rilErrors: RilError[];
+  callEvents: CallEvent[];
+  smsEvents: SmsEvent[];
+  ratChanges: RatChangeEvent[];
+  simSlotCount: number;
+}
+
 export interface AnalysisResult {
   metadata: BugreportMetadata;
   insights: InsightCard[];
@@ -382,6 +452,7 @@ export interface AnalysisResult {
   logTagStats?: TagStat[];
   deepAnalysisOverview?: DeepAnalysisOverview;
   powerStatus?: PowerParseResult;
+  telephonyStatus?: TelephonyParseResult;
 }
 
 // SSE progress from backend
