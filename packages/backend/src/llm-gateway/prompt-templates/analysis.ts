@@ -146,6 +146,27 @@ ${timeline}`;
     }
   }
 
+  // Telephony status
+  if (result.telephonyStatus) {
+    const tel = result.telephonyStatus;
+    const oosCount = tel.oosEvents.filter(e => e.type === 'oos_start').length;
+    const totalOosMs = tel.oosEvents
+      .filter(e => e.type === 'oos_end')
+      .reduce((sum, e) => sum + (e.durationMs || 0), 0);
+
+    userPrompt += `\n\n## Telephony Status
+- Current Voice: ${tel.serviceState?.voiceState || 'N/A'}, Data: ${tel.serviceState?.dataState || 'N/A'}
+- OOS events: ${oosCount} times, total duration: ${Math.round(totalOosMs / 60000)} min
+- RIL errors: ${tel.rilErrors.length} (${[...new Set(tel.rilErrors.map(e => e.errorType))].join(', ') || 'none'})
+- Signal: ${tel.signalStrength?.technology || 'N/A'} level ${tel.signalStrength?.level ?? 'N/A'}
+- RAT changes: ${tel.ratChanges.length}
+
+When analyzing telephony insights, focus on:
+1. Root cause of OOS (modem crash? signal loss? network rejection?)
+2. Correlation between RIL errors and OOS events
+3. Whether OOS is device-side or network-side issue`;
+  }
+
   // Detailed context per insight
   if (insightContexts.length > 0) {
     userPrompt += '\n\n## Detailed Context Per Insight';

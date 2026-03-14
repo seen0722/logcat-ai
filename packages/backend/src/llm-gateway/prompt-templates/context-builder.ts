@@ -57,6 +57,8 @@ export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
       collectKernelContext(ctx, insight, result);
     } else if (insight.source === 'power') {
       collectPowerContext(ctx, insight, result);
+    } else if (insight.source === 'telephony') {
+      collectTelephonyContext(ctx, insight, result);
     } else if (insight.source === 'cross') {
       collectLogcatContext(ctx, insight, result);
       collectKernelContext(ctx, insight, result);
@@ -301,6 +303,77 @@ function collectPowerContext(
   }
 
   ctx.anomalyLogs = lines;
+}
+
+function collectTelephonyContext(
+  ctx: InsightContext,
+  insight: InsightCard,
+  result: AnalysisResult,
+): void {
+  if (!result.telephonyStatus) return;
+  const tel = result.telephonyStatus;
+
+  if (tel.serviceState) {
+    ctx.anomalyLogs.push(`[ServiceState] voice=${tel.serviceState.voiceState} data=${tel.serviceState.dataState} rat=${tel.serviceState.rat || 'Unknown'} operator=${tel.serviceState.operator || 'N/A'}`);
+  }
+
+  if (tel.oosEvents.length > 0) {
+    ctx.anomalyLogs.push(`[OOS Events] ${tel.oosEvents.length} events:`);
+    for (const oos of tel.oosEvents.slice(0, 10)) {
+      const dur = oos.durationMs ? ` (${Math.round(oos.durationMs / 1000)}s)` : oos.type === 'oos_start' ? '' : ' (ongoing)';
+      ctx.anomalyLogs.push(`  ${oos.timestamp} ${oos.type} ${oos.domain}${dur}`);
+    }
+  }
+
+  if (tel.rilErrors.length > 0) {
+    ctx.anomalyLogs.push(`[RIL Errors] ${tel.rilErrors.length} errors:`);
+    for (const err of tel.rilErrors.slice(0, 10)) {
+      ctx.anomalyLogs.push(`  ${err.timestamp} ${err.errorType} ${err.request || ''} ${err.message.slice(0, 100)}`);
+    }
+  }
+
+  // ±10s radio log context around insight timestamp
+  if (insight.timestamp && result.logcatResult?.entries) {
+    const nearby: string[] = [];
+    for (const e of result.logcatResult.entries) {
+      if (e.buffer !== 'radio') continue;
+      if (isWithinTimeWindow(e.timestamp, insight.timestamp, 10000)) {
+        nearby.push(e.raw);
+        if (nearby.length >= 30) break;
+      }
+    }
+    for (const line of nearby) {
+      ctx.anomalyLogs.push(line);
+    }
+  }
+
+  // Kernel log entries related to modem/ril
+  if (result.kernelResult?.entries) {
+    const modemKernelEntries: string[] = [];
+    for (const e of result.kernelResult.entries) {
+      if (/modem|ril|radio|baseband|qcom_smd|rmnet|esoc/i.test(e.message)) {
+        modemKernelEntries.push(`  [${e.timestamp}] ${e.message.slice(0, 150)}`);
+        if (modemKernelEntries.length >= 15) break;
+      }
+    }
+    if (modemKernelEntries.length > 0) {
+      ctx.anomalyLogs.push(`[Kernel modem/ril entries] ${modemKernelEntries.length} entries:`);
+      for (const line of modemKernelEntries) {
+        ctx.anomalyLogs.push(line);
+      }
+    }
+  }
+}
+
+function isWithinTimeWindow(ts1: string, ts2: string, windowMs: number): boolean {
+  const parse = (ts: string): number => {
+    const m = ts.match(/(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
+    if (!m) return 0;
+    return (parseInt(m[1]) * 31 + parseInt(m[2])) * 86400000 +
+      parseInt(m[3]) * 3600000 + parseInt(m[4]) * 60000 +
+      parseInt(m[5]) * 1000 + parseInt(m[6]);
+  };
+  return Math.abs(parse(ts1) - parse(ts2)) <= windowMs;
 }
 
 function collectTemporalContext(

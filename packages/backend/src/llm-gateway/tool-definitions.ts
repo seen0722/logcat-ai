@@ -46,6 +46,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
             description: 'Minimum log level to include',
             enum: ['V', 'D', 'I', 'W', 'E', 'F'],
           },
+          buffer: {
+            type: 'string',
+            description: 'Filter by logcat buffer (e.g. "radio" for telephony logs)',
+            enum: ['main', 'system', 'events', 'crash', 'radio'],
+          },
           pid: {
             type: 'number',
             description: 'Filter by process ID',
