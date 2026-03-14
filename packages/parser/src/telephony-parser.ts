@@ -8,6 +8,8 @@ import {
   SmsEvent,
   RatChangeEvent,
   DumpsysOosPeriod,
+  TransportError,
+  SimState,
   BugreportSection,
   LogEntry,
 } from './types.js';
@@ -55,6 +57,8 @@ export function parseTelephonySections(
     result.ratChanges = detectRatChanges(radioLogEntries);
     result.callEvents = detectCallEvents(radioLogEntries);
     result.smsEvents = detectSmsEvents(radioLogEntries);
+    result.modemRestartReasons = detectModemRestartReasons(radioLogEntries);
+    result.transportErrors = detectTransportErrors(radioLogEntries);
 
     // Radio log buffer time coverage
     const first = radioLogEntries[0];
@@ -77,6 +81,11 @@ export function parseTelephonySections(
       const count = parseModemRestartCount(c);
       if (count > 0) {
         result.modemRestartCount = count;
+      }
+      // Parse latest SIM state
+      const simState = parseSimState(c);
+      if (simState) {
+        result.simState = simState;
       }
     }
   }
@@ -545,6 +554,27 @@ export function parseDumpsysOosPeriods(content: string): DumpsysOosPeriod[] {
 // ============================================================
 
 /**
+ * Parse latest SIM state from dumpsys isub updateSimState history.
+ */
+export function parseSimState(content: string): SimState | undefined {
+  const SIM_STATE_RE = /updateSimState:\s*slot\s+\d+\s+(\w+)/;
+  const VALID_STATES = new Set<SimState>(['ABSENT', 'NOT_READY', 'READY', 'LOADED', 'UNKNOWN', 'ERROR']);
+  let lastState: SimState | undefined;
+
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const m = line.match(SIM_STATE_RE);
+    if (!m) continue;
+    const state = m[1] as SimState;
+    if (VALID_STATES.has(state)) {
+      lastState = state;
+    }
+  }
+
+  return lastState;
+}
+
+/**
  * Count modem restarts from dumpsys isub SIM state transitions.
  * Each UNKNOWN → READY cycle after initial boot indicates a modem restart.
  */
@@ -574,4 +604,70 @@ export function parseModemRestartCount(content: string): number {
   }
 
   return restarts;
+}
+
+// ============================================================
+// Modem Restart Reason Detection (Radio Log)
+// ============================================================
+
+/**
+ * Extract UNSOL_MODEM_RESTART reason strings from radio log.
+ * Reason distinguishes "Modem removed" (USB transport) from "Modem crash" (firmware).
+ */
+function detectModemRestartReasons(entries: LogEntry[]): string[] {
+  const reasons: string[] = [];
+  const RESTART_RE = /UNSOL_MODEM_RESTART\s+(.+)/;
+
+  for (const entry of entries) {
+    const tag = entry.tag.trim();
+    if (tag !== 'RILJ' && tag !== 'RIL') continue;
+
+    const m = entry.message.match(RESTART_RE);
+    if (m) {
+      reasons.push(m[1].trim());
+    }
+  }
+
+  return reasons;
+}
+
+// ============================================================
+// Transport Error Detection (ENODEV / Device Gone)
+// ============================================================
+
+const TRANSPORT_TAGS = new Set(['QMUXROUTER', 'LITEQMUX', 'RIL', 'RILC', 'SWIGNSS']);
+
+const TRANSPORT_ERROR_RULES: Array<{
+  type: TransportError['type'];
+  pattern: RegExp;
+}> = [
+  { type: 'enodev', pattern: /errno[:\s]*19\b|ENODEV/i },
+  { type: 'device_gone', pattern: /Device is gone|DEVICE_GONE_INDICATION|device.*removed/i },
+  { type: 'transport_read_error', pattern: /[Rr]ead:?\s*read failed|TransportErrorCallback/i },
+];
+
+/**
+ * Detect USB/QMUX transport errors in radio log.
+ * Pattern: QMUXROUTER read failed → errno 19 (ENODEV) → device gone → modem removed
+ */
+function detectTransportErrors(entries: LogEntry[]): TransportError[] {
+  const errors: TransportError[] = [];
+
+  for (const entry of entries) {
+    const tag = entry.tag.trim();
+    if (!TRANSPORT_TAGS.has(tag)) continue;
+
+    for (const rule of TRANSPORT_ERROR_RULES) {
+      if (rule.pattern.test(entry.message)) {
+        errors.push({
+          timestamp: entry.timestamp,
+          type: rule.type,
+          message: `[${tag}] ${entry.message}`,
+        });
+        break;
+      }
+    }
+  }
+
+  return errors;
 }

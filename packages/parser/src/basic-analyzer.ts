@@ -1229,17 +1229,24 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCar
   if (!telephony) return [];
   const insights: InsightCard[] = [];
 
-  // 1. Current OOS
+  // 1. Current OOS — include SIM state as root cause context
   if (telephony.serviceState) {
     const { voiceState, dataState } = telephony.serviceState;
     if (voiceState === 'OUT_OF_SERVICE' || dataState === 'OUT_OF_SERVICE') {
+      let rootCause = 'This may indicate modem failure, SIM issue, or network problem.';
+      if (telephony.simState === 'ABSENT') {
+        rootCause = 'Root cause: No SIM card detected (SIM state: ABSENT). Insert a valid SIM card to restore service.';
+      } else if (telephony.simState === 'ERROR') {
+        rootCause = 'Root cause: SIM card error detected. Check SIM card insertion or try a different SIM.';
+      } else if (telephony.simState === 'NOT_READY') {
+        rootCause = 'SIM state is NOT_READY — modem may still be initializing or SIM is not recognized.';
+      }
       insights.push({
         id: '',
         severity: 'critical',
         category: 'telephony',
-        title: `Device currently out of service (voice: ${voiceState}, data: ${dataState})`,
-        description: `The device is currently out of service. Voice: ${voiceState}, Data: ${dataState}. ` +
-          `This may indicate modem failure, SIM issue, or network problem.`,
+        title: `Device currently out of service (voice: ${voiceState}, data: ${dataState})${telephony.simState === 'ABSENT' ? ' — No SIM' : ''}`,
+        description: `The device is currently out of service. Voice: ${voiceState}, Data: ${dataState}. ${rootCause}`,
         source: 'telephony',
         debugCommands: TELEPHONY_DEBUG_COMMANDS,
       });
@@ -1378,6 +1385,30 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCar
         `Frequent RAT switching increases power consumption and may indicate weak or unstable network coverage.`,
       source: 'telephony',
       debugCommands: TELEPHONY_DEBUG_COMMANDS,
+    });
+  }
+
+  // 10. USB/QMUX transport errors (ENODEV)
+  const transportErrors = telephony.transportErrors ?? [];
+  const enodevCount = transportErrors.filter(e => e.type === 'enodev').length;
+  if (transportErrors.length > 0) {
+    const reasons = (telephony.modemRestartReasons ?? []).join(', ') || 'unknown';
+    insights.push({
+      id: '',
+      severity: 'critical',
+      category: 'telephony',
+      title: `USB transport error detected (ENODEV${enodevCount > 0 ? ` ×${enodevCount}` : ''})`,
+      description: `Transport layer errors detected in radio log: ${transportErrors.length} events. ` +
+        `Modem restart reason: "${reasons}". ` +
+        `ENODEV (errno 19) indicates the USB modem device node became unreadable — ` +
+        `check kernel USB logs for device unbind/re-enumeration and modem firmware crash artifacts.`,
+      timestamp: transportErrors[0].timestamp,
+      source: 'telephony',
+      debugCommands: [
+        'adb shell dmesg | grep -E "usb|cdc-wdm|unbind|enumeration"',
+        'adb shell logcat -b radio -d | grep -E "QMUX|TransportError|ENODEV|device.gone"',
+        ...TELEPHONY_DEBUG_COMMANDS,
+      ],
     });
   }
 

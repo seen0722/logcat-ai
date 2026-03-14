@@ -433,6 +433,14 @@ export interface DumpsysOosPeriod {
   durationMs?: number;
 }
 
+export type SimState = 'ABSENT' | 'NOT_READY' | 'READY' | 'LOADED' | 'UNKNOWN' | 'ERROR';
+
+export interface TransportError {
+  timestamp: string;
+  type: 'enodev' | 'device_gone' | 'transport_read_error';
+  message: string;
+}
+
 export interface TelephonyParseResult {
   serviceState?: ServiceStateSnapshot;
   signalStrength?: SignalStrengthSnapshot;
@@ -442,8 +450,11 @@ export interface TelephonyParseResult {
   smsEvents: SmsEvent[];
   ratChanges: RatChangeEvent[];
   simSlotCount: number;
+  simState?: SimState;
   dumpsysOosPeriods?: DumpsysOosPeriod[];
   modemRestartCount?: number;
+  modemRestartReasons?: string[];
+  transportErrors?: TransportError[];
   radioLogTimeRange?: { start: string; end: string };
 }
 

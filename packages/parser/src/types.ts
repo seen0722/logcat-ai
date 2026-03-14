@@ -633,6 +633,8 @@ export interface PowerParseResult {
 // Telephony
 // ============================================================
 
+export type SimState = 'ABSENT' | 'NOT_READY' | 'READY' | 'LOADED' | 'UNKNOWN' | 'ERROR';
+
 export interface TelephonyParseResult {
   serviceState?: ServiceStateSnapshot;
   signalStrength?: SignalStrengthSnapshot;
@@ -642,12 +644,24 @@ export interface TelephonyParseResult {
   smsEvents: SmsEvent[];
   ratChanges: RatChangeEvent[];
   simSlotCount: number;
+  /** SIM card state from dumpsys isub (latest updateSimState per slot) */
+  simState?: SimState;
   /** Cumulative OOS periods from dumpsys phone (covers full uptime, not just radio log buffer) */
   dumpsysOosPeriods?: DumpsysOosPeriod[];
   /** Modem restart count from dumpsys isub SIM state UNKNOWN cycles */
   modemRestartCount?: number;
+  /** UNSOL_MODEM_RESTART reason strings from radio log */
+  modemRestartReasons?: string[];
+  /** USB/QMUX transport error events (ENODEV, device gone) */
+  transportErrors?: TransportError[];
   /** Radio log buffer time coverage */
   radioLogTimeRange?: { start: string; end: string };
+}
+
+export interface TransportError {
+  timestamp: string;
+  type: 'enodev' | 'device_gone' | 'transport_read_error';
+  message: string;
 }
 
 export interface DumpsysOosPeriod {
