@@ -178,7 +178,7 @@ export async function deleteHistory(id: string): Promise<void> {
 
 // ---- Export API ----
 
-export function downloadExport(id: string, format: 'json' | 'html' | 'power-html'): void {
+export function downloadExport(id: string, format: 'json' | 'html' | 'power-html' | 'telephony-html'): void {
   window.open(`${API_BASE}/export/${id}/${format}`, '_blank');
 }
 

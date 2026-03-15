@@ -156,7 +156,7 @@ export default function App() {
                 </button>
               </>
             )}
-            {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} /></span>}
+            {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} hasTelephonyData={!!result?.telephonyStatus?.serviceState} /></span>}
             {/* Desktop: show all buttons */}
             <button
               onClick={() => setShowSettings(true)}

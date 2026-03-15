@@ -4,9 +4,10 @@ import { downloadExport } from '../lib/api';
 interface Props {
   uploadId: string;
   hasPowerData?: boolean;
+  hasTelephonyData?: boolean;
 }
 
-export default function ExportMenu({ uploadId, hasPowerData }: Props) {
+export default function ExportMenu({ uploadId, hasPowerData, hasTelephonyData }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -40,16 +41,24 @@ export default function ExportMenu({ uploadId, hasPowerData }: Props) {
           </button>
           <button
             onClick={() => { downloadExport(uploadId, 'html'); setOpen(false); }}
-            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors border-t border-border ${hasPowerData ? '' : 'rounded-b-lg'}`}
+            className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors border-t border-border ${!hasPowerData && !hasTelephonyData ? 'rounded-b-lg' : ''}`}
           >
             Export as HTML
           </button>
           {hasPowerData && (
             <button
               onClick={() => { downloadExport(uploadId, 'power-html'); setOpen(false); }}
-              className="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover rounded-b-lg transition-colors border-t border-border text-indigo-400"
+              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors border-t border-border text-indigo-400 ${hasTelephonyData ? '' : 'rounded-b-lg'}`}
             >
               Power Report
+            </button>
+          )}
+          {hasTelephonyData && (
+            <button
+              onClick={() => { downloadExport(uploadId, 'telephony-html'); setOpen(false); }}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover rounded-b-lg transition-colors border-t border-border text-amber-400"
+            >
+              Telephony Report
             </button>
           )}
         </div>
