@@ -392,7 +392,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       const lowerMsg = err.message.toLowerCase();
       if (
         lowerMsg.includes('end of central directory') ||
-        lowerMsg.includes('invalid') ||
+        lowerMsg.includes('invalid zip') ||
+        lowerMsg.includes('invalid comment length') ||
         lowerMsg.includes('bad local file header')
       ) {
         msg = `Corrupted or invalid ZIP file: ${err.message}. Please re-download or re-generate the bugreport using \`adb bugreport\`.`;

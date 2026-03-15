@@ -32,7 +32,28 @@ export const historyStore = {
     const insightCount = result.insights?.length ?? 0;
     const criticalCount = result.insights?.filter((i) => i.severity === 'critical').length ?? 0;
     const anrCount = result.anrAnalyses?.length ?? 0;
-    const resultJson = JSON.stringify(result);
+    // Strip raw entries before serializing — they can be 200MB+ for large bugreports
+    // and are already stored in FTS5 index + rawDataStore for search/chat access.
+    const slim = {
+      ...result,
+      logcatResult: result.logcatResult
+        ? {
+            anomalies: result.logcatResult.anomalies,
+            totalLines: result.logcatResult.totalLines,
+            parsedLines: result.logcatResult.parsedLines,
+            parseErrors: result.logcatResult.parseErrors,
+            tagStats: result.logcatResult.tagStats,
+          }
+        : undefined,
+      kernelResult: result.kernelResult
+        ? {
+            events: result.kernelResult.events,
+            totalLines: result.kernelResult.totalLines,
+            parseErrors: result.kernelResult.parseErrors,
+          }
+        : undefined,
+    };
+    const resultJson = JSON.stringify(slim);
 
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO analyses
