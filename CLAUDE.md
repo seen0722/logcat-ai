@@ -98,7 +98,7 @@ Core parsing library, no runtime dependencies except `yauzl-promise` for ZIP ext
 Express.js API server. Loads `.env` from repo root (`../../.env` relative to package).
 
 - **Routes**: `upload.ts` (Multer, .zip/.txt/.log), `analyze.ts` (SSE streaming, per-section logcat parsing with buffer, `/:id/result` returns slim JSON without raw entries), `chat.ts` (LLM chat with tool calling), `settings.ts` (provider management), `history.ts` (CRUD, strips raw entries from response), `export.ts` (JSON/HTML/power-html), `compare.ts` (diff), `batch.ts` (multi-file, per-section logcat parsing), `search.ts` (FTS5/keyword logcat+kernel search, `source=logcat|kernel`, `buffer=main|system|events|crash|radio`, `startTime`/`endTime` for timestamp range filtering, `export=true` raises limit cap from 500 to 100K for full-result export)
-- **Export** (`export/`): `json-exporter.ts`, `html-exporter.ts`, `power-report-exporter.ts` for JSON/HTML/Power Report self-contained dark-theme HTML generation (11 sections, rule-based findings, summary cards)
+- **Export** (`export/`): `json-exporter.ts`, `html-exporter.ts`, `power-report-exporter.ts`, `telephony-report-exporter.ts` for JSON/HTML/Power/Telephony Report self-contained dark-theme HTML generation. All HTML reports share `report-styles.ts` brand CSS (DM Serif Display + DM Sans, navy #0c1222, warm gold #d4a06a, accent blue #4f8ff7, TOC sidebar with scroll spy)
 - **LLM Gateway** (`llm-gateway/`): Provider-agnostic interface. All providers implement `LLMProvider` (chat, chatStream, isAvailable). Supported: Ollama, OpenAI, Gemini, Anthropic. `chatWithTools()` adds prompt-based tool calling loop (max 5 iterations).
 - **Tool Calling** (`llm-gateway/tool-definitions.ts`, `tool-executor.ts`): 5 investigation tools (search_logcat, get_thread_info, get_kernel_events, get_insight_detail, search_section) executed against raw parsed data.
 - **Prompt Templates** (`llm-gateway/prompt-templates/`): `analysis.ts` builds deep analysis prompt, `chat.ts` builds follow-up prompts, `context-builder.ts` composes analysis context
@@ -122,14 +122,15 @@ React 19 + Vite 6 + Tailwind CSS 3.4 + D3.js. Three-phase UI: upload → analyzi
 - `lib/export-utils.ts` — Search result export utilities (CSV, logcat text format, dmesg text format, blob download)
 - `components/LockGraphVisualization.tsx` — D3.js force-directed lock graph with deadlock highlighting
 - `components/SectionNav.tsx` — Floating right-side TOC navigation (xl screens only), IntersectionObserver-based active section tracking, collapsible
-- `components/PowerOverview.tsx` — Power management: key metrics summary bar + Deep Doze rate always visible, details collapsible via "Show details" toggle (3-column grid, wakelocks, alarms, suspend stats). Doze settings diff-only format (non-AOSP values highlighted)
+- `components/Icons.tsx` — Custom SVG icon library (34 icons, stroke-based, currentColor). All UI icons are self-drawn — no Heroicons, no emoji
+- `components/PowerOverview.tsx` — Power management: hero Doze rate display + 4 metric cards (Battery/OnBattery/DeepDoze/Suspend) always visible, details collapsible via centered "Show details" toggle. Doze settings diff-only format (non-AOSP values highlighted)
 - `components/TelephonyOverview.tsx` — Telephony analysis: summary cards (Voice State, OOS Count, RIL Errors, Signal Level) always visible, details collapsible via "Show details" toggle. OOS Count prefers dumpsys data (full uptime) over radio log (buffer only ~2h). Modem restart badge, radio log time range hint, MCC/MNC operator name fallback. Detail section: dumpsys OOS periods table with fallback to radio log OOS events, RIL/Modem errors, call/SMS events, signal & RAT changes. Voice State card red bg when OOS
 - `components/InsightsCards.tsx` — Insight list with severity filters; info-level insights hidden by default in "All" mode with "Show N more" button; same-type grouping (SELinux denials, normalized titles) into expandable groups
 - `components/BSPQuickReference.tsx` — Conclusion-focused findings (boot issues, HAL problems, Doze rate) instead of raw data; vendor error tags as chips
 - `components/ChatPanel.tsx` — Compact mode when no messages (suggested question buttons + input), expands to h-96 chat after first message
-- `components/SystemOverview.tsx` — Health score rings with pulse animation for low scores (<70), deduction hints below rings, accent border color based on overall score; accepts optional `insights` prop; collapsible "HW & SW details" section showing platform/hardware/CPU/kernel/baseband/security patch/serial/build date/boot image
+- `components/SystemOverview.tsx` — Hero device heading (T70 + manufacturer) with tag badges (Android ver, build type, boot status, uptime). Large Overall score ring (120px) + 4 dimension progress bars. Memory/CPU/HAL resource cards with usage bars. Collapsible "Show details" for HW & SW info
 - `components/HistoryPanel.tsx` — Slide-out analysis history browser
-- `components/ExportMenu.tsx` — JSON/HTML/Power Report export dropdown; `hasPowerData?: boolean` prop for conditional Power Report button rendering (indigo text)
+- `components/ExportMenu.tsx` — JSON/HTML/Power/Telephony Report export dropdown; `hasPowerData?: boolean` and `hasTelephonyData?: boolean` props for conditional rendering
 - `components/ComparisonView.tsx` — Side-by-side analysis diff modal
 - `components/BatchUpload.tsx` — Multi-file drag-drop upload with SSE progress
 - `components/BatchResults.tsx` — Batch analysis statistics dashboard
@@ -160,6 +161,8 @@ Standalone MCP (Model Context Protocol) server for Claude Desktop / VS Code inte
 - **Collapsible detail pattern**: Power and BSP sections use `useState` toggle for show/hide details. Key metrics always visible, secondary data behind "Show details" button
 - **SearchModal virtual scroll**: Uses react-window v2 `List` with `useListRef`. `focusIndex` must be state (not ref) so `rowProps` useMemo dependency triggers re-render for focus marker visibility
 - **ANR severity**: All ANR types are classified as `critical` severity (`anrSeverity()` in `basic-analyzer.ts`), including `idle_main_thread`. Health score deduction for idle_main_thread: 10 per occurrence, cap 30
+- **Design system**: Frontend uses brand design system unified with personal resume site — DM Serif Display headings, DM Sans body, SF Mono code. Colors: surface #0c1222, accent #4f8ff7, warm #d4a06a. All icons from `Icons.tsx` (34 custom SVGs). CSS utility classes: `card`, `btn-primary`/`btn-warm`/`btn-outline`/`btn-ghost`, `glass`, `section-title`, `stagger-children`. HTML export reports share `report-styles.ts` brand CSS
+- **History store stripping**: `historyStore.save()` strips `logcatResult.entries` and `kernelResult.entries` before `JSON.stringify()` to avoid V8 string length limit crash for large bugreports (1M+ entries → 200MB+ JSON)
 - Documentation and PRD are written in Traditional Chinese
 
 ## Android BSP Domain Knowledge
