@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f1830"/>
+      <stop offset="100%" stop-color="#0c1222"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d4a06a"/>
+      <stop offset="100%" stop-color="#e8c9a0"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7cb3ff"/>
+      <stop offset="100%" stop-color="#4f8ff7"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Subtle border -->
+  <rect x="2" y="2" width="508" height="508" rx="94" fill="none" stroke="#243049" stroke-width="3"/>
+
+  <!-- Log lines (representing logcat entries) -->
+  <!-- Line 1: muted (normal log) -->
+  <rect x="96" y="148" width="200" height="16" rx="8" fill="#243049"/>
+  <rect x="308" y="148" width="108" height="16" rx="8" fill="#1a2540"/>
+
+  <!-- Line 2: HIGHLIGHTED in gold (AI-detected anomaly) -->
+  <rect x="96" y="208" width="320" height="24" rx="12" fill="url(#gold)" filter="url(#glow)" opacity="0.95"/>
+  <!-- Small severity indicator dot -->
+  <circle cx="72" cy="220" r="12" fill="#ef4444" opacity="0.9"/>
+
+  <!-- Line 3: muted -->
+  <rect x="96" y="276" width="160" height="16" rx="8" fill="#243049"/>
+  <rect x="268" y="276" width="148" height="16" rx="8" fill="#1a2540"/>
+
+  <!-- Line 4: muted -->
+  <rect x="96" y="336" width="240" height="16" rx="8" fill="#1a2540"/>
+
+  <!-- AI Spark (diamond shape, top-right) -->
+  <g transform="translate(400, 100)" filter="url(#glow)">
+    <path d="M0,-28 L16,0 L0,28 L-16,0 Z" fill="url(#blue)"/>
+    <path d="M0,-12 L7,0 L0,12 L-7,0 Z" fill="white" opacity="0.6"/>
+  </g>
+
+  <!-- Small decorative dots (representing more entries fading out) -->
+  <circle cx="120" cy="392" r="5" fill="#243049"/>
+  <circle cx="144" cy="392" r="5" fill="#1a2540"/>
+  <circle cx="168" cy="392" r="5" fill="#1a2540" opacity="0.5"/>
+</svg>

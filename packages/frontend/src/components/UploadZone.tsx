@@ -1,5 +1,6 @@
 import { useState, useRef, DragEvent } from 'react';
 import { AnalysisMode, QUICK_TAGS, QuickTag } from '../lib/types';
+import { IconCheck, IconUpload } from './Icons';
 
 interface Props {
   onStart: (file: File, mode: AnalysisMode, description?: string) => void;
@@ -52,16 +53,18 @@ export default function UploadZone({ onStart, error }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold">Logcat AI</h1>
-        <p className="text-gray-400">AI-powered bugreport.zip analyzer for Android</p>
+      <div className="text-center space-y-3">
+        <h1 className="font-display text-3xl">
+          Logcat <span className="text-warm">AI</span>
+        </h1>
+        <p className="text-gray-400 font-light">AI-powered bugreport.zip analyzer for Android</p>
       </div>
 
       {/* Drop Zone */}
       <div
-        className={`card border-2 border-dashed cursor-pointer text-center py-12 transition-all duration-200 ${
-          dragging ? 'border-indigo-500 bg-indigo-500/5 scale-[1.01] shadow-lg shadow-indigo-500/10'
-          : file ? 'border-indigo-500/50 bg-indigo-500/5'
+        className={`card border-2 border-dashed cursor-pointer text-center py-12 transition-all duration-300 ${
+          dragging ? 'border-accent bg-accent/5 scale-[1.01] shadow-glow'
+          : file ? 'border-accent/50 bg-accent/5'
           : 'border-border hover:border-gray-500 hover:bg-surface-hover/30'
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -78,18 +81,14 @@ export default function UploadZone({ onStart, error }: Props) {
         />
         {file ? (
           <div className="space-y-1">
-            <svg className="w-8 h-8 mx-auto text-green-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <IconCheck className="w-8 h-8 mx-auto text-green-400 mb-1" />
             <p className="text-lg font-medium text-white">{file.name}</p>
             <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
           </div>
         ) : (
           <div className="space-y-2">
             <div className="text-4xl text-gray-500">
-              <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
+              <IconUpload className="w-12 h-12 mx-auto" />
             </div>
             <p className="text-gray-300">Drop bugreport.zip, logcat.txt, or dmesg.log here</p>
             <p className="text-xs text-gray-500">Max 200 MB</p>
@@ -101,7 +100,7 @@ export default function UploadZone({ onStart, error }: Props) {
       <div className="space-y-2">
         <label className="text-sm text-gray-400">Problem description (optional)</label>
         <textarea
-          className="w-full bg-surface-card border border-border rounded-lg p-3 text-sm text-gray-200 placeholder-gray-500 resize-none focus:outline-none focus:border-border-focus"
+          className="w-full bg-surface-card border border-border rounded-xl p-3 text-sm text-gray-200 placeholder-gray-500 resize-none focus:outline-none focus:border-border-focus transition-colors"
           rows={3}
           placeholder="e.g. App freezes on launch after update..."
           value={description}
@@ -117,10 +116,10 @@ export default function UploadZone({ onStart, error }: Props) {
             <button
               key={tag}
               onClick={() => toggleTag(tag)}
-              className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+              className={`px-3 py-1 text-sm rounded-full border transition-all duration-200 ${
                 selectedTags.has(tag)
-                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                  : 'bg-surface-card border-border text-gray-400 hover:border-gray-500'
+                  ? 'bg-accent border-accent text-white shadow-glow'
+                  : 'bg-surface-card border-border text-gray-400 hover:border-gray-500 hover:text-gray-300'
               }`}
             >
               {tag}
@@ -132,32 +131,32 @@ export default function UploadZone({ onStart, error }: Props) {
       {/* Analysis Mode */}
       <div className="flex gap-3">
         <button
-          className={`flex-1 card text-center py-3 cursor-pointer transition-all ${
+          className={`flex-1 card text-center py-3.5 cursor-pointer transition-all duration-300 ${
             mode === 'quick'
-              ? 'border-indigo-500 bg-indigo-500/15 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
+              ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow'
               : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
           }`}
           onClick={() => setMode('quick')}
         >
-          <div className={`font-medium ${mode === 'quick' ? 'text-indigo-300' : ''}`}>Quick Analysis</div>
+          <div className={`font-medium ${mode === 'quick' ? 'text-accent-light' : ''}`}>Quick Analysis</div>
           <div className="text-xs text-gray-400 mt-1">Rule-based, &lt; 5s, no LLM</div>
         </button>
         <button
-          className={`flex-1 card text-center py-3 cursor-pointer transition-all ${
+          className={`flex-1 card text-center py-3.5 cursor-pointer transition-all duration-300 ${
             mode === 'deep'
-              ? 'border-indigo-500 bg-indigo-500/15 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10'
+              ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow'
               : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
           }`}
           onClick={() => setMode('deep')}
         >
-          <div className={`font-medium ${mode === 'deep' ? 'text-indigo-300' : ''}`}>Deep Analysis</div>
+          <div className={`font-medium ${mode === 'deep' ? 'text-accent-light' : ''}`}>Deep Analysis</div>
           <div className="text-xs text-gray-400 mt-1">AI-powered, 30s-2min</div>
         </button>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm flex items-start gap-2">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm flex items-start gap-2">
           <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
           </svg>
@@ -169,7 +168,7 @@ export default function UploadZone({ onStart, error }: Props) {
       <button
         onClick={handleSubmit}
         disabled={!file}
-        className="w-full py-3 rounded-lg font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 text-white"
+        className="w-full py-3.5 rounded-xl font-semibold transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed bg-warm hover:bg-warm-dark text-surface hover:shadow-warm-glow active:scale-[0.99]"
       >
         {file ? `Analyze ${file.name}` : 'Select a file to analyze'}
       </button>

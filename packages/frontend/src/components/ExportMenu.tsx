@@ -26,7 +26,7 @@ export default function ExportMenu({ uploadId, hasPowerData, hasTelephonyData }:
       <button
         onClick={() => setOpen(!open)}
         className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
-          open ? 'border-indigo-500/50 ring-1 ring-indigo-500/30 bg-indigo-500/5 text-indigo-400' : 'border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/10'
+          open ? 'border-accent/50 ring-1 ring-accent/30 bg-accent/5 text-accent' : 'border-accent/50 text-accent hover:bg-accent/10'
         }`}
       >
         Export
@@ -48,7 +48,7 @@ export default function ExportMenu({ uploadId, hasPowerData, hasTelephonyData }:
           {hasPowerData && (
             <button
               onClick={() => { downloadExport(uploadId, 'power-html'); setOpen(false); }}
-              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors border-t border-border text-indigo-400 ${hasTelephonyData ? '' : 'rounded-b-lg'}`}
+              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface-hover transition-colors border-t border-border text-accent ${hasTelephonyData ? '' : 'rounded-b-lg'}`}
             >
               Power Report
             </button>

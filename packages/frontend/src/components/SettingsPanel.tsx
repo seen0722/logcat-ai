@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchProviders, switchProvider } from '../lib/api';
+import { IconRefresh } from './Icons';
 
 interface ProviderInfo {
   type: string;
@@ -133,9 +134,7 @@ export default function SettingsPanel({ onClose }: Props) {
               className="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors disabled:opacity-40"
               title="Refresh status"
             >
-              <svg className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <IconRefresh className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={handleClose}
@@ -150,7 +149,7 @@ export default function SettingsPanel({ onClose }: Props) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
+              <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
             </div>
           ) : (
             <>
@@ -162,7 +161,7 @@ export default function SettingsPanel({ onClose }: Props) {
                     onClick={() => handleSelectProvider(prov.type)}
                     className={`rounded-lg border p-4 cursor-pointer transition-colors ${
                       prov.type === active
-                        ? 'border-indigo-500/60 bg-indigo-500/5'
+                        ? 'border-accent/60 bg-accent/5'
                         : 'border-gray-700/60 bg-[#161b22] hover:border-gray-600'
                     }`}
                   >
@@ -185,7 +184,7 @@ export default function SettingsPanel({ onClose }: Props) {
                           <span className="text-xs text-gray-500">{prov.model}</span>
                         )}
                         {prov.type === active && (
-                          <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full font-medium">
+                          <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
                             Active
                           </span>
                         )}
@@ -211,7 +210,7 @@ export default function SettingsPanel({ onClose }: Props) {
                       value={editModel}
                       onChange={(e) => setEditModel(e.target.value)}
                       placeholder="e.g. gpt-4o, gemini-pro, llama3"
-                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/60"
+                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                     />
                   </div>
                   {needsApiKey && (
@@ -222,7 +221,7 @@ export default function SettingsPanel({ onClose }: Props) {
                         value={editApiKey}
                         onChange={(e) => setEditApiKey(e.target.value)}
                         placeholder="Leave empty to keep current key"
-                        className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/60"
+                        className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                       />
                     </div>
                   )}
@@ -233,14 +232,14 @@ export default function SettingsPanel({ onClose }: Props) {
                       value={editBaseUrl}
                       onChange={(e) => setEditBaseUrl(e.target.value)}
                       placeholder={active === 'ollama' ? 'http://localhost:11434' : 'Leave empty for default'}
-                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/60"
+                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                     />
                   </div>
                   <div className="flex items-center gap-3 pt-1">
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors disabled:opacity-50"
+                      className="px-4 py-1.5 text-sm bg-accent hover:bg-accent text-white rounded-md transition-colors disabled:opacity-50"
                     >
                       {saving ? 'Saving...' : 'Save'}
                     </button>

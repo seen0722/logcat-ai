@@ -6,25 +6,31 @@
   * {
     box-sizing: border-box;
   }
+  html {
+    scroll-behavior: smooth;
+  }
   body {
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-optical-sizing: auto;
   }
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
   }
   /* Show focus ring only for keyboard navigation */
   :focus-visible {
-    outline: 2px solid #6366f1;
+    outline: 2px solid #4f8ff7;
     outline-offset: 2px;
     border-radius: 4px;
   }
   :focus:not(:focus-visible) {
     outline: none;
   }
-  /* Firefox scrollbar */
+  /* Custom scrollbar */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #2a2d3e transparent;
+    scrollbar-color: #243049 transparent;
   }
   ::-webkit-scrollbar {
     width: 6px;
@@ -33,24 +39,66 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a2d3e;
+    background: #243049;
     border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2d3d5a;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-surface-card border border-border rounded-lg p-4;
+    @apply bg-surface-card border border-border rounded-xl p-5 shadow-card transition-all duration-300;
+  }
+  .card:hover {
+    @apply shadow-card-hover;
   }
   .badge-critical {
-    @apply bg-red-500/15 text-red-400 text-xs font-medium px-2 py-0.5 rounded;
+    @apply bg-red-500/15 text-red-400 text-xs font-medium px-2.5 py-0.5 rounded-md;
   }
   .badge-warning {
-    @apply bg-amber-500/15 text-amber-400 text-xs font-medium px-2 py-0.5 rounded;
+    @apply bg-amber-500/15 text-amber-400 text-xs font-medium px-2.5 py-0.5 rounded-md;
   }
   .badge-info {
-    @apply bg-green-500/15 text-green-400 text-xs font-medium px-2 py-0.5 rounded;
+    @apply bg-green-500/15 text-green-400 text-xs font-medium px-2.5 py-0.5 rounded-md;
   }
+  /* Section headings — DM Serif Display */
+  .section-title {
+    @apply font-display text-xl font-normal tracking-tight text-gray-100;
+  }
+  /* Button variants */
+  .btn-primary {
+    @apply px-5 py-2.5 bg-accent hover:bg-accent-dark text-white rounded-xl font-medium transition-all duration-300 hover:shadow-glow active:scale-[0.98];
+  }
+  .btn-warm {
+    @apply px-5 py-2.5 bg-warm hover:bg-warm-dark text-surface rounded-xl font-semibold transition-all duration-300 hover:shadow-warm-glow active:scale-[0.98];
+  }
+  .btn-outline {
+    @apply px-5 py-2.5 border border-accent/40 text-accent rounded-xl font-medium transition-all duration-300 hover:bg-accent/10 hover:border-accent/60;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 border border-border text-gray-400 rounded-xl transition-all duration-300 hover:bg-surface-hover hover:text-gray-200 hover:border-border-focus/30;
+  }
+  /* Glassmorphic panel */
+  .glass {
+    @apply backdrop-blur-xl bg-surface-card/80 border border-border/60;
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+  /* Staggered reveal children */
+  .stagger-children > * {
+    opacity: 0;
+    animation: reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-children > *:nth-child(2) { animation-delay: 0.13s; }
+  .stagger-children > *:nth-child(3) { animation-delay: 0.21s; }
+  .stagger-children > *:nth-child(4) { animation-delay: 0.29s; }
+  .stagger-children > *:nth-child(5) { animation-delay: 0.37s; }
+  .stagger-children > *:nth-child(6) { animation-delay: 0.45s; }
+  .stagger-children > *:nth-child(7) { animation-delay: 0.53s; }
+  .stagger-children > *:nth-child(8) { animation-delay: 0.61s; }
 }
 
 /* Hide scrollbar for nav overflow */
@@ -62,11 +110,16 @@
   display: none;
 }
 
-/* Subtle pulse animation for low-score health rings */
+@keyframes reveal {
+  0% { opacity: 0; transform: translateY(24px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+
 .animate-pulse-subtle {
   animation: pulse-subtle 2s ease-in-out infinite;
 }

@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react';
+import { IconOverview, IconTag, IconBattery, IconSignal, IconBrain, IconLightbulb, IconANR, IconStopwatch, IconChat } from './Icons';
 
 interface Section {
   id: string;
   label: string;
   icon: string;
 }
+
+const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+  overview: IconOverview,
+  tags: IconTag,
+  power: IconBattery,
+  telephony: IconSignal,
+  brain: IconBrain,
+  insights: IconLightbulb,
+  anr: IconANR,
+  timeline: IconStopwatch,
+  chat: IconChat,
+};
 
 interface Props {
   sections: Section[];
@@ -65,12 +78,14 @@ export default function SectionNav({ sections }: Props) {
                   onClick={() => scrollTo(s.id)}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs transition-colors ${
                     isActive
-                      ? 'text-indigo-400 bg-indigo-500/10'
+                      ? 'text-accent bg-accent/10'
                       : 'text-gray-500 hover:text-gray-300 hover:bg-surface-hover'
                   }`}
                   title={s.label}
                 >
-                  <span className="w-4 text-center shrink-0">{s.icon}</span>
+                  <span className="w-4 flex items-center justify-center shrink-0">
+                    {(() => { const IconComp = SECTION_ICONS[s.icon]; return IconComp ? <IconComp className="w-4 h-4" /> : <span>{s.icon}</span>; })()}
+                  </span>
                   {!collapsed && <span className="truncate">{s.label}</span>}
                 </button>
               );
@@ -90,14 +105,16 @@ export default function SectionNav({ sections }: Props) {
                 onClick={() => scrollTo(s.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs whitespace-nowrap transition-colors relative ${
                   isActive
-                    ? 'text-indigo-400'
+                    ? 'text-accent'
                     : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
-                <span className="text-sm">{s.icon}</span>
+                <span className="flex items-center">
+                  {(() => { const IconComp = SECTION_ICONS[s.icon]; return IconComp ? <IconComp className="w-4 h-4" /> : <span className="text-sm">{s.icon}</span>; })()}
+                </span>
                 <span>{s.label}</span>
                 {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-indigo-400 rounded-full" />
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full" />
                 )}
               </button>
             );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchHistory, deleteHistory } from '../lib/api';
 import { AnalysisSummary } from '../lib/types';
+import { IconClose, IconDelete } from './Icons';
 
 interface Props {
   onLoad: (id: string) => void;
@@ -86,17 +87,17 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
   return (
     <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
-        className={`w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`w-full max-w-lg bg-surface border-l border-border h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60 shrink-0">
-          <h2 className="text-lg font-semibold text-gray-100">Analysis History</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <h2 className="font-display text-lg text-gray-100">Analysis History</h2>
           <button
             onClick={handleClose}
-            className="text-gray-500 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
+            className="text-gray-500 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover transition-colors"
           >
-            &times;
+            <IconClose size={18} />
           </button>
         </div>
 
@@ -107,7 +108,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             placeholder="Filter by filename..."
-            className="w-full bg-[#161b22] border border-gray-700/60 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500/60"
+            className="w-full bg-surface-card border border-border rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-border-focus transition-colors"
           />
         </div>
 
@@ -115,7 +116,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
         <div className="flex-1 overflow-y-auto p-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
+              <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
             </div>
           ) : items.length === 0 ? (
             <div className="text-center text-gray-500 py-16">
@@ -128,7 +129,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
                 <div
                   key={item.id}
                   onClick={() => onLoad(item.id)}
-                  className="bg-[#161b22] border border-gray-700/60 rounded-lg p-4 cursor-pointer hover:border-indigo-500/50 hover:bg-[#1c2333] transition-colors"
+                  className="bg-surface-card border border-border rounded-xl p-4 cursor-pointer hover:border-accent/40 hover:bg-surface-hover hover:shadow-card transition-all duration-200"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -140,15 +141,15 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
                     </div>
                     <button
                       onClick={(e) => handleDelete(item.id, e)}
-                      className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded hover:bg-red-500/10 transition-colors shrink-0"
+                      className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-500/10 transition-colors shrink-0"
                       title="Delete"
                     >
-                      &#x2715;
+                      <IconDelete size={14} />
                     </button>
                   </div>
                   <div className="flex items-center gap-3 mt-2.5 text-xs">
                     {item.deviceModel && (
-                      <span className="text-gray-400 bg-gray-800/50 px-1.5 py-0.5 rounded">{item.deviceModel}</span>
+                      <span className="text-gray-400 bg-surface px-2 py-0.5 rounded-lg border border-border/50">{item.deviceModel}</span>
                     )}
                     {item.androidVer && (
                       <span className="text-gray-500">Android {item.androidVer}</span>
@@ -176,11 +177,11 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
 
         {/* Pagination footer */}
         {total > pageSize && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-700/60 shrink-0 text-xs">
+          <div className="flex items-center justify-between px-6 py-3 border-t border-border shrink-0 text-xs">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-2.5 py-1 rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
+              className="btn-ghost text-xs px-3 py-1 disabled:opacity-30"
             >
               Previous
             </button>
@@ -190,7 +191,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={(page + 1) * pageSize >= total}
-              className="px-2.5 py-1 rounded border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors"
+              className="btn-ghost text-xs px-3 py-1 disabled:opacity-30"
             >
               Next
             </button>
@@ -199,19 +200,19 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
 
         {/* Custom Confirm Dialog */}
         {confirmDeleteId && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60" onClick={() => setConfirmDeleteId(null)}>
-            <div className="bg-[#161b22] border border-gray-700/60 rounded-xl p-6 max-w-sm mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={() => setConfirmDeleteId(null)}>
+            <div className="glass rounded-xl p-6 max-w-sm mx-4 shadow-elevated" onClick={(e) => e.stopPropagation()}>
               <p className="text-gray-200 text-sm mb-4">Delete this analysis? This action cannot be undone.</p>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirmDeleteId(null)}
-                  className="px-4 py-1.5 text-sm border border-gray-700/60 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors"
+                  className="btn-ghost text-sm px-4 py-1.5"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmDelete}
-                  className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+                  className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors"
                 >
                   Delete
                 </button>

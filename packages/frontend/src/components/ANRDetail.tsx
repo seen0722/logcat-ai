@@ -41,10 +41,10 @@ export default function ANRDetail({ analyses }: Props) {
   return (
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">ANR Detail</h2>
+        <h2 className="font-display text-lg text-gray-100">ANR Detail</h2>
         {withAnalysis.length > 1 && (
           <select
-            className="bg-surface border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-indigo-500"
+            className="bg-surface border border-border rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-border-focus transition-colors"
             value={selectedIdx}
             onChange={(e) => setSelectedIdx(Number(e.target.value))}
           >

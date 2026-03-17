@@ -146,7 +146,7 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
                         <td className="py-2 px-3 text-center">
                           <button
                             onClick={() => onViewReport(item.id)}
-                            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                            className="text-xs text-accent hover:text-accent-light transition-colors"
                           >
                             View
                           </button>

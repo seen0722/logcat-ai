@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { InsightCard } from '../lib/types';
 import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary } from '../lib/types';
+import { IconChevronDown } from './Icons';
 
 interface Props {
   metadata: BugreportMetadata;
@@ -16,6 +17,20 @@ function scoreColor(score: number): string {
   if (score >= 80) return 'text-green-400';
   if (score >= 50) return 'text-amber-400';
   return 'text-red-400';
+}
+
+function scoreStrokeColor(score: number): string {
+  if (score >= 80) return '#22c55e';
+  if (score >= 50) return '#f59e0b';
+  return '#ef4444';
+}
+
+function scoreLabel(score: number): string {
+  if (score >= 90) return 'Excellent';
+  if (score >= 80) return 'Good';
+  if (score >= 60) return 'Fair';
+  if (score >= 40) return 'Poor';
+  return 'Critical';
 }
 
 /** Build a brief deduction reason for a given health dimension */
@@ -40,8 +55,9 @@ function deductionHint(dimension: string, score: number, insights?: InsightCard[
   return parts.slice(0, 2).join(', ');
 }
 
-function ScoreRing({ score, label, size = 64, hint, showMax }: { score: number; label: string; size?: number; hint?: string; showMax?: boolean }) {
-  const radius = (size - 8) / 2;
+function OverallScoreRing({ score }: { score: number }) {
+  const size = 120;
+  const radius = (size - 10) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
   const isLow = score < 70;
@@ -52,26 +68,49 @@ function ScoreRing({ score, label, size = 64, hint, showMax }: { score: number; 
         <svg width={size} height={size} className="-rotate-90">
           <circle
             cx={size / 2} cy={size / 2} r={radius}
-            fill="none" stroke="#2a2d3e" strokeWidth={4}
+            fill="none" stroke="#1a2540" strokeWidth={6}
           />
           <circle
             cx={size / 2} cy={size / 2} r={radius}
             fill="none"
-            stroke={score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444'}
-            strokeWidth={isLow ? 5 : 4}
+            stroke={scoreStrokeColor(score)}
+            strokeWidth={isLow ? 7 : 6}
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             className="transition-all duration-1000 ease-out"
+            style={{ filter: `drop-shadow(0 0 6px ${scoreStrokeColor(score)}40)` }}
           />
         </svg>
-        <span className={`absolute inset-0 flex flex-col items-center justify-center ${scoreColor(score)}`}>
-          <span className="text-lg font-bold leading-none">{score}</span>
-          {showMax && <span className="text-[9px] text-gray-600 leading-none mt-0.5">/100</span>}
+        <span className={`absolute inset-0 flex flex-col items-center justify-center`}>
+          <span className={`text-3xl font-bold leading-none ${scoreColor(score)}`}>{score}</span>
+          <span className="text-[10px] text-gray-500 mt-1">/100</span>
         </span>
       </div>
-      <span className={`text-xs mt-1.5 ${isLow ? 'text-amber-400 font-medium' : 'text-gray-500'}`}>{label}</span>
-      {hint && <span className="text-[10px] text-gray-600 mt-0.5 max-w-[120px] text-center leading-tight" title={hint}>{hint}</span>}
+      <span className={`text-sm font-medium mt-2 ${scoreColor(score)}`}>{scoreLabel(score)}</span>
+    </div>
+  );
+}
+
+function DimensionBar({ score, label, hint }: { score: number; label: string; hint?: string }) {
+  const isLow = score < 70;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className={`text-xs font-medium ${isLow ? scoreColor(score) : 'text-gray-400'}`}>{label}</span>
+        <span className={`text-xs font-bold ${scoreColor(score)}`}>{score}</span>
+      </div>
+      <div className="h-1.5 bg-surface rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-1000 ease-out"
+          style={{
+            width: `${score}%`,
+            background: scoreStrokeColor(score),
+            boxShadow: isLow ? `0 0 8px ${scoreStrokeColor(score)}60` : 'none',
+          }}
+        />
+      </div>
+      {hint && <span className="text-[10px] text-gray-600 leading-tight block">{hint}</span>}
     </div>
   );
 }
@@ -91,7 +130,6 @@ function formatUptime(seconds: number): string {
 
 export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus, insights }: Props) {
   const { breakdown } = healthScore;
-  const overallBorderColor = healthScore.overall >= 80 ? 'border-l-green-500' : healthScore.overall >= 50 ? 'border-l-amber-500' : 'border-l-red-500';
   const [showHwSwDetails, setShowHwSwDetails] = useState(false);
 
   const hwSwDetails: Array<{ label: string; value: string }> = [];
@@ -106,126 +144,138 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
   if (metadata.bootloaderVersion && metadata.bootloaderVersion !== 'unknown') hwSwDetails.push({ label: 'Boot Image', value: metadata.bootloaderVersion });
 
   return (
-    <div className={`card space-y-4 border-l-4 ${overallBorderColor}`}>
-      <h2 className="text-lg font-semibold">System Overview</h2>
+    <div className="space-y-5">
+      {/* ── Hero: Device Identity + Health Score ── */}
+      <div className="card p-0 overflow-hidden">
+        {/* Top gradient bar */}
+        <div className="h-1" style={{ background: `linear-gradient(90deg, ${scoreStrokeColor(healthScore.overall)}, ${scoreStrokeColor(healthScore.overall)}80, transparent)` }} />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div>
-          <span className="text-gray-500">Device</span>
-          <p className="font-medium">{metadata.deviceModel}</p>
-        </div>
-        <div>
-          <span className="text-gray-500">Manufacturer</span>
-          <p className="font-medium">{metadata.manufacturer}</p>
-        </div>
-        <div>
-          <span className="text-gray-500">Android</span>
-          <p className="font-medium">{metadata.androidVersion} (SDK {metadata.sdkLevel})</p>
-        </div>
-        <div>
-          <span className="text-gray-500">Build</span>
-          <p className="font-medium truncate" title={metadata.buildFingerprint}>
-            {metadata.buildFingerprint.split('/').slice(-2).join('/')}
-          </p>
-        </div>
-        {metadata.buildType && metadata.buildType !== 'unknown' && (
-          <div>
-            <span className="text-gray-500">Build Type</span>
-            <p className={`font-medium ${metadata.buildType !== 'user' ? 'text-amber-400' : ''}`}>
-              {metadata.buildType}
-              {metadata.buildType !== 'user' && (
-                <span className="text-xs text-amber-500 ml-1">(non-production)</span>
-              )}
-            </p>
-          </div>
-        )}
-        {bootStatus && (
-          <>
-            <div>
-              <span className="text-gray-500">Boot</span>
-              <p className={`font-medium ${bootStatus.bootCompleted ? 'text-green-400' : 'text-red-400'}`}>
-                {bootStatus.bootCompleted ? 'Completed' : 'Incomplete'}
-              </p>
-            </div>
-            {bootStatus.uptimeSeconds != null && (
-              <div>
-                <span className="text-gray-500">Uptime</span>
-                <p className="font-medium">{formatUptime(bootStatus.uptimeSeconds)}</p>
+        <div className="p-6 pb-5">
+          {/* Device heading row */}
+          <div className="flex flex-col lg:flex-row lg:items-start gap-6 lg:gap-10">
+            {/* Left: Device identity */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-3 mb-1">
+                <h2 className="font-display text-2xl text-gray-100 tracking-tight">{metadata.deviceModel || 'Unknown Device'}</h2>
+                {metadata.manufacturer && (
+                  <span className="text-sm text-gray-500 font-light">{metadata.manufacturer}</span>
+                )}
               </div>
-            )}
-            {bootStatus.bootReason && (
-              <div>
-                <span className="text-gray-500">Boot Reason</span>
-                <p className={`font-medium ${/reboot|normal/i.test(bootStatus.bootReason) ? '' : 'text-amber-400'}`}>
-                  {bootStatus.bootReason}
-                </p>
-              </div>
-            )}
-            {bootStatus.systemServerRestarts > 0 && (
-              <div>
-                <span className="text-gray-500">SS Restarts</span>
-                <p className="font-medium text-red-400">{bootStatus.systemServerRestarts}</p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
 
-      {/* HW & SW Details */}
-      {hwSwDetails.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowHwSwDetails(!showHwSwDetails)}
-            className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 bg-surface px-3 py-1 rounded-md border border-border hover:border-indigo-500/30 transition-colors"
-          >
-            <svg className={`w-3 h-3 transition-transform ${showHwSwDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-            {showHwSwDetails ? 'Hide' : 'Show'} HW & SW details ({hwSwDetails.length})
-          </button>
-          {showHwSwDetails && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 mt-2 text-sm">
-              {hwSwDetails.map((d) => (
-                <div key={d.label} className="flex flex-col">
-                  <span className="text-xs text-gray-500">{d.label}</span>
-                  <p className="font-medium text-gray-300 truncate" title={d.value}>{d.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Health Scores */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-4 justify-items-center pt-2">
-        <ScoreRing score={healthScore.overall} label="Overall" size={80} showMax />
-        <ScoreRing score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
-        <ScoreRing score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
-        <ScoreRing score={breakdown.responsiveness} label="Response" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
-        <ScoreRing score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
-      </div>
-
-      {/* Memory, CPU & HAL Summary */}
-      {(memInfo || cpuInfo || halStatus) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-          {memInfo && memInfo.totalRamKb > 0 && (
-            <div className="bg-surface rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-400">Memory</h3>
-              <p className="text-sm">
-                Used <span className="font-medium text-gray-200">{formatKbToGb(memInfo.usedRamKb)} GB</span>
-                {' / '}
-                Total <span className="font-medium text-gray-200">{formatKbToGb(memInfo.totalRamKb)} GB</span>
-                <span className="text-gray-500 ml-2">
-                  ({((memInfo.freeRamKb / memInfo.totalRamKb) * 100).toFixed(0)}% free)
+              {/* Inline tags */}
+              <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-accent/10 text-accent border border-accent/20 rounded-lg">
+                  Android {metadata.androidVersion}
                 </span>
+                {metadata.buildType && metadata.buildType !== 'unknown' && (
+                  <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
+                    metadata.buildType !== 'user'
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      : 'bg-surface-hover text-gray-400 border border-border'
+                  }`}>
+                    {metadata.buildType}
+                  </span>
+                )}
+                {bootStatus?.bootCompleted != null && (
+                  <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
+                    bootStatus.bootCompleted
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}>
+                    Boot {bootStatus.bootCompleted ? 'OK' : 'Incomplete'}
+                  </span>
+                )}
+                {bootStatus?.uptimeSeconds != null && (
+                  <span className="inline-flex items-center px-2.5 py-1 text-xs text-gray-400 bg-surface-hover border border-border rounded-lg">
+                    Uptime {formatUptime(bootStatus.uptimeSeconds)}
+                  </span>
+                )}
+                {bootStatus?.bootReason && !/reboot|normal/i.test(bootStatus.bootReason) && (
+                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
+                    {bootStatus.bootReason}
+                  </span>
+                )}
+                {bootStatus && bootStatus.systemServerRestarts > 0 && (
+                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
+                    SS Restart ×{bootStatus.systemServerRestarts}
+                  </span>
+                )}
+              </div>
+
+              {/* Build fingerprint */}
+              <p className="text-xs text-gray-600 mt-2.5 font-mono truncate" title={metadata.buildFingerprint}>
+                {metadata.buildFingerprint}
+              </p>
+
+              {/* HW & SW Details toggle */}
+              {hwSwDetails.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowHwSwDetails(!showHwSwDetails)}
+                    className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
+                  >
+                    <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${showHwSwDetails ? 'rotate-180' : ''}`} />
+                    {showHwSwDetails ? 'Hide' : 'Show'} details ({hwSwDetails.length})
+                  </button>
+                  {showHwSwDetails && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 mt-3 pl-0.5">
+                      {hwSwDetails.map((d) => (
+                        <div key={d.label} className="flex flex-col">
+                          <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
+                          <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Health Score */}
+            <div className="flex items-start gap-8 lg:gap-10 shrink-0">
+              <OverallScoreRing score={healthScore.overall} />
+              <div className="w-40 space-y-3 pt-2">
+                <DimensionBar score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
+                <DimensionBar score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
+                <DimensionBar score={breakdown.responsiveness} label="Responsiveness" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
+                <DimensionBar score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── System Resources: Memory, CPU, HAL ── */}
+      {(memInfo || cpuInfo || halStatus) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {memInfo && memInfo.totalRamKb > 0 && (
+            <div className="card space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-base text-gray-200">Memory</h3>
+                <span className="text-xs text-gray-500">{((memInfo.freeRamKb / memInfo.totalRamKb) * 100).toFixed(0)}% free</span>
+              </div>
+              {/* Usage bar */}
+              <div className="h-2 bg-surface rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${((memInfo.usedRamKb / memInfo.totalRamKb) * 100).toFixed(0)}%`,
+                    background: memInfo.freeRamKb / memInfo.totalRamKb < 0.2 ? '#ef4444' : memInfo.freeRamKb / memInfo.totalRamKb < 0.4 ? '#f59e0b' : '#22c55e',
+                  }}
+                />
+              </div>
+              <p className="text-sm text-gray-400">
+                <span className="text-gray-200 font-medium">{formatKbToGb(memInfo.usedRamKb)} GB</span>
+                <span className="mx-1">/</span>
+                {formatKbToGb(memInfo.totalRamKb)} GB
               </p>
               {memInfo.topProcesses.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500">Top processes (PSS)</span>
+                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                  <span className="text-[10px] text-gray-600 uppercase tracking-wider">Top Processes (PSS)</span>
                   {memInfo.topProcesses.slice(0, 3).map((p, i) => (
-                    <div key={i} className="flex justify-between text-xs text-gray-400">
-                      <span className="truncate mr-2">{p.processName}</span>
-                      <span className="shrink-0">{(p.totalPssKb / 1024).toFixed(0)} MB</span>
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-gray-400 truncate mr-2">{p.processName}</span>
+                      <span className="text-gray-300 shrink-0 font-mono">{(p.totalPssKb / 1024).toFixed(0)} MB</span>
                     </div>
                   ))}
                 </div>
@@ -234,22 +284,47 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
           )}
 
           {cpuInfo && cpuInfo.totalCpuPercent > 0 && (
-            <div className="bg-surface rounded-lg p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-400">CPU</h3>
-              <p className="text-sm">
-                Total <span className="font-medium text-gray-200">{cpuInfo.totalCpuPercent}%</span>
-                <span className="text-gray-500 ml-2">
-                  ({cpuInfo.userPercent}% user / {cpuInfo.kernelPercent}% kernel
-                  {cpuInfo.ioWaitPercent > 0 && ` / ${cpuInfo.ioWaitPercent}% iowait`})
+            <div className="card space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-base text-gray-200">CPU</h3>
+                <span className={`text-xs font-medium ${cpuInfo.totalCpuPercent > 80 ? 'text-red-400' : cpuInfo.totalCpuPercent > 50 ? 'text-amber-400' : 'text-gray-500'}`}>
+                  {cpuInfo.totalCpuPercent}% total
                 </span>
-              </p>
+              </div>
+              {/* Usage bar */}
+              <div className="h-2 bg-surface rounded-full overflow-hidden flex">
+                <div
+                  className="h-full transition-all duration-700"
+                  style={{ width: `${cpuInfo.userPercent}%`, background: '#4f8ff7' }}
+                  title={`User ${cpuInfo.userPercent}%`}
+                />
+                <div
+                  className="h-full transition-all duration-700"
+                  style={{ width: `${cpuInfo.kernelPercent}%`, background: '#d4a06a' }}
+                  title={`Kernel ${cpuInfo.kernelPercent}%`}
+                />
+                {cpuInfo.ioWaitPercent > 0 && (
+                  <div
+                    className="h-full transition-all duration-700"
+                    style={{ width: `${cpuInfo.ioWaitPercent}%`, background: '#ef4444' }}
+                    title={`IO Wait ${cpuInfo.ioWaitPercent}%`}
+                  />
+                )}
+              </div>
+              <div className="flex gap-3 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent inline-block" />User {cpuInfo.userPercent}%</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-warm inline-block" />Kernel {cpuInfo.kernelPercent}%</span>
+                {cpuInfo.ioWaitPercent > 0 && (
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />IO {cpuInfo.ioWaitPercent}%</span>
+                )}
+              </div>
               {cpuInfo.topProcesses.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500">Top processes (per-core %)</span>
+                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                  <span className="text-[10px] text-gray-600 uppercase tracking-wider">Top Processes</span>
                   {cpuInfo.topProcesses.slice(0, 3).map((p, i) => (
-                    <div key={i} className="flex justify-between text-xs text-gray-400">
-                      <span className="truncate mr-2">{p.processName}</span>
-                      <span className="shrink-0">{p.cpuPercent}%</span>
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-gray-400 truncate mr-2">{p.processName}</span>
+                      <span className="text-gray-300 shrink-0 font-mono">{p.cpuPercent}%</span>
                     </div>
                   ))}
                 </div>
@@ -262,23 +337,35 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             const totalFamilies = halStatus.families.length;
             const oemIssues = halStatus.families.filter((f) => f.isVendor && f.isOem && f.highestStatus !== 'alive');
             const isTruncated = halStatus.truncated;
+            const alivePercent = Math.round((aliveFamilies / totalFamilies) * 100);
             return (
-              <div className="bg-surface rounded-lg p-3 space-y-2">
-                <h3 className="text-sm font-semibold text-gray-400">HAL Services</h3>
+              <div className="card space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-base text-gray-200">HAL Services</h3>
+                  <span className={`text-xs font-medium ${alivePercent >= 90 ? 'text-green-400' : alivePercent >= 70 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {aliveFamilies}/{totalFamilies} alive
+                  </span>
+                </div>
                 {isTruncated && (
-                  <p className="text-xs text-amber-400">lshal truncated — BSP HAL status unreliable</p>
+                  <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+                    lshal truncated — BSP HAL status unreliable
+                  </p>
                 )}
-                <p className="text-sm">
-                  <span className="font-medium text-green-400">{aliveFamilies}</span>
-                  <span className="text-gray-400"> / {totalFamilies} families alive</span>
-                  {oemIssues.length > 0 && (
-                    <span className="text-red-400 ml-2">({oemIssues.length} OEM issue{oemIssues.length > 1 ? 's' : ''})</span>
-                  )}
-                </p>
+                {/* Usage bar */}
+                <div className="h-2 bg-surface rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${alivePercent}%`,
+                      background: alivePercent >= 90 ? '#22c55e' : alivePercent >= 70 ? '#f59e0b' : '#ef4444',
+                    }}
+                  />
+                </div>
                 {oemIssues.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                    <span className="text-[10px] text-red-400 uppercase tracking-wider">OEM Issues ({oemIssues.length})</span>
                     {oemIssues.map((f, i) => (
-                      <div key={i} className="text-xs text-red-400 truncate" title={f.familyName}>
+                      <div key={i} className="text-xs text-red-400/80 truncate" title={f.familyName}>
                         {f.shortName}@{f.highestVersion} — {f.highestStatus}
                       </div>
                     ))}

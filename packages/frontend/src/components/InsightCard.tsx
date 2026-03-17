@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { InsightCard as InsightCardType } from '../lib/types';
 import StackTrace from './StackTrace';
+import { IconExpand, IconCollapse } from './Icons';
 
 interface Props {
   insight: InsightCardType;
@@ -63,10 +64,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 function DeepAnalysisBlock({ deepAnalysis }: { deepAnalysis: NonNullable<InsightCardType['deepAnalysis']> }) {
   return (
-    <div className="border border-indigo-500/30 rounded-lg p-3 bg-indigo-500/5 space-y-3">
+    <div className="rounded-xl p-4 bg-accent/5 border border-accent/20 space-y-3">
       {/* Header with category badge */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-indigo-400 font-medium text-xs uppercase tracking-wide">
+        <span className="text-accent font-medium text-xs uppercase tracking-wide">
           AI Deep Analysis
         </span>
         <span className="badge-info">{deepAnalysis.confidence}</span>
@@ -146,7 +147,7 @@ function DeepAnalysisBlock({ deepAnalysis }: { deepAnalysis: NonNullable<Insight
               <a
                 key={id}
                 href={`#${id}`}
-                className="text-xs text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded hover:bg-indigo-500/20 transition-colors"
+                className="text-xs text-accent bg-accent/10 px-1.5 py-0.5 rounded hover:bg-accent/20 transition-colors"
                 onClick={(e) => {
                   e.stopPropagation();
                   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -169,7 +170,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
   return (
     <div
       id={insight.id}
-      className={`border-l-4 ${styles.border} bg-surface-card border border-border rounded-lg overflow-hidden transition-colors`}
+      className={`border-l-4 ${styles.border} card p-0 overflow-hidden transition-colors`}
     >
       {/* Header — clickable to expand/collapse */}
       <div
@@ -197,17 +198,17 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
           </div>
           <h3 className="font-medium mt-1">{insight.title}</h3>
         </div>
-        <span className="text-gray-500 text-sm">{expanded ? '▲' : '▼'}</span>
+        {expanded ? <IconCollapse className="w-4 h-4 text-gray-500" /> : <IconExpand className="w-4 h-4 text-gray-500" />}
       </div>
 
       {/* Expanded */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 text-sm border-t border-border/50 pt-3">
+        <div className="px-5 pb-5 space-y-3 text-sm border-t border-border/50 pt-3">
           <DescriptionBlock text={insight.description} />
 
           {insight.stackTrace && (
             <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Stack Trace</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600">Stack Trace</span>
               <div className="mt-1">
                 <StackTrace frames={insight.stackTrace} />
               </div>
@@ -216,7 +217,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
 
           {insight.relatedLogSnippet && (
             <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Related Logs</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600">Related Logs</span>
               <pre className="mt-1 p-2 bg-surface rounded text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap">
                 {insight.relatedLogSnippet}
               </pre>
@@ -225,13 +226,13 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
 
           {insight.suggestedAllowRule && (
             <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide">SELinux Allow Rule</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600">SELinux Allow Rule</span>
               <div className="mt-1 flex items-center gap-2">
                 <code className="flex-1 p-2 bg-surface rounded text-xs text-amber-300 font-mono">
                   {insight.suggestedAllowRule}
                 </code>
                 <button
-                  className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                  className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-surface-hover text-gray-300 rounded-lg transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigator.clipboard.writeText(insight.suggestedAllowRule!);
@@ -245,7 +246,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
 
           {insight.debugCommands && insight.debugCommands.length > 0 && (
             <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Suggested Debug Commands</span>
+              <span className="text-[10px] uppercase tracking-wider text-gray-600">Suggested Debug Commands</span>
               <div className="mt-1 space-y-1">
                 {insight.debugCommands.map((cmd, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -253,7 +254,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
                       {cmd}
                     </code>
                     <button
-                      className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                      className="shrink-0 px-2 py-1 text-xs bg-gray-700 hover:bg-surface-hover text-gray-300 rounded-lg transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(cmd);

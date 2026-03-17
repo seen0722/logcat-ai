@@ -1,4 +1,5 @@
 import { SSEProgress } from '../lib/types';
+import { IconCheck } from './Icons';
 
 interface Props {
   progress: SSEProgress | null;
@@ -37,14 +38,12 @@ export default function ProgressView({ progress, onCancel }: Props) {
                     isDone
                       ? 'bg-green-600 text-white'
                       : isActive
-                        ? 'bg-indigo-600 text-white animate-pulse-subtle shadow-lg shadow-indigo-500/30'
+                        ? 'bg-accent text-white animate-pulse-subtle shadow-lg shadow-accent/30'
                         : 'bg-surface-card border border-border text-gray-500'
                   }`}
                 >
                   {isDone ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
+                    <IconCheck className="w-5 h-5" />
                   ) : stage.num}
                 </div>
                 <span className={`text-xs mt-1.5 transition-colors ${isActive ? 'text-white font-medium' : isDone ? 'text-green-400' : 'text-gray-500'}`}>
@@ -59,7 +58,7 @@ export default function ProgressView({ progress, onCancel }: Props) {
                       i < currentIdx || progress.stage === 'complete'
                         ? 'bg-green-600'
                         : i === currentIdx
-                          ? 'bg-gradient-to-r from-indigo-600 to-border'
+                          ? 'bg-gradient-to-r from-accent to-border'
                           : 'bg-border'
                     }`}
                   />
@@ -73,7 +72,7 @@ export default function ProgressView({ progress, onCancel }: Props) {
       {/* Progress bar */}
       <div className="w-full bg-surface-card rounded-full h-2 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full transition-all duration-500 ease-out"
+          className="h-full bg-gradient-to-r from-accent to-accent rounded-full transition-all duration-500 ease-out"
           style={{ width: `${progress.progress}%` }}
         />
       </div>

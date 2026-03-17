@@ -142,7 +142,7 @@ export default function InsightsCards({ insights, halStatus }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
+        <h2 className="font-display text-lg text-gray-100">
           Insights <span className="text-gray-500 text-sm font-normal">({filtered.length})</span>
         </h2>
         <div className="flex gap-1.5">
@@ -154,12 +154,12 @@ export default function InsightsCards({ insights, halStatus }: Props) {
               <button
                 key={f.key}
                 onClick={() => { setFilter(f.key); setShowAllInfo(f.key === 'info'); }}
-                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                className={`px-2.5 py-1 text-xs rounded-lg transition-all duration-200 ${
                   active
                     ? f.key === 'critical' ? 'bg-red-500/20 text-red-400'
                     : f.key === 'warning' ? 'bg-amber-500/20 text-amber-400'
                     : f.key === 'info' ? 'bg-green-500/20 text-green-400'
-                    : 'bg-indigo-500/20 text-indigo-400'
+                    : 'bg-accent/20 text-accent'
                     : 'text-gray-500 hover:text-gray-300 hover:bg-surface'
                 }`}
               >
@@ -186,7 +186,7 @@ export default function InsightsCards({ insights, halStatus }: Props) {
             <div key={group.key} className="space-y-2">
               <button
                 onClick={() => toggleGroup(group.key)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface-card border border-border rounded-lg text-sm hover:bg-surface-hover transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2.5 card text-sm hover:bg-surface-hover transition-colors"
               >
                 <span className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-xs bg-amber-500/20 text-amber-400">
                   {group.insights.length}
@@ -220,7 +220,7 @@ export default function InsightsCards({ insights, halStatus }: Props) {
             <div key={group.key} className="space-y-2">
               <button
                 onClick={() => toggleGroup(group.key)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 bg-surface-card border border-border rounded-lg text-sm hover:bg-surface-hover transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2.5 card text-sm hover:bg-surface-hover transition-colors"
               >
                 <span className="w-5 h-5 shrink-0 rounded flex items-center justify-center text-xs bg-green-500/20 text-green-400">
                   {group.insights.length}
@@ -247,7 +247,7 @@ export default function InsightsCards({ insights, halStatus }: Props) {
         {hiddenInfoCount > 0 && (
           <button
             onClick={() => setShowAllInfo(true)}
-            className="w-full py-3 text-sm text-gray-500 hover:text-gray-300 bg-surface-card border border-border border-dashed rounded-lg hover:bg-surface-hover transition-colors"
+            className="w-full py-3 text-sm text-gray-500 hover:text-gray-300 btn-ghost rounded-xl border border-dashed border-border hover:bg-surface-hover transition-all duration-200"
           >
             Show {hiddenInfoCount} info-level items
           </button>

@@ -107,17 +107,17 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
 
     let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 hover:bg-gray-800/30 ${levelBg(entry.level)}`;
     if (isCurrentMatch) {
-      rowClass += ' bg-indigo-500/20';
+      rowClass += ' bg-accent/20';
     } else if (isFocus) {
-      rowClass += ' border-l-[3px] border-l-indigo-500';
+      rowClass += ' border-l-[3px] border-l-accent';
     } else if (isMatch) {
-      rowClass += ' border-l-2 border-l-indigo-400/30';
+      rowClass += ' border-l-2 border-l-accent/30';
     }
 
     return (
       <div style={style} className={rowClass}>
         <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-          {isFocus && <span className="text-indigo-400 font-bold text-[9px]">{'\u25B6 '}</span>}
+          {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
           {entry.timestamp}
         </span>
         <span className="text-gray-600 px-1 whitespace-nowrap w-[75px] shrink-0">
@@ -137,17 +137,17 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
 
     let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
     if (isCurrentMatch) {
-      rowClass += ' bg-indigo-500/20';
+      rowClass += ' bg-accent/20';
     } else if (isFocus) {
-      rowClass += ' border-l-[3px] border-l-indigo-500';
+      rowClass += ' border-l-[3px] border-l-accent';
     } else if (isMatch) {
-      rowClass += ' border-l-2 border-l-indigo-400/30';
+      rowClass += ' border-l-2 border-l-accent/30';
     }
 
     return (
       <div style={style} className={rowClass}>
         <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-          {isFocus && <span className="text-indigo-400 font-bold text-[9px]">{'\u25B6 '}</span>}
+          {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
           [{entry.timestamp}]
         </span>
         <span className={`px-1 whitespace-nowrap w-[70px] shrink-0 font-semibold ${kernelLevelColor(entry.level)}`}>
@@ -475,7 +475,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               onClick={() => switchSource('logcat')}
               className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
                 source === 'logcat'
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-accent text-white'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
             >
@@ -485,7 +485,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               onClick={() => switchSource('kernel')}
               className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
                 source === 'kernel'
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-accent text-white'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
             >
@@ -503,7 +503,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); goToPrevMatch(); }
               }}
               placeholder={source === 'kernel' ? 'Find in kernel logs...' : 'Find in logs...'}
-              className="w-full bg-[#161b22] border border-gray-700/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
+              className="w-full bg-[#161b22] border border-gray-700/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
             />
             {q.trim() && (
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
@@ -546,7 +546,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   value={tag}
                   onChange={(e) => setTag(e.target.value)}
                   placeholder="e.g. ActivityManager"
-                  className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
               </div>
               <div className="flex items-center gap-1">
@@ -554,7 +554,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <select
                   value={buffer}
                   onChange={(e) => setBuffer(e.target.value)}
-                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-indigo-500"
+                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
                   <option value="main">main</option>
@@ -569,7 +569,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <select
                   value={level}
                   onChange={(e) => setLevel(e.target.value)}
-                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-indigo-500"
+                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
                   <option value="V">V+</option>
@@ -587,7 +587,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   value={pid}
                   onChange={(e) => setPid(e.target.value)}
                   placeholder="—"
-                  className="w-16 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  className="w-16 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
               </div>
             </>
@@ -599,7 +599,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               <select
                 value={level}
                 onChange={(e) => setLevel(e.target.value)}
-                className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-indigo-500"
+                className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
               >
                 <option value="">All</option>
                 <option value="<0>">&lt;0&gt; EMERG</option>
@@ -622,7 +622,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               placeholder="MM-DD HH:mm:ss"
-              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
+              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
             />
           </div>
           <div className="flex items-center gap-1">
@@ -632,13 +632,13 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               placeholder="MM-DD HH:mm:ss"
-              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-indigo-500 font-mono"
+              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
             />
           </div>
           <button
             onClick={() => loadData()}
             disabled={loading}
-            className="px-3 py-1 text-[11px] font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-md transition-colors"
+            className="px-3 py-1 text-[11px] font-medium bg-accent hover:bg-accent disabled:opacity-50 text-white rounded-md transition-colors"
           >
             {loading ? 'Loading...' : 'Load Range'}
           </button>
@@ -666,14 +666,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               {q.trim() && matchList.length > 0 && (
                 <>
                   <span className="text-gray-600">|</span>
-                  <span className="font-medium text-indigo-400">{matchList.length.toLocaleString()}</span>
+                  <span className="font-medium text-accent">{matchList.length.toLocaleString()}</span>
                   <span>matches</span>
                 </>
               )}
               {method && (
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
                   method === 'fts5'
-                    ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                    ? 'bg-accent/20 text-accent border border-accent/30'
                     : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
                 }`}>
                   {method}

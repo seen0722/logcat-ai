@@ -109,9 +109,9 @@ export default function ComparisonView({ comparison, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60">
           <h2 className="text-lg font-semibold text-gray-100">
-            Comparison: <span className="font-mono text-indigo-400">{shortId(comparison.leftId)}</span>
+            Comparison: <span className="font-mono text-accent">{shortId(comparison.leftId)}</span>
             {' '}vs{' '}
-            <span className="font-mono text-indigo-400">{shortId(comparison.rightId)}</span>
+            <span className="font-mono text-accent">{shortId(comparison.rightId)}</span>
           </h2>
           <button
             onClick={handleClose}

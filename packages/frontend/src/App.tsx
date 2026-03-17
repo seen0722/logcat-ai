@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useComparison } from './hooks/useComparison';
+import { IconSettings, IconMenu } from './components/Icons';
 import { BatchAggregation, BatchFileResult } from './lib/types';
 import UploadZone from './components/UploadZone';
 import ProgressView from './components/ProgressView';
@@ -100,26 +101,26 @@ export default function App() {
   const navSections = useMemo(() => {
     if (!result) return [];
     const sections = [
-      { id: 'section-overview', label: 'Overview', icon: '\u{1F4CB}' },
+      { id: 'section-overview', label: 'Overview', icon: 'overview' },
     ];
     if (result.logTagStats && result.logTagStats.length > 0) {
-      sections.push({ id: 'section-tags', label: 'Tags', icon: '\u{1F3F7}' });
+      sections.push({ id: 'section-tags', label: 'Tags', icon: 'tags' });
     }
     if (result.powerStatus) {
-      sections.push({ id: 'section-power', label: 'Power', icon: '\u{1F50B}' });
+      sections.push({ id: 'section-power', label: 'Power', icon: 'power' });
     }
     if (result.telephonyStatus) {
-      sections.push({ id: 'section-telephony', label: 'Telephony', icon: '\u{1F4F6}' });
+      sections.push({ id: 'section-telephony', label: 'Telephony', icon: 'telephony' });
     }
     if (result.deepAnalysisOverview) {
-      sections.push({ id: 'section-deep', label: 'AI Analysis', icon: '\u{1F9E0}' });
+      sections.push({ id: 'section-deep', label: 'AI Analysis', icon: 'brain' });
     }
-    sections.push({ id: 'section-insights', label: 'Insights', icon: '\u{1F4A1}' });
+    sections.push({ id: 'section-insights', label: 'Insights', icon: 'insights' });
     if (result.anrAnalyses.length > 0) {
-      sections.push({ id: 'section-anr', label: 'ANR', icon: '\u{26A0}' });
+      sections.push({ id: 'section-anr', label: 'ANR', icon: 'anr' });
     }
-    sections.push({ id: 'section-timeline', label: 'Timeline', icon: '\u{23F1}' });
-    sections.push({ id: 'section-chat', label: 'Chat', icon: '\u{1F4AC}' });
+    sections.push({ id: 'section-timeline', label: 'Timeline', icon: 'timeline' });
+    sections.push({ id: 'section-chat', label: 'Chat', icon: 'chat' });
     return sections;
   }, [result]);
 
@@ -137,106 +138,105 @@ export default function App() {
     <div className="min-h-screen p-6 md:p-10">
       {/* Header (when not in upload phase) */}
       {phase !== 'upload' && phase !== 'landing' && (
-        <div className="flex items-center justify-between mb-6 max-w-5xl mx-auto">
-          <h1 className="text-xl font-bold">Logcat AI</h1>
-          <div className="flex items-center gap-2">
-            {uploadId && phase === 'result' && (
-              <>
-                <button
-                  onClick={() => setCompareMode(true)}
-                  className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
-                >
-                  Compare
-                </button>
-                <button
-                  onClick={() => setShowSearch(true)}
-                  className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-indigo-500/50 text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
-                >
-                  Search
-                </button>
-              </>
-            )}
-            {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} hasTelephonyData={!!result?.telephonyStatus?.serviceState} /></span>}
-            {/* Desktop: show all buttons */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
-              title="LLM Settings"
-            >
-              <svg className="w-4 h-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setShowHistory(true)}
-              className="hidden sm:inline-flex px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-gray-400"
-            >
-              History
-            </button>
-            <button
-              onClick={reset}
-              className="hidden sm:inline-flex px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium"
-            >
-              New Analysis
-            </button>
-            {/* Mobile: overflow menu */}
-            <div className="relative sm:hidden">
-              <button
-                onClick={() => setShowHeaderMenu(!showHeaderMenu)}
-                className="px-2 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-                </svg>
-              </button>
-              {showHeaderMenu && (
+        <div className="sticky top-0 z-30 -mx-6 md:-mx-10 px-6 md:px-10 py-3 mb-6 glass">
+          <div className="flex items-center justify-between max-w-5xl mx-auto">
+            <h1 className="font-display text-xl">
+              Logcat <span className="text-warm">AI</span>
+            </h1>
+            <div className="flex items-center gap-2">
+              {uploadId && phase === 'result' && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-50 w-40 bg-surface-card border border-border rounded-lg shadow-xl py-1">
-                    {uploadId && phase === 'result' && (
-                      <>
-                        <button
-                          onClick={() => { setShowHeaderMenu(false); setCompareMode(true); }}
-                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors"
-                        >
-                          Compare
-                        </button>
-                        <button
-                          onClick={() => { setShowHeaderMenu(false); setShowSearch(true); }}
-                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors"
-                        >
-                          Search
-                        </button>
-                        <button
-                          onClick={() => { setShowHeaderMenu(false); downloadExportFromMenu(); }}
-                          className="w-full text-left px-4 py-2 text-sm text-indigo-400 hover:bg-surface-hover transition-colors border-b border-border"
-                        >
-                          Export
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => { setShowHeaderMenu(false); setShowSettings(true); }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
-                    >
-                      Settings
-                    </button>
-                    <button
-                      onClick={() => { setShowHeaderMenu(false); setShowHistory(true); }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
-                    >
-                      History
-                    </button>
-                    <button
-                      onClick={() => { setShowHeaderMenu(false); reset(); }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
-                    >
-                      New Analysis
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setCompareMode(true)}
+                    className="hidden sm:inline-flex btn-outline text-sm px-3 py-1.5"
+                  >
+                    Compare
+                  </button>
+                  <button
+                    onClick={() => setShowSearch(true)}
+                    className="hidden sm:inline-flex btn-outline text-sm px-3 py-1.5"
+                  >
+                    Search
+                  </button>
                 </>
               )}
+              {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} hasTelephonyData={!!result?.telephonyStatus?.serviceState} /></span>}
+              {/* Desktop: show all buttons */}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
+                title="LLM Settings"
+              >
+                <IconSettings className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowHistory(true)}
+                className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
+              >
+                History
+              </button>
+              <button
+                onClick={reset}
+                className="hidden sm:inline-flex btn-primary text-sm px-3 py-1.5"
+              >
+                New Analysis
+              </button>
+              {/* Mobile: overflow menu */}
+              <div className="relative sm:hidden">
+                <button
+                  onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+                  className="btn-ghost px-2 py-1.5 text-sm"
+                >
+                  <IconMenu className="w-5 h-5" />
+                </button>
+                {showHeaderMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 w-44 glass rounded-xl shadow-elevated py-1.5">
+                      {uploadId && phase === 'result' && (
+                        <>
+                          <button
+                            onClick={() => { setShowHeaderMenu(false); setCompareMode(true); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-accent hover:bg-surface-hover transition-colors"
+                          >
+                            Compare
+                          </button>
+                          <button
+                            onClick={() => { setShowHeaderMenu(false); setShowSearch(true); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-accent hover:bg-surface-hover transition-colors"
+                          >
+                            Search
+                          </button>
+                          <button
+                            onClick={() => { setShowHeaderMenu(false); downloadExportFromMenu(); }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-accent hover:bg-surface-hover transition-colors border-b border-border"
+                          >
+                            Export
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); setShowSettings(true); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                      >
+                        Settings
+                      </button>
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); setShowHistory(true); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                      >
+                        History
+                      </button>
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); reset(); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                      >
+                        New Analysis
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -257,10 +257,10 @@ export default function App() {
       {phase === 'upload' && (
         <div className={`pt-20 transition-all duration-300 ease-out ${phaseVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <UploadZone onStart={start} error={error} />
-          <div className="text-center mt-4 flex items-center justify-center gap-4">
+          <div className="text-center mt-5 flex items-center justify-center gap-4">
             <button
               onClick={() => setShowBatchUpload(true)}
-              className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+              className="text-sm text-accent hover:text-accent-light transition-colors"
             >
               Batch Analysis
             </button>
@@ -386,8 +386,8 @@ export default function App() {
       {/* Comparison loading indicator */}
       {compareLoading && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
-          <div className="bg-[#0d1117] border border-gray-700/60 rounded-lg px-8 py-6 text-center">
-            <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full mx-auto mb-3" />
+          <div className="glass rounded-xl px-8 py-6 text-center shadow-elevated">
+            <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
             <p className="text-gray-300">Comparing analyses...</p>
           </div>
         </div>
@@ -396,11 +396,11 @@ export default function App() {
       {/* Comparison error */}
       {compareError && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={resetComparison}>
-          <div className="bg-[#0d1117] border border-red-900/50 rounded-lg px-8 py-6 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="glass rounded-xl px-8 py-6 text-center max-w-md border-red-900/50 shadow-elevated" onClick={(e) => e.stopPropagation()}>
             <p className="text-red-400 mb-4">{compareError}</p>
             <button
               onClick={resetComparison}
-              className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              className="btn-ghost text-sm"
             >
               Close
             </button>

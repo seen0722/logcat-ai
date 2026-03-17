@@ -1,4 +1,8 @@
 import { AnalysisResult, InsightCard } from '@logcat-ai/parser';
+import { getReportCSS, getReportScript, THEME_GENERAL, escapeHtml as sharedEscapeHtml, formatDate } from './report-styles.js';
+
+// Re-export for internal use (keeps call sites unchanged)
+const escapeHtml = sharedEscapeHtml;
 
 /**
  * Prefix-to-color mapping for description lines, mirroring frontend LINE_STYLES.
@@ -206,17 +210,20 @@ export function exportAsHTML(result: AnalysisResult): string {
     }
   };
 
+  const scoreColor = (score: number) =>
+    score >= 80 ? '#22c55e' : score >= 60 ? '#eab308' : '#ef4444';
+
   const insightsHTML = result.insights.map(insight => `
-    <div id="${escapeHtml(insight.id)}" class="insight-card">
+    <div id="${escapeHtml(insight.id)}" class="insight-card ${escapeHtml(insight.severity)}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <span class="severity-badge" style="background:${severityColor(insight.severity)};">
+        <span class="badge badge-${escapeHtml(insight.severity === 'info' ? 'info' : insight.severity === 'warning' ? 'warning' : 'critical')}">
           ${insight.severity.toUpperCase()}
         </span>
         <span class="badge" style="background:rgba(99,102,241,0.2);color:#818cf8;">${escapeHtml(insight.category)}</span>
         <span class="badge" style="background:rgba(107,114,128,0.2);color:#9ca3af;">${escapeHtml(insight.source)}</span>
-        ${insight.timestamp ? `<span style="font-size:12px;color:#6b7280;">${escapeHtml(insight.timestamp)}</span>` : ''}
+        ${insight.timestamp ? `<span style="font-size:12px;color:var(--text-muted);">${escapeHtml(insight.timestamp)}</span>` : ''}
       </div>
-      <h3 style="font-weight:600;margin-bottom:8px;">${escapeHtml(insight.title)}</h3>
+      <h3 style="margin-bottom:8px;">${escapeHtml(insight.title)}</h3>
       <div class="insight-desc-block">
         ${renderDescription(insight.description)}
       </div>
@@ -225,114 +232,89 @@ export function exportAsHTML(result: AnalysisResult): string {
     </div>
   `).join('');
 
+  // Build TOC entries for all sections
+  const hasSummary = !!result.deepAnalysisOverview;
+  const tocEntries = [
+    '<a href="#section-health">Health Score</a>',
+    ...(hasSummary ? ['<a href="#section-summary">Executive Summary</a>'] : []),
+    `<a href="#section-insights">Insights (${result.insights.length})</a>`,
+    `<a href="#section-timeline">Timeline</a>`,
+  ].join('\n      ');
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Logcat AI Report - ${escapeHtml(m.deviceModel || 'Unknown Device')}</title>
+<title>Logcat AI Report — ${escapeHtml(m.deviceModel || 'Unknown Device')}</title>
+${getReportCSS(THEME_GENERAL)}
 <style>
-  * { margin:0;padding:0;box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;padding:32px;max-width:900px;margin:0 auto; }
-  .header { margin-bottom:32px;padding-bottom:16px;border-bottom:1px solid #1e293b; }
-  .header h1 { font-size:24px;margin-bottom:8px; }
-  .header .meta { color:#94a3b8;font-size:14px; }
-  .section { margin-bottom:32px; }
-  .section h2 { font-size:18px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #1e293b; }
-  .health-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px; }
-  .health-card { background:#1e293b;border-radius:8px;padding:16px;text-align:center; }
-  .health-card .score { font-size:24px;font-weight:700; }
-  .health-card .label { color:#94a3b8;font-size:12px;margin-top:4px; }
-  .timeline-item { padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px; }
-  .timeline-item .time { color:#6b7280;font-family:monospace; }
-  .footer { margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;color:#6b7280;font-size:12px; }
-
-  /* Insight cards */
-  .insight-card { border:1px solid #374151;border-radius:8px;padding:16px;margin-bottom:12px;background:#1f2937; }
-  .severity-badge { color:white;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600; }
-  .badge { padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500; }
-  .insight-desc { color:#9ca3af;font-size:14px; }
-  .insight-desc-block { margin-bottom:8px; }
-  .insight-desc-line { font-size:14px;line-height:1.5; }
-
-  /* Detail sections */
-  .detail-section { margin-top:12px; }
-  .detail-label { font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px; }
-  .code-block { padding:10px 12px;background:#111827;border-radius:6px;font-size:12px;color:#9ca3af;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;margin:0; }
-  .selinux-rule { display:block;padding:8px 12px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.2);border-radius:6px;font-size:12px;color:#fcd34d;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
-  .debug-commands { display:flex;flex-direction:column;gap:4px; }
-  .debug-cmd { display:block;padding:6px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:4px;font-size:12px;color:#86efac;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
-
-  /* Deep Analysis */
-  .deep-analysis { margin-top:12px;padding:12px;background:#111827;border:1px solid rgba(99,102,241,0.3);border-radius:8px; }
-  .da-header { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px; }
-  .da-title { color:#818cf8;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:0.05em; }
-  .da-field { margin-bottom:10px; }
-  .da-field:last-child { margin-bottom:0; }
-  .da-field-label { font-size:11px;color:#6b7280;margin-bottom:2px; }
-  .da-field-text { color:#d1d5db;font-size:14px;line-height:1.5; }
-  .component-tags { display:flex;gap:4px;flex-wrap:wrap;margin-top:4px; }
-  .component-tag { font-size:11px;background:rgba(107,114,128,0.3);color:#d1d5db;padding:2px 8px;border-radius:4px;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace; }
-  .da-evidence-list { padding-left:16px;margin-top:4px; }
-  .da-evidence-list li { font-size:12px;color:#9ca3af;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;line-height:1.6;white-space:pre-wrap; }
-  .da-steps-list { padding-left:20px;margin-top:4px; }
-  .da-steps-list li { font-size:12px;color:#d1d5db;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;line-height:1.6; }
-  .related-tags { display:flex;gap:4px;flex-wrap:wrap;margin-top:4px; }
-  .related-link { font-size:11px;color:#818cf8;background:rgba(99,102,241,0.1);padding:2px 8px;border-radius:4px;text-decoration:none; }
-  .related-link:hover { background:rgba(99,102,241,0.2); }
+  /* Insight-specific extras not in shared CSS */
+  .insight-desc-block { margin-bottom: 8px; }
+  .da-evidence-list { padding-left: 16px; margin-top: 4px; }
+  .da-evidence-list li { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); line-height: 1.6; white-space: pre-wrap; }
+  .da-steps-list { padding-left: 20px; margin-top: 4px; }
+  .da-steps-list li { font-size: 12px; color: var(--text-dim); font-family: var(--font-mono); line-height: 1.6; }
+  .related-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .related-link { font-size: 11px; color: var(--accent); background: var(--accent-glow); padding: 2px 8px; border-radius: var(--radius-sm); text-decoration: none; }
+  .related-link:hover { opacity: 0.8; }
+  .timeline-item { padding: 8px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+  .timeline-item .time { color: var(--text-muted); font-family: var(--font-mono); }
 </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Logcat AI Analysis Report</h1>
-    <div class="meta">
-      ${m.deviceModel ? `<div>Device: ${escapeHtml(m.deviceModel)} (${escapeHtml(m.manufacturer || '')})</div>` : ''}
-      ${m.androidVersion ? `<div>Android ${escapeHtml(m.androidVersion)} (SDK ${m.sdkLevel})</div>` : ''}
-      ${m.buildFingerprint ? `<div>Build: ${escapeHtml(m.buildFingerprint)}</div>` : ''}
-      ${m.platform || m.hardware ? `<div>Platform: ${escapeHtml(m.platform || '')}${m.hardware ? ` (${escapeHtml(m.hardware)})` : ''}</div>` : ''}
-      ${m.kernelVersion && m.kernelVersion !== 'unknown' ? `<div>Kernel: ${escapeHtml(m.kernelVersion)}</div>` : ''}
-      ${m.basebandVersion ? `<div>Baseband: ${escapeHtml(m.basebandVersion)}</div>` : ''}
-      ${m.securityPatchLevel ? `<div>Security Patch: ${escapeHtml(m.securityPatchLevel)}</div>` : ''}
-      <div>Generated: ${new Date().toISOString()}</div>
+<div class="page">
+  <nav class="toc">
+    <h2>Logcat <span>AI</span></h2>
+    ${tocEntries}
+  </nav>
+  <main>
+    <div class="report-header">
+      <div class="type-badge">${escapeHtml(THEME_GENERAL.reportType)}</div>
+      <h1>Logcat <span class="brand">AI</span></h1>
+      <div class="subtitle">
+        ${m.deviceModel ? `<div>Device: ${escapeHtml(m.deviceModel)}${m.manufacturer ? ` (${escapeHtml(m.manufacturer)})` : ''}</div>` : ''}
+        ${m.androidVersion ? `<div>Android ${escapeHtml(m.androidVersion)} (SDK ${m.sdkLevel})</div>` : ''}
+        ${m.buildFingerprint ? `<div>Build: ${escapeHtml(m.buildFingerprint)}</div>` : ''}
+        ${m.platform || m.hardware ? `<div>Platform: ${escapeHtml(m.platform || '')}${m.hardware ? ` (${escapeHtml(m.hardware)})` : ''}</div>` : ''}
+        ${m.kernelVersion && m.kernelVersion !== 'unknown' ? `<div>Kernel: ${escapeHtml(m.kernelVersion)}</div>` : ''}
+        ${m.basebandVersion ? `<div>Baseband: ${escapeHtml(m.basebandVersion)}</div>` : ''}
+        ${m.securityPatchLevel ? `<div>Security Patch: ${escapeHtml(m.securityPatchLevel)}</div>` : ''}
+        <div>Generated: ${formatDate(new Date())}</div>
+      </div>
     </div>
-  </div>
 
-  <div class="section">
-    <h2>Health Score</h2>
-    <div class="health-grid">
-      <div class="health-card">
-        <div class="score" style="color:${h.overall >= 80 ? '#22c55e' : h.overall >= 60 ? '#eab308' : '#ef4444'}">${h.overall}</div>
+    <h2 id="section-health">Health Score</h2>
+    <div class="card-grid card-grid-4">
+      <div class="metric-card">
         <div class="label">Overall</div>
+        <div class="value" style="color:${scoreColor(h.overall)}">${h.overall}</div>
       </div>
-      <div class="health-card">
-        <div class="score">${h.breakdown.stability}</div>
+      <div class="metric-card">
         <div class="label">Stability</div>
+        <div class="value" style="color:${scoreColor(h.breakdown.stability)}">${h.breakdown.stability}</div>
       </div>
-      <div class="health-card">
-        <div class="score">${h.breakdown.memory}</div>
+      <div class="metric-card">
         <div class="label">Memory</div>
+        <div class="value" style="color:${scoreColor(h.breakdown.memory)}">${h.breakdown.memory}</div>
       </div>
-      <div class="health-card">
-        <div class="score">${h.breakdown.responsiveness}</div>
+      <div class="metric-card">
         <div class="label">Responsiveness</div>
+        <div class="value" style="color:${scoreColor(h.breakdown.responsiveness)}">${h.breakdown.responsiveness}</div>
       </div>
     </div>
-  </div>
 
-  ${result.deepAnalysisOverview ? `
-  <div class="section">
-    <h2>Executive Summary</h2>
-    <p style="color:#d1d5db;line-height:1.6;">${escapeHtml(result.deepAnalysisOverview.executiveSummary)}</p>
-  </div>
-  ` : ''}
+    ${result.deepAnalysisOverview ? `
+    <h2 id="section-summary">Executive Summary</h2>
+    <div class="card">
+      <p style="color:var(--text-dim);line-height:1.7;">${escapeHtml(result.deepAnalysisOverview.executiveSummary)}</p>
+    </div>
+    ` : ''}
 
-  <div class="section">
-    <h2>Insights (${result.insights.length})</h2>
+    <h2 id="section-insights">Insights (${result.insights.length})</h2>
     ${insightsHTML}
-  </div>
 
-  <div class="section">
-    <h2>Timeline (${Math.min(result.timeline.length, 50)} of ${result.timeline.length} events)</h2>
+    <h2 id="section-timeline">Timeline (${Math.min(result.timeline.length, 50)} of ${result.timeline.length} events)</h2>
     ${result.timeline.slice(0, 50).map(e => `
       <div class="timeline-item">
         <span class="time">${escapeHtml(e.timestamp || '')}</span>
@@ -340,19 +322,13 @@ export function exportAsHTML(result: AnalysisResult): string {
         <span>${escapeHtml(e.label)}</span>
       </div>
     `).join('')}
-  </div>
 
-  <div class="footer">
-    Generated by Logcat AI &middot; ${new Date().toISOString()}
-  </div>
+    <div class="footer">
+      Generated by Logcat AI &middot; ${formatDate(new Date())}
+    </div>
+  </main>
+</div>
+${getReportScript()}
 </body>
 </html>`;
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

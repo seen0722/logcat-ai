@@ -113,15 +113,15 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
   if (messages.length === 0) {
     return (
       <div className="card">
-        <h2 className="text-lg font-semibold mb-3">Ask Follow-up Questions</h2>
+        <h2 className="font-display text-lg text-gray-100 mb-3">Ask Follow-up Questions</h2>
 
         {/* Suggested questions */}
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-4">
           {buildSuggestedQuestions(criticalInsights).map((q) => (
             <button
               key={q}
               onClick={() => send(q)}
-              className="text-xs px-3 py-1.5 bg-surface border border-border rounded-full text-gray-400 hover:text-gray-200 hover:border-indigo-500/50 transition-colors"
+              className="text-xs px-3.5 py-2 bg-surface border border-border rounded-xl text-gray-400 hover:text-gray-200 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-card transition-all duration-200"
             >
               {q}
             </button>
@@ -132,7 +132,7 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
         <div className="flex gap-2">
           <input
             type="text"
-            className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-border-focus"
+            className="flex-1 bg-surface border border-border rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-border-focus transition-colors"
             placeholder="Ask anything about this bugreport..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -142,7 +142,7 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
           <button
             onClick={() => send()}
             disabled={!input.trim() || streaming}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="btn-warm px-5 py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Send
           </button>
@@ -153,7 +153,7 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
 
   return (
     <div className="card flex flex-col min-h-96 max-h-[70vh]">
-      <h2 className="text-lg font-semibold mb-3">Ask Follow-up Questions</h2>
+      <h2 className="font-display text-lg text-gray-100 mb-3">Ask Follow-up Questions</h2>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1">
@@ -169,12 +169,12 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
                   >
                     {activity.type === 'call' ? (
                       <>
-                        <span className="inline-block w-3 h-3 text-indigo-400">
+                        <span className="inline-block w-3 h-3 text-accent">
                           <svg viewBox="0 0 16 16" fill="currentColor">
                             <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.598.646a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" />
                           </svg>
                         </span>
-                        <span className="text-indigo-400">
+                        <span className="text-accent">
                           {TOOL_LABELS[activity.name] ?? activity.name}...
                         </span>
                       </>
@@ -199,11 +199,11 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
             <div
               className={`text-sm rounded-lg p-3 ${
                 msg.role === 'user'
-                  ? 'bg-indigo-600/20 text-gray-200 ml-8'
+                  ? 'bg-accent/20 text-gray-200 ml-8'
                   : 'bg-surface text-gray-300 mr-8'
               }`}
             >
-              <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:text-indigo-300 prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-surface prose-pre:rounded prose-pre:p-2 prose-pre:text-xs">
+              <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:text-accent-light prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-surface prose-pre:rounded prose-pre:p-2 prose-pre:text-xs">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
               </div>
             </div>
@@ -213,9 +213,9 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
           <div className="flex items-center gap-1.5 text-xs text-gray-500 ml-1">
             <span>AI is thinking</span>
             <span className="flex gap-0.5">
-              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1 h-1 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <span className="w-1 h-1 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
           </div>
         )}
@@ -235,7 +235,7 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
         <button
           onClick={() => send()}
           disabled={!input.trim() || streaming}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 bg-accent hover:bg-accent-dark rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           Send
         </button>

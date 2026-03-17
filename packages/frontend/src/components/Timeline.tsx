@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TimelineEvent, Severity } from '../lib/types';
+import { IconSearch, IconExternalLink } from './Icons';
 
 interface Props {
   events: TimelineEvent[];
@@ -77,8 +78,8 @@ export default function Timeline({ events, onSearchTime }: Props) {
   };
 
   return (
-    <div className="card space-y-3">
-      <h2 className="text-lg font-semibold">
+    <div className="card space-y-4">
+      <h2 className="font-display text-lg text-gray-100">
         Timeline{' '}
         <span className="text-gray-500 text-sm font-normal">
           ({filteredEvents.length} shown / {events.length} total)
@@ -91,7 +92,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
           <button
             key={s}
             onClick={() => toggleSeverity(s)}
-            className={`px-2 py-1 rounded border transition-colors ${
+            className={`px-2 py-1 rounded-lg border transition-all duration-200 ${
               severityFilter.has(s) ? SEVERITY_BTN[s].active : INACTIVE_BTN
             }`}
           >
@@ -103,7 +104,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
           <button
             key={s}
             onClick={() => toggleSource(s)}
-            className={`px-2 py-1 rounded border transition-colors flex items-center gap-1.5 ${
+            className={`px-2 py-1 rounded-lg border transition-all duration-200 flex items-center gap-1.5 ${
               sourceFilter.has(s) ? SOURCE_BTN[s].active : INACTIVE_BTN
             }`}
           >
@@ -125,8 +126,8 @@ export default function Timeline({ events, onSearchTime }: Props) {
                 const el = document.getElementById(event.insightId!);
                 if (el) {
                   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  el.classList.add('ring-2', 'ring-indigo-500/70');
-                  setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500/70'), 2000);
+                  el.classList.add('ring-2', 'ring-accent/70');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-accent/70'), 2000);
                 }
               }
             : undefined;
@@ -136,14 +137,14 @@ export default function Timeline({ events, onSearchTime }: Props) {
               key={i}
               onClick={handleClick}
               className={`flex items-start gap-3 py-2 group ${
-                event.severity === 'critical' ? 'border-l-2 border-red-500 pl-2' : ''
-              } ${hasLink ? 'cursor-pointer hover:bg-indigo-500/5 rounded-r transition-colors' : ''}`}
+                event.severity === 'critical' ? 'border-l-2 border-red-500 pl-2 rounded-r-lg' : ''
+              } ${hasLink ? 'cursor-pointer hover:bg-accent/5 rounded-r-lg transition-colors' : ''}`}
             >
               {/* Dot + line */}
               <div className="flex flex-col items-center">
                 <div className={`w-2.5 h-2.5 rounded-full ${dotColor(event.severity, event.source)} shrink-0 mt-1.5`} />
                 {i < filteredEvents.length - 1 && (
-                  <div className="w-0.5 flex-1 bg-gray-700 min-h-[20px]" />
+                  <div className="w-0.5 flex-1 bg-border min-h-[20px]" />
                 )}
               </div>
 
@@ -157,13 +158,13 @@ export default function Timeline({ events, onSearchTime }: Props) {
                     {event.source}
                   </span>
                   {event.count && event.count > 1 && (
-                    <span className="text-xs font-semibold bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded-full">
+                    <span className="text-xs font-semibold bg-surface-hover border border-border/50 text-gray-300 px-1.5 py-0.5 rounded-lg">
                       &times;{event.count}
                     </span>
                   )}
                   {hasLink && (
-                    <span className="text-[10px] text-indigo-400/70 font-medium" title="Click to jump to related insight">
-                      &#x2197;
+                    <span className="text-accent/70" title="Click to jump to related insight">
+                      <IconExternalLink className="w-3 h-3" />
                     </span>
                   )}
                   {onSearchTime && event.timestamp && (
@@ -172,16 +173,14 @@ export default function Timeline({ events, onSearchTime }: Props) {
                         e.stopPropagation();
                         onSearchTime(event.timestamp, event.timestamp, event.source);
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-indigo-400 transition-all p-0.5 rounded hover:bg-indigo-500/10"
+                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-accent transition-all p-0.5 rounded hover:bg-accent/10"
                       title="Search logs around this time"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
+                      <IconSearch className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <p className={`transition-colors ${hasLink ? 'text-gray-300 group-hover:text-indigo-300 underline decoration-indigo-500/30 underline-offset-2' : 'text-gray-300 group-hover:text-white'}`}>
+                <p className={`transition-colors ${hasLink ? 'text-gray-300 group-hover:text-accent-light underline decoration-accent/30 underline-offset-2' : 'text-gray-300 group-hover:text-white'}`}>
                   {event.label}
                 </p>
                 {event.details && (
