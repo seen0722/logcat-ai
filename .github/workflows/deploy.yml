@@ -50,4 +50,5 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 15m
           script: /opt/logcat-ai/deploy.sh
