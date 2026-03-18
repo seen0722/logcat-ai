@@ -52,6 +52,16 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/_test', testUtilsRouter);
 }
 
+// Production: serve frontend static files
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendDist, { maxAge: '7d' }));
+  // SPA fallback — serve index.html for non-API routes
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Server Error]', err.message);

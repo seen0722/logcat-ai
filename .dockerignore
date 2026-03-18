@@ -1,0 +1,16 @@
+node_modules
+*/node_modules
+.git
+*.md
+doc/
+docs/
+sample-bugreports/
+*.png
+*.zip
+*.pptx
+.playwright-mcp/
+packages/frontend/test-results/
+packages/frontend/e2e/
+packages/mcp-server/
+pptx-assets/
+data/
