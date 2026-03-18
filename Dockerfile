@@ -8,10 +8,10 @@ COPY packages/frontend/package.json packages/frontend/
 
 RUN npm ci --ignore-scripts
 
+COPY tsconfig.base.json ./
 COPY packages/parser packages/parser
 COPY packages/backend packages/backend
 COPY packages/frontend packages/frontend
-COPY tsconfig.json ./
 
 # Build parser first (backend depends on it)
 RUN npm run build -w packages/parser
