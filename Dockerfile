@@ -26,13 +26,11 @@ FROM node:22-alpine
 RUN apk add --no-cache tini
 WORKDIR /app
 
-# Copy everything from builder (includes compiled native modules)
+# Copy deps + built artifacts from builder (hoisted node_modules at root)
 COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/packages/parser/package.json packages/parser/
 COPY --from=builder /app/packages/backend/package.json packages/backend/
 COPY --from=builder /app/node_modules node_modules
-COPY --from=builder /app/packages/parser/node_modules packages/parser/node_modules
-COPY --from=builder /app/packages/backend/node_modules packages/backend/node_modules
 COPY --from=builder /app/packages/parser/dist packages/parser/dist
 COPY --from=builder /app/packages/backend/dist packages/backend/dist
 COPY --from=builder /app/packages/frontend/dist packages/frontend/dist
