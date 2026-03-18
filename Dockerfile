@@ -1,12 +1,14 @@
 FROM node:22-alpine AS builder
 
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/parser/package.json packages/parser/
 COPY packages/backend/package.json packages/backend/
 COPY packages/frontend/package.json packages/frontend/
 
-RUN npm ci --ignore-scripts
+RUN npm ci
 
 COPY tsconfig.base.json ./
 COPY packages/parser packages/parser
@@ -21,15 +23,17 @@ RUN npm run build -w packages/frontend
 # ── Production stage ──
 FROM node:22-alpine
 
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY packages/parser/package.json packages/parser/
 COPY packages/backend/package.json packages/backend/
 
-# Install production deps only
-RUN npm ci --omit=dev --ignore-scripts
+# Install production deps (better-sqlite3 needs native build)
+RUN npm ci --omit=dev
+# Remove build tools after native compilation
+RUN apk del python3 make g++
 
 # Copy built artifacts
 COPY --from=builder /app/packages/parser/dist packages/parser/dist
