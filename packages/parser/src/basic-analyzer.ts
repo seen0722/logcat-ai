@@ -21,8 +21,10 @@ import {
   TombstoneAnalysis,
   PowerParseResult,
   TelephonyParseResult,
+  OomAnalysisResult,
 } from './types.js';
 import { generateSELinuxAllowRule } from './kernel-parser.js';
+import { analyzeOom } from './oom-analyzer.js';
 
 // ============================================================
 // Main Entry Point
@@ -41,6 +43,7 @@ export interface BasicAnalyzerInput {
   uptimeContent?: string;
   powerStatus?: PowerParseResult;
   telephonyStatus?: TelephonyParseResult;
+  userDescription?: string;
 }
 
 /**
@@ -48,7 +51,7 @@ export interface BasicAnalyzerInput {
  * Pure rule-based — no LLM required.
  */
 export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
-  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent, powerStatus, telephonyStatus } = input;
+  const { metadata, logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, halStatus, tombstoneAnalyses, systemProperties, uptimeContent, powerStatus, telephonyStatus, userDescription } = input;
 
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties, uptimeContent);
 
@@ -69,11 +72,22 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const powerInsights = generatePowerInsights(powerStatus);
   const telephonyInsights = generateTelephonyInsights(telephonyStatus);
 
+  const oomResult = analyzeOom(logcatResult.entries, logcatResult.anomalies, kernelResult.events, kernelResult.entries, memInfo, userDescription);
+  const oomInsights = oomResult.detected ? [generateOomInsight(oomResult)] : [];
+
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
-  const filteredLogcat = hasANRTraceInsights
-    ? logcatInsights.filter((i) => i.category !== 'anr')
-    : logcatInsights;
+  const filteredLogcat = (() => {
+    let filtered = hasANRTraceInsights
+      ? logcatInsights.filter((i) => i.category !== 'anr')
+      : logcatInsights;
+    if (oomResult.detected) {
+      filtered = filtered.filter((i) =>
+        !(i.source === 'logcat' && i.category === 'memory' && i.title.includes('Out of memory'))
+      );
+    }
+    return filtered;
+  })();
 
   const merged = [
     ...filteredLogcat,
@@ -86,6 +100,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...tagInsights,
     ...powerInsights,
     ...telephonyInsights,
+    ...oomInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -121,6 +136,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(logcatResult.tagStats && logcatResult.tagStats.length > 0 ? { logTagStats: logcatResult.tagStats } : {}),
     ...(powerStatus ? { powerStatus } : {}),
     ...(telephonyStatus ? { telephonyStatus } : {}),
+    ...(oomResult.detected ? { oomResult } : {}),
   };
 }
 
@@ -321,6 +337,80 @@ function describeLogcatAnomaly(anomaly: LogcatAnomaly): string {
     default:
       return `Anomaly detected${process}${pid}.`;
   }
+}
+
+// ============================================================
+// OOM → Insight
+// ============================================================
+
+function generateOomInsight(oomResult: OomAnalysisResult): InsightCard {
+  const s = oomResult.summary!;
+  const lines: string[] = [];
+
+  if (s.pressureDurationSec > 0 && oomResult.lowMemoryTrend.firstTimestamp) {
+    const mins = Math.floor(s.pressureDurationSec / 60);
+    const secs = s.pressureDurationSec % 60;
+    const dur = mins > 0 ? `${mins}m${secs}s` : `${secs}s`;
+    lines.push(`Memory pressure event — system under pressure from ${oomResult.lowMemoryTrend.firstTimestamp} to ${s.timestamp} (${dur}).`);
+  } else {
+    lines.push('Out of memory event detected.');
+  }
+
+  if (s.userDescription) {
+    lines.push(`\nUser report: ${s.userDescription}`);
+  }
+
+  if (s.targetApp) {
+    const targetInfo = oomResult.topMemoryConsumers.find((p) => p.isTarget);
+    if (targetInfo) {
+      lines.push(`\nTarget app: ${targetInfo.name} (PSS ${Math.round(targetInfo.pssKb / 1024)} MB, adj=${targetInfo.adjScore ?? '??'}, pid ${targetInfo.pid}) — ${targetInfo.type}`);
+    } else {
+      lines.push(`\nTarget app: ${s.targetApp} — not found in memory dump`);
+    }
+  }
+
+  if (s.totalRamKb && s.freeRamKb) {
+    lines.push(`\nSystem RAM: ${Math.round(s.freeRamKb / 1024)} MB free / ${Math.round(s.totalRamKb / 1024)} MB total`);
+  }
+
+  if (oomResult.topMemoryConsumers.length > 0) {
+    lines.push('\nTop memory consumers (at OOM):');
+    for (const p of oomResult.topMemoryConsumers.slice(0, 5)) {
+      const memtrack = p.memtrackKb > 0 ? ` (${Math.round(p.memtrackKb / 1024)} MB memtrack)` : '';
+      lines.push(`  ${p.name} — ${Math.round(p.pssKb / 1024)} MB${memtrack}`);
+    }
+  }
+
+  const stats: string[] = [];
+  if (s.lmkCount > 0) stats.push(`LMK kills: ${s.lmkCount}`);
+  if (s.reapedCount > 0) stats.push(`oom_reaper: ${s.reapedCount} processes`);
+  if (oomResult.lowMemoryTrend.events.length > 0) {
+    const trend = oomResult.lowMemoryTrend;
+    stats.push(`cached process trend: ${trend.peakCachedCount} → ${trend.minCachedCount}`);
+  }
+  if (stats.length > 0) lines.push('\n' + stats.join(' | '));
+
+  if (oomResult.reapedProcesses.length > 0) {
+    const names = oomResult.reapedProcesses.slice(0, 5).map((r) => r.name).join(', ');
+    const more = oomResult.reapedProcesses.length > 5 ? `, +${oomResult.reapedProcesses.length - 5} more` : '';
+    lines.push(`oom_reaper reclaimed: ${names}${more}`);
+  }
+
+  return {
+    id: '',
+    severity: 'critical',
+    category: 'memory',
+    title: oomResult.lmkKills.length > 0
+      ? `Out of memory event (${s.lmkCount} LMK kills, ${s.reapedCount} reaped)`
+      : 'Out of memory event',
+    description: lines.join('\n'),
+    relatedLogSnippet: oomResult.lmkKills.slice(0, 3)
+      .map((k) => `${k.timestamp} [${k.source}] LMK kill: ${k.processName} (pid ${k.pid}, adj=${k.adjScore ?? '??'})`)
+      .join('\n'),
+    timestamp: s.timestamp,
+    source: 'logcat',
+    debugCommands: ['adb shell dumpsys meminfo', 'adb shell cat /proc/meminfo', 'adb shell dumpsys activity oom'],
+  };
 }
 
 // ============================================================

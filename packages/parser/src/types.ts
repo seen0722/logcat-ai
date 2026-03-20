@@ -488,6 +488,69 @@ export interface AnalysisResult {
   deepAnalysisOverview?: DeepAnalysisOverview;
   powerStatus?: PowerParseResult;
   telephonyStatus?: TelephonyParseResult;
+  oomResult?: OomAnalysisResult;
+}
+
+// ============================================================
+// OOM Analysis
+// ============================================================
+
+export interface OomAnalysisResult {
+  detected: boolean;
+  summary: OomSummary | null;
+  topMemoryConsumers: OomProcessInfo[];
+  reapedProcesses: ReapedProcess[];
+  lowMemoryTrend: LowMemoryTrend;
+  lmkKills: LmkKill[];
+}
+
+export interface OomSummary {
+  timestamp: string;
+  triggerPid: number | null;
+  lmkCount: number;
+  reapedCount: number;
+  pressureDurationSec: number;
+  pressureDurationTruncated: boolean;
+  userDescription: string | null;
+  userReportedTimestamps: string[];
+  targetApp: string | null;
+  totalRamKb: number | null;
+  freeRamKb: number | null;
+}
+
+export interface OomProcessInfo {
+  name: string;
+  adjCategory: string;
+  adjScore: number | null;
+  pssKb: number;
+  memtrackKb: number;
+  pid: number;
+  type: 'native' | 'persistent' | 'system' | 'foreground' | 'visible' | 'perceptible' | 'backup' | 'cached' | 'empty' | string;
+  isTarget: boolean;
+}
+
+export interface ReapedProcess {
+  timestamp: string;
+  pid: number;
+  name: string;
+  anonRssKb: number;
+  fileRssKb: number;
+}
+
+export interface LowMemoryTrend {
+  events: Array<{ timestamp: string; cachedProcessCount: number }>;
+  peakCachedCount: number;
+  minCachedCount: number;
+  firstTimestamp: string | null;
+  lastTimestamp: string | null;
+}
+
+export interface LmkKill {
+  timestamp: string;
+  processName: string;
+  pid: number;
+  adjScore: number | null;
+  source: 'logcat' | 'kernel';
 }
 
 // ============================================================
