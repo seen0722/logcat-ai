@@ -273,6 +273,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         uptimeContent,
         powerStatus,
         telephonyStatus,
+        userDescription,
       });
 
       // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
