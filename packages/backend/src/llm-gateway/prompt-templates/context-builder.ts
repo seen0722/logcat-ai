@@ -49,6 +49,8 @@ export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
 
     if (insight.source === 'logcat' && insight.title.startsWith('Excessive Error Logs:')) {
       collectTagContext(ctx, insight, result);
+    } else if (insight.category === 'memory' && insight.title.includes('Out of memory') && result.oomResult?.detected) {
+      collectOomContext(ctx, insight, result);
     } else if (insight.source === 'logcat') {
       collectLogcatContext(ctx, insight, result);
     } else if (insight.source === 'anr') {
@@ -100,6 +102,61 @@ function collectLogcatContext(
     const entries = anomaly.entries.slice(0, 15).map((e) => e.raw);
     ctx.anomalyLogs.push(...entries);
   }
+}
+
+function collectOomContext(ctx: InsightContext, insight: InsightCard, result: AnalysisResult): void {
+  const oomResult = result.oomResult;
+  if (!oomResult?.detected) {
+    collectLogcatContext(ctx, insight, result);
+    return;
+  }
+
+  const lines: string[] = ['=== OOM Analysis Summary ==='];
+  const s = oomResult.summary;
+
+  if (s) {
+    lines.push(`OOM timestamp: ${s.timestamp}`);
+    if (s.totalRamKb) lines.push(`System RAM: ${Math.round(s.freeRamKb! / 1024)} MB free / ${Math.round(s.totalRamKb / 1024)} MB total`);
+    if (s.targetApp) lines.push(`User-reported target app: ${s.targetApp}`);
+    if (s.userDescription) lines.push(`User description: ${s.userDescription}`);
+    lines.push(`Pressure duration: ${s.pressureDurationSec}s${s.pressureDurationTruncated ? ' (may be longer, events buffer truncated)' : ''}`);
+  }
+
+  if (oomResult.topMemoryConsumers.length > 0) {
+    lines.push('\n=== Top Memory Consumers at OOM ===');
+    for (const p of oomResult.topMemoryConsumers.slice(0, 10)) {
+      const target = p.isTarget ? ' [TARGET APP]' : '';
+      lines.push(`  ${p.adjCategory} adj=${p.adjScore ?? '??'} ${p.pssKb}KB: ${p.name} (pid ${p.pid}) ${p.type}${target}`);
+    }
+  }
+
+  if (oomResult.lmkKills.length > 0) {
+    lines.push('\n=== LMK Kills ===');
+    for (const k of oomResult.lmkKills) {
+      lines.push(`  ${k.timestamp} ${k.processName} pid=${k.pid} adj=${k.adjScore ?? '??'} [${k.source}]`);
+    }
+  }
+
+  if (oomResult.reapedProcesses.length > 0) {
+    lines.push('\n=== Reaped Processes ===');
+    for (const r of oomResult.reapedProcesses.slice(0, 10)) {
+      lines.push(`  ${r.timestamp} pid=${r.pid} ${r.name} anon-rss=${r.anonRssKb}kB file-rss=${r.fileRssKb}kB`);
+    }
+  }
+
+  if (oomResult.lowMemoryTrend.events.length > 0) {
+    const t = oomResult.lowMemoryTrend;
+    lines.push('\n=== Low Memory Trend ===');
+    lines.push(`Cached process count: peak=${t.peakCachedCount} min=${t.minCachedCount} (${t.firstTimestamp} to ${t.lastTimestamp})`);
+    for (const e of t.events.slice(0, 15)) {
+      lines.push(`  ${e.timestamp} cached=${e.cachedProcessCount}`);
+    }
+  }
+
+  ctx.anomalyLogs.push(lines.join('\n'));
+
+  // Also collect standard temporal context
+  collectLogcatContext(ctx, insight, result);
 }
 
 function findAnomaliesByCategory(
