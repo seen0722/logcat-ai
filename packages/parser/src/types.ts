@@ -291,7 +291,10 @@ export interface BootStatusSummary {
   bootCompleted: boolean;
   bootReason?: string;
   systemServerRestarts: number;
+  /** Userspace uptime from `uptime` command (resets on soft reboot) */
   uptimeSeconds?: number;
+  /** Kernel uptime from max dmesg timestamp (survives soft reboot). Use this for bootEpochMs calculation. */
+  kernelUptimeSeconds?: number;
 }
 
 // ============================================================

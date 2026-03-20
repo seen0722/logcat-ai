@@ -56,8 +56,10 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const bootStatus = analyzeBootStatus(logcatResult, kernelResult, systemProperties, uptimeContent);
 
   // Calculate boot epoch for kernel timestamp conversion
-  const bootEpochMs = bootStatus.uptimeSeconds != null
-    ? metadata.bugreportTimestamp.getTime() - bootStatus.uptimeSeconds * 1000
+  // Prefer kernelUptimeSeconds (survives soft reboot) over uptimeSeconds (resets on soft reboot)
+  const uptimeForKernel = bootStatus.kernelUptimeSeconds ?? bootStatus.uptimeSeconds;
+  const bootEpochMs = uptimeForKernel != null
+    ? metadata.bugreportTimestamp.getTime() - uptimeForKernel * 1000
     : undefined;
 
   const anrInsights = generateANRInsights(anrAnalyses);
@@ -799,10 +801,15 @@ export function analyzeBootStatus(
     uptimeSeconds = parseUptimeSection(uptimeContent);
   }
 
-  // 5. Fallback: estimate from last kernel dmesg timestamp (only reliable for dmesg format
-  //    where timestamp = seconds since boot; logcat format timestamps are relative to first entry)
-  if (uptimeSeconds == null && kernelResult.entries.length > 0) {
-    uptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
+  // 5. Kernel uptime from max dmesg timestamp (survives soft reboot)
+  let kernelUptimeSeconds: number | undefined;
+  if (kernelResult.entries.length > 0) {
+    kernelUptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
+  }
+
+  // 6. Fallback: if no uptime section, use kernel uptime
+  if (uptimeSeconds == null && kernelUptimeSeconds != null) {
+    uptimeSeconds = kernelUptimeSeconds;
   }
 
   // First boot counts as 1, so restarts = count - 1 (if > 0)
@@ -813,6 +820,7 @@ export function analyzeBootStatus(
     bootReason,
     systemServerRestarts: restartCount,
     uptimeSeconds,
+    kernelUptimeSeconds,
   };
 }
 

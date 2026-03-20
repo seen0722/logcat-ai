@@ -277,8 +277,10 @@ router.get('/:id', async (req: Request, res: Response) => {
       });
 
       // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
-      const bootEpochMs = analysisResult.bootStatus?.uptimeSeconds != null
-        ? unpackResult.metadata.bugreportTimestamp.getTime() - analysisResult.bootStatus.uptimeSeconds * 1000
+      // Prefer kernelUptimeSeconds (survives soft reboot) over uptimeSeconds
+      const uptimeForKernel = analysisResult.bootStatus?.kernelUptimeSeconds ?? analysisResult.bootStatus?.uptimeSeconds;
+      const bootEpochMs = uptimeForKernel != null
+        ? unpackResult.metadata.bugreportTimestamp.getTime() - uptimeForKernel * 1000
         : undefined;
       // Update rawDataStore with bootEpochMs for in-memory kernel search timestamp conversion
       const rawData = rawDataStore.get(id);
