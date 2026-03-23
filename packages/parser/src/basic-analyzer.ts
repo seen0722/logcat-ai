@@ -72,7 +72,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
 
   const tagInsights = generateTagInsights(logcatResult.tagStats);
   const powerInsights = generatePowerInsights(powerStatus);
-  const telephonyInsights = generateTelephonyInsights(telephonyStatus);
+  const telephonyInsights = generateTelephonyInsights(telephonyStatus, powerStatus);
 
   const oomResult = analyzeOom(logcatResult.entries, logcatResult.anomalies, kernelResult.events, kernelResult.entries, memInfo, userDescription);
   const oomInsights = oomResult.detected ? [generateOomInsight(oomResult)] : [];
@@ -1323,7 +1323,7 @@ const TELEPHONY_DEBUG_COMMANDS = [
   'adb shell logcat -b radio -d | grep -E "SST|RIL|RILJ"',
 ];
 
-function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCard[] {
+function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: PowerParseResult): InsightCard[] {
   if (!telephony) return [];
   const insights: InsightCard[] = [];
 
@@ -1351,27 +1351,32 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult): InsightCar
     }
   }
 
-  // 2. OOS summary — prefer dumpsys (full uptime) over radio log (buffer only)
+  // 2. OOS summary — prefer RAT distribution (since last charge) > dumpsys > radio log
+  const ratOos = power?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
   const dumpsysPeriods = telephony.dumpsysOosPeriods ?? [];
   const oosStarts = telephony.oosEvents.filter(e => e.type === 'oos_start');
-  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : oosStarts.length;
-  const totalOosDurationMs = dumpsysPeriods.length > 0
-    ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
-    : telephony.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
   const modemRestarts = telephony.modemRestartCount ?? 0;
 
-  if (oosCount >= 3 || totalOosDurationMs > 5 * 60 * 1000) {
+  // Use RAT OOS as primary source; fallback to dumpsys/radio log for event count
+  const totalOosDurationMs = ratOos ? ratOos.timeMs
+    : dumpsysPeriods.length > 0 ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
+    : telephony.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  const oosPercentage = ratOos?.percentage ?? 0;
+  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : oosStarts.length;
+
+  if (oosPercentage > 5 || totalOosDurationMs > 5 * 60 * 1000 || oosCount >= 3) {
     const totalMin = Math.round(totalOosDurationMs / 60000);
-    const label = oosCount >= 4 ? 'Frequent' : oosCount >= 2 ? 'Recurring' : 'Extended';
     const modemNote = modemRestarts > 0 ? `, ${modemRestarts} modem restarts` : '';
+    const pctStr = ratOos ? ` (${oosPercentage.toFixed(1)}% of battery time)` : '';
+    const source = ratOos ? 'BatteryStats RAT' : dumpsysPeriods.length > 0 ? 'dumpsys phone' : 'radio log';
     insights.push({
       id: '',
       severity: 'critical',
       category: 'telephony',
-      title: `${label} service outage: ${oosCount} times, total ${totalMin} min${modemNote}`,
-      description: `Device experienced ${oosCount} OOS periods with total duration of ${totalMin} minutes${modemNote}. ` +
-        (dumpsysPeriods.length > 0 ? `(Source: dumpsys phone, covers full uptime) ` : '') +
-        `${label === 'Frequent' ? 'Frequent' : 'Recurring'} service outages indicate modem instability or persistent network issues.`,
+      title: `Service outage: ${totalMin} min${pctStr}${modemNote}`,
+      description: `Device was out of service for ${totalMin} minutes${pctStr}${modemNote}. ` +
+        `(Source: ${source}) ` +
+        `Extended service outages indicate modem instability or persistent network issues.`,
       source: 'telephony',
       debugCommands: TELEPHONY_DEBUG_COMMANDS,
     });

@@ -1,6 +1,7 @@
 import {
   AnalysisResult,
   TelephonyParseResult,
+  PowerParseResult,
   ServiceStateSnapshot,
   SignalStrengthSnapshot,
   OosEvent,
@@ -71,7 +72,7 @@ export function exportTelephonyReport(result: AnalysisResult): string {
   if (findingsHtml) addSection('findings', '8. Findings & Recommendations', findingsHtml);
 
   // Summary cards
-  const summaryCards = renderSummaryCards(ts);
+  const summaryCards = renderSummaryCards(ts, result.powerStatus);
 
   return buildHtml(meta, summaryCards, tocEntries, sections.join('\n'));
 }
@@ -391,7 +392,7 @@ function minimalReport(result: AnalysisResult, msg: string): string {
 // Summary Cards
 // ============================================================
 
-function renderSummaryCards(ts: TelephonyParseResult): string {
+function renderSummaryCards(ts: TelephonyParseResult, power?: PowerParseResult): string {
   const cards: string[] = [];
 
   // Voice State
@@ -406,13 +407,19 @@ function renderSummaryCards(ts: TelephonyParseResult): string {
   const simLabel = ts.simState ?? 'N/A';
   cards.push(metricCard('SIM State', simLabel, `Slot count: ${ts.simSlotCount}`, simCls));
 
-  // OOS Count
-  const dumpsysOosCount = ts.dumpsysOosPeriods?.length ?? 0;
-  const radioOosCount = ts.oosEvents.filter(e => e.type === 'oos_start').length;
-  const oosCount = dumpsysOosCount > 0 ? dumpsysOosCount : radioOosCount;
-  const oosCls = oosCount >= 3 ? 'danger' : oosCount > 0 ? 'warn' : 'ok';
-  const oosSource = dumpsysOosCount > 0 ? 'dumpsys' : 'radio log';
-  cards.push(metricCard('OOS Events', String(oosCount), `Source: ${oosSource}`, oosCls));
+  // OOS — prefer RAT distribution > dumpsys > radio log
+  const ratOos = power?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
+  if (ratOos) {
+    const oosCls = ratOos.percentage > 5 ? 'danger' : ratOos.percentage > 0 ? 'warn' : 'ok';
+    cards.push(metricCard('OOS', `${ratOos.percentage.toFixed(1)}%`, fmtMs(ratOos.timeMs), oosCls));
+  } else {
+    const dumpsysOosCount = ts.dumpsysOosPeriods?.length ?? 0;
+    const radioOosCount = ts.oosEvents.filter(e => e.type === 'oos_start').length;
+    const oosCount = dumpsysOosCount > 0 ? dumpsysOosCount : radioOosCount;
+    const oosCls = oosCount >= 3 ? 'danger' : oosCount > 0 ? 'warn' : 'ok';
+    const oosSource = dumpsysOosCount > 0 ? 'dumpsys' : 'radio log';
+    cards.push(metricCard('OOS Events', String(oosCount), `Source: ${oosSource}`, oosCls));
+  }
 
   // Signal Level
   if (ts.signalStrength) {

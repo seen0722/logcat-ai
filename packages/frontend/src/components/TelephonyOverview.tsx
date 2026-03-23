@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { TelephonyParseResult } from '../lib/types';
+import { TelephonyParseResult, PowerParseResult } from '../lib/types';
 import { IconSignal, IconNoService, IconWarningTriangle, IconAntenna, IconChevronDown } from './Icons';
 
 interface Props {
   telephonyStatus: TelephonyParseResult;
+  powerStatus?: PowerParseResult;
 }
 
 function voiceStateBadge(state: string): { color: string; label: string } {
@@ -53,17 +54,20 @@ function MetricCard({ label, value, sub, color, icon, highlight }: {
   );
 }
 
-export default function TelephonyOverview({ telephonyStatus }: Props) {
+export default function TelephonyOverview({ telephonyStatus, powerStatus }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const tel = telephonyStatus;
 
-  // Prefer dumpsys OOS data (full uptime) over radio log (buffer only)
+  // OOS data: prefer RAT distribution (since last charge) > dumpsys > radio log
+  const ratOos = powerStatus?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
   const dumpsysPeriods = tel.dumpsysOosPeriods ?? [];
   const radioOosStarts = tel.oosEvents.filter(e => e.type === 'oos_start');
   const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : radioOosStarts.length;
-  const totalOosMs = dumpsysPeriods.length > 0
-    ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
+  const totalOosMs = ratOos ? ratOos.timeMs
+    : dumpsysPeriods.length > 0 ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
     : tel.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  const oosPercentage = ratOos?.percentage;
+  const hasRatOos = ratOos !== undefined;
   const hasDumpsysData = dumpsysPeriods.length > 0;
 
   const criticalRilErrors = tel.rilErrors.filter(
@@ -149,13 +153,23 @@ export default function TelephonyOverview({ telephonyStatus }: Props) {
               }
             />
 
-            {/* OOS Count */}
+            {/* OOS */}
             <MetricCard
               icon={<IconNoService className="w-4 h-4" />}
-              label="OOS Count"
-              value={oosCount}
-              color={oosCount >= 3 ? 'text-red-400' : oosCount > 0 ? 'text-warm' : 'text-gray-300'}
-              sub={totalOosMs > 0 ? `${formatDuration(totalOosMs)} total` : undefined}
+              label="OOS"
+              value={hasRatOos
+                ? `${oosPercentage!.toFixed(1)}%`
+                : oosCount
+              }
+              color={
+                hasRatOos
+                  ? (oosPercentage! > 5 ? 'text-red-400' : oosPercentage! > 0 ? 'text-warm' : 'text-gray-300')
+                  : (oosCount >= 3 ? 'text-red-400' : oosCount > 0 ? 'text-warm' : 'text-gray-300')
+              }
+              sub={hasRatOos
+                ? (totalOosMs > 0 ? formatDuration(totalOosMs) : undefined)
+                : (totalOosMs > 0 ? `${formatDuration(totalOosMs)} total` : undefined)
+              }
             />
 
             {/* RIL Errors */}

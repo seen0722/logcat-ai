@@ -149,14 +149,15 @@ ${timeline}`;
   // Telephony status
   if (result.telephonyStatus) {
     const tel = result.telephonyStatus;
+    const ratOos = result.powerStatus?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
     const oosCount = tel.oosEvents.filter(e => e.type === 'oos_start').length;
-    const totalOosMs = tel.oosEvents
-      .filter(e => e.type === 'oos_end')
-      .reduce((sum, e) => sum + (e.durationMs || 0), 0);
+    const totalOosMs = ratOos ? ratOos.timeMs
+      : tel.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+    const oosPctStr = ratOos ? ` (${ratOos.percentage.toFixed(1)}% of battery time)` : '';
 
     userPrompt += `\n\n## Telephony Status
 - Current Voice: ${tel.serviceState?.voiceState || 'N/A'}, Data: ${tel.serviceState?.dataState || 'N/A'}
-- OOS events: ${oosCount} times, total duration: ${Math.round(totalOosMs / 60000)} min
+- OOS: ${Math.round(totalOosMs / 60000)} min${oosPctStr}, ${oosCount} events from radio log
 - RIL errors: ${tel.rilErrors.length} (${[...new Set(tel.rilErrors.map(e => e.errorType))].join(', ') || 'none'})
 - Signal: ${tel.signalStrength?.technology || 'N/A'} level ${tel.signalStrength?.level ?? 'N/A'}
 - RAT changes: ${tel.ratChanges.length}

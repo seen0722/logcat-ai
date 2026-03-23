@@ -320,7 +320,7 @@ export default function App() {
             )}
             {result.telephonyStatus && (
               <div id="section-telephony">
-                <TelephonyOverview telephonyStatus={result.telephonyStatus} />
+                <TelephonyOverview telephonyStatus={result.telephonyStatus} powerStatus={result.powerStatus} />
               </div>
             )}
             {result.deepAnalysisOverview && (

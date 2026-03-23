@@ -333,11 +333,18 @@ export interface EstimatedPowerUse {
   actualDrain?: { min: number; max: number };
 }
 
+export interface CellularRatEntry {
+  rat: string;
+  timeMs: number;
+  percentage: number;
+}
+
 export interface ConnectivityStats {
   cellularActiveTimeMs: number;
   cellularDataRxBytes: number;
   cellularDataTxBytes: number;
   cellularSignalDistribution?: Array<{ level: string; percentage: number }>;
+  cellularRatDistribution?: CellularRatEntry[];
   wifiActiveTimeMs: number;
   wifiDataRxBytes: number;
   wifiDataTxBytes: number;

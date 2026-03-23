@@ -13,6 +13,7 @@ import {
   KernelLogEntry,
   EstimatedPowerUse,
   ConnectivityStats,
+  CellularRatEntry,
   PartialWakeLockStat,
 } from './types.js';
 
@@ -810,6 +811,31 @@ export function parseConnectivityStats(content: string): ConnectivityStats | und
   if (wifiSignalDist.length > 0) {
     result.wifiSignalDistribution = wifiSignalDist;
     hasData = true;
+  }
+
+  // Cellular Radio Access Technology distribution
+  // Format: "  lte: 5h 30m 15s 123ms (55.2%)" / "  oos: 1h 18m (13.0%)"
+  // Skip "(no activity)"
+  const ratIdx = block.indexOf('Cellular Radio Access Technology:');
+  if (ratIdx !== -1) {
+    const ratBlock = block.slice(ratIdx);
+    if (!ratBlock.match(/Cellular Radio Access Technology:\s*\(no activity\)/)) {
+      const ratEntries: CellularRatEntry[] = [];
+      const ratEndIdx = ratBlock.search(/\n\s*(Cellular Rx signal|Wifi Statistics|GPS Statistics|CONNECTIVITY POWER SUMMARY END)/);
+      const ratSection = ratEndIdx > 0 ? ratBlock.slice(0, ratEndIdx) : ratBlock.slice(0, 500);
+      const ratRegex = /^\s+(\w[\w_]*\w?):\s+(.+?)\s+\(([\d.]+)%\)/gm;
+      let ratMatch: RegExpExecArray | null;
+      while ((ratMatch = ratRegex.exec(ratSection)) !== null) {
+        const rat = ratMatch[1].toLowerCase();
+        const timeMs = parseDurationToMs(ratMatch[2].trim());
+        const percentage = parseFloat(ratMatch[3]);
+        ratEntries.push({ rat, timeMs, percentage });
+      }
+      if (ratEntries.length > 0) {
+        result.cellularRatDistribution = ratEntries;
+        hasData = true;
+      }
+    }
   }
 
   return hasData ? result : undefined;
