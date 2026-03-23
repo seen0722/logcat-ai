@@ -26,9 +26,60 @@ export function startAnalysis(
 
   const url = `${API_BASE}/analyze/${id}?${params}`;
   let aborted = false;
+  let sseReceivedEvent = false;
+  let pollingActive = false;
   const controller = new AbortController();
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Use fetch + ReadableStream instead of EventSource for reliable SSE through proxies
+  // Simulated progress stages for polling fallback
+  const simulatedStages: Array<{ stage: SSEProgress['stage']; progress: number; message: string }> = [
+    { stage: 'unpacking', progress: 15, message: 'Unpacking bugreport...' },
+    { stage: 'parsing', progress: 35, message: 'Parsing log sections...' },
+    { stage: 'parsing', progress: 50, message: 'Parsing kernel & dumpsys...' },
+    { stage: 'analyzing', progress: 65, message: 'Running rule-based analysis...' },
+    { stage: 'analyzing', progress: 75, message: 'Generating insights...' },
+    { stage: 'deep_analysis', progress: 85, message: 'AI deep analysis in progress...' },
+    { stage: 'deep_analysis', progress: 90, message: 'Finalizing analysis...' },
+  ];
+  let simIndex = 0;
+
+  function cleanup() {
+    aborted = true;
+    controller.abort();
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+  }
+
+  function startPollingFallback() {
+    if (pollingActive || aborted) return;
+    pollingActive = true;
+
+    // Emit simulated progress every 3 seconds
+    pollTimer = setInterval(async () => {
+      if (aborted) return;
+
+      // Advance simulated progress
+      if (simIndex < simulatedStages.length) {
+        onProgress?.(simulatedStages[simIndex]);
+        simIndex++;
+      }
+
+      // Poll for result
+      try {
+        const res = await fetch(`${API_BASE}/analyze/${id}/result`);
+        if (res.ok) {
+          // Analysis complete — result is available
+          onProgress?.({ stage: 'complete', progress: 100, message: 'Analysis complete', data: { id } as never });
+          cleanup();
+        }
+      } catch {
+        // Network error during poll — ignore, will retry
+      }
+    }, 3000);
+  }
+
+  // SSE stream — also triggers the analysis on the backend
   (async () => {
     try {
       const res = await fetch(url, { signal: controller.signal });
@@ -54,6 +105,13 @@ export function startAnalysis(
           if (!trimmed.startsWith('data: ')) continue;
           try {
             const data: SSEProgress = JSON.parse(trimmed.slice(6));
+            sseReceivedEvent = true;
+            // SSE is working — cancel polling fallback if active
+            if (pollingActive) {
+              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+              pollingActive = false;
+            }
+            if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
             onProgress?.(data);
             if (data.stage === 'complete' || data.stage === 'error') {
               aborted = true;
@@ -65,16 +123,24 @@ export function startAnalysis(
       }
     } catch (err) {
       if (!aborted) {
-        onError?.(err instanceof Error ? err.message : 'Connection lost');
+        // SSE connection failed — polling fallback will handle it
+        if (!sseReceivedEvent && !pollingActive) {
+          startPollingFallback();
+        } else if (!pollingActive) {
+          onError?.(err instanceof Error ? err.message : 'Connection lost');
+        }
       }
     }
   })();
 
-  // Return cleanup function
-  return () => {
-    aborted = true;
-    controller.abort();
-  };
+  // Start polling fallback if no SSE event arrives within 3 seconds
+  fallbackTimer = setTimeout(() => {
+    if (!sseReceivedEvent && !aborted) {
+      startPollingFallback();
+    }
+  }, 3000);
+
+  return cleanup;
 }
 
 /**
