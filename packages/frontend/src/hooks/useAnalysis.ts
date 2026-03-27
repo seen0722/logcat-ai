@@ -6,7 +6,7 @@ import {
   AnalysisMode,
 } from '../lib/types';
 
-export type AppPhase = 'landing' | 'upload' | 'analyzing' | 'result';
+export type AppPhase = 'landing' | 'upload' | 'analyzing' | 'result' | 'comparison';
 
 function getInitialPhase(): AppPhase {
   try {
@@ -103,5 +103,5 @@ export function useAnalysis() {
     setError(null);
   }, []);
 
-  return { phase, uploadId, progress, result, error, start, reset, loadFromHistory };
+  return { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory };
 }

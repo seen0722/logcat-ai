@@ -21,9 +21,42 @@ export interface HALChange {
   rightStatus: string;
 }
 
+export interface MetadataSummary {
+  deviceModel: string;
+  manufacturer: string;
+  androidVersion: string;
+  buildType: string;
+  buildFingerprint: string;
+  bugreportTimestamp?: string;
+  serialNumber?: string;
+  securityPatchLevel?: string;
+  basebandVersion?: string;
+}
+
+export interface PowerDiff {
+  present: boolean;
+  dozeRateMahPerHr?: HealthDiffItem;
+  suspendSuccessPercent?: HealthDiffItem;
+  deepDozePercent?: HealthDiffItem;
+  totalDischargeMah?: HealthDiffItem;
+}
+
+export interface TelephonyDiff {
+  present: boolean;
+  totalOosMs?: HealthDiffItem;
+  oosPercentage?: HealthDiffItem;
+  rilErrorCount?: HealthDiffItem;
+  modemRestartCount?: HealthDiffItem;
+  signalLevel?: HealthDiffItem;
+}
+
 export interface ComparisonResult {
   leftId: string;
   rightId: string;
+  metadataDiff: {
+    left: MetadataSummary;
+    right: MetadataSummary;
+  };
   healthDiff: {
     overall: HealthDiffItem;
     stability: HealthDiffItem;
@@ -44,6 +77,8 @@ export interface ComparisonResult {
   halDiff: {
     changes: HALChange[];
   };
+  powerDiff: PowerDiff;
+  telephonyDiff: TelephonyDiff;
 }
 
 export function useComparison() {

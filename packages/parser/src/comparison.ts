@@ -5,6 +5,9 @@ import {
   HALFamily,
   HALStatusSummary,
   Severity,
+  PowerParseResult,
+  TelephonyParseResult,
+  BugreportMetadata,
 } from './types.js';
 
 // ============================================================
@@ -47,13 +50,51 @@ export interface HALDiff {
   changes: HALChange[];
 }
 
+/** Side-by-side metadata for Hero section (not a diff — display only) */
+export interface MetadataSummary {
+  deviceModel: string;
+  manufacturer: string;
+  androidVersion: string;
+  buildType: string;
+  buildFingerprint: string;
+  bugreportTimestamp?: string; // ISO string
+  serialNumber?: string;
+  securityPatchLevel?: string;
+  basebandVersion?: string;
+}
+
+export interface MetadataDiff {
+  left: MetadataSummary;
+  right: MetadataSummary;
+}
+
+export interface PowerDiff {
+  present: boolean;
+  dozeRateMahPerHr?: HealthDiffItem;
+  suspendSuccessPercent?: HealthDiffItem;
+  deepDozePercent?: HealthDiffItem;
+  totalDischargeMah?: HealthDiffItem;
+}
+
+export interface TelephonyDiff {
+  present: boolean;
+  totalOosMs?: HealthDiffItem;
+  oosPercentage?: HealthDiffItem;
+  rilErrorCount?: HealthDiffItem;
+  modemRestartCount?: HealthDiffItem;
+  signalLevel?: HealthDiffItem;
+}
+
 export interface ComparisonResult {
   leftId: string;
   rightId: string;
+  metadataDiff: MetadataDiff;
   healthDiff: HealthDiff;
   insightDiff: InsightDiff;
   anrDiff: ANRDiff;
   halDiff: HALDiff;
+  powerDiff: PowerDiff;
+  telephonyDiff: TelephonyDiff;
 }
 
 // ============================================================
@@ -219,6 +260,91 @@ function compareHALs(left: AnalysisResult, right: AnalysisResult): HALDiff {
   return { changes };
 }
 
+function diffItem(l: number, r: number): HealthDiffItem {
+  return { left: l, right: r, delta: Math.round((r - l) * 100) / 100 };
+}
+
+function extractMetadata(meta: BugreportMetadata): MetadataSummary {
+  return {
+    deviceModel: meta.deviceModel,
+    manufacturer: meta.manufacturer,
+    androidVersion: meta.androidVersion,
+    buildType: meta.buildType ?? 'unknown',
+    buildFingerprint: meta.buildFingerprint,
+    bugreportTimestamp: meta.bugreportTimestamp instanceof Date
+      ? meta.bugreportTimestamp.toISOString()
+      : meta.bugreportTimestamp ? String(meta.bugreportTimestamp) : undefined,
+    serialNumber: meta.serialNumber,
+    securityPatchLevel: meta.securityPatchLevel,
+    basebandVersion: meta.basebandVersion,
+  };
+}
+
+function comparePower(left?: PowerParseResult, right?: PowerParseResult): PowerDiff {
+  if (!left?.batteryStats || !right?.batteryStats) {
+    return { present: false };
+  }
+  const lb = left.batteryStats;
+  const rb = right.batteryStats;
+
+  const result: PowerDiff = { present: true };
+
+  if (lb.deepDozeDischargeRateMahPerHr != null && rb.deepDozeDischargeRateMahPerHr != null) {
+    result.dozeRateMahPerHr = diffItem(lb.deepDozeDischargeRateMahPerHr, rb.deepDozeDischargeRateMahPerHr);
+  }
+  if (left.suspendStats && right.suspendStats) {
+    result.suspendSuccessPercent = diffItem(
+      left.suspendStats.suspendSuccessRate * 100,
+      right.suspendStats.suspendSuccessRate * 100,
+    );
+  }
+  if (lb.deepDozeTimeMs != null && lb.timePeriodMs > 0 && rb.deepDozeTimeMs != null && rb.timePeriodMs > 0) {
+    result.deepDozePercent = diffItem(
+      (lb.deepDozeTimeMs / lb.timePeriodMs) * 100,
+      (rb.deepDozeTimeMs / rb.timePeriodMs) * 100,
+    );
+  }
+  result.totalDischargeMah = diffItem(lb.totalDischargeMah, rb.totalDischargeMah);
+  return result;
+}
+
+function getOosTotalMs(tel: TelephonyParseResult): number {
+  const ratOosEntry = undefined; // RAT OOS is on PowerParseResult, not here
+  const periods = tel.dumpsysOosPeriods ?? [];
+  if (periods.length > 0) return periods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
+  return tel.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+}
+
+function compareTelephony(
+  left?: TelephonyParseResult, right?: TelephonyParseResult,
+  leftPower?: PowerParseResult, rightPower?: PowerParseResult,
+): TelephonyDiff {
+  if (!left || !right) return { present: false };
+
+  const result: TelephonyDiff = { present: true };
+
+  // OOS: prefer RAT distribution > dumpsys > radio log
+  const leftRatOos = leftPower?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
+  const rightRatOos = rightPower?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
+
+  const leftOosMs = leftRatOos ? leftRatOos.timeMs : getOosTotalMs(left);
+  const rightOosMs = rightRatOos ? rightRatOos.timeMs : getOosTotalMs(right);
+  result.totalOosMs = diffItem(leftOosMs, rightOosMs);
+
+  if (leftRatOos && rightRatOos) {
+    result.oosPercentage = diffItem(leftRatOos.percentage, rightRatOos.percentage);
+  }
+
+  result.rilErrorCount = diffItem(left.rilErrors.length, right.rilErrors.length);
+  result.modemRestartCount = diffItem(left.modemRestartCount ?? 0, right.modemRestartCount ?? 0);
+
+  if (left.signalStrength && right.signalStrength) {
+    result.signalLevel = diffItem(left.signalStrength.level, right.signalStrength.level);
+  }
+
+  return result;
+}
+
 /**
  * Compare two analysis results to produce a structured diff.
  * Useful for regression tracking and before/after analysis.
@@ -232,9 +358,18 @@ export function compareAnalyses(
   return {
     leftId,
     rightId,
+    metadataDiff: {
+      left: extractMetadata(left.metadata),
+      right: extractMetadata(right.metadata),
+    },
     healthDiff: compareHealth(left.healthScore, right.healthScore),
     insightDiff: compareInsights(left.insights, right.insights),
     anrDiff: compareANRs(left, right),
     halDiff: compareHALs(left, right),
+    powerDiff: comparePower(left.powerStatus, right.powerStatus),
+    telephonyDiff: compareTelephony(
+      left.telephonyStatus, right.telephonyStatus,
+      left.powerStatus, right.powerStatus,
+    ),
   };
 }

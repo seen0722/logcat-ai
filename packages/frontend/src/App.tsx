@@ -16,7 +16,7 @@ import PowerOverview from './components/PowerOverview';
 import TelephonyOverview from './components/TelephonyOverview';
 import HistoryPanel from './components/HistoryPanel';
 import ExportMenu from './components/ExportMenu';
-import ComparisonView from './components/ComparisonView';
+import ComparisonPage from './components/ComparisonPage';
 import BatchUpload from './components/BatchUpload';
 import BatchResults from './components/BatchResults';
 import SearchModal from './components/SearchModal';
@@ -26,7 +26,7 @@ import SettingsPanel from './components/SettingsPanel';
 import LandingPage from './components/LandingPage';
 
 export default function App() {
-  const { phase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
+  const { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -137,7 +137,7 @@ export default function App() {
   return (
     <div className="min-h-screen p-6 md:p-10">
       {/* Header (when not in upload phase) */}
-      {phase !== 'upload' && phase !== 'landing' && (
+      {phase !== 'upload' && phase !== 'landing' && phase !== 'comparison' && (
         <div className="sticky top-0 z-30 -mx-6 md:-mx-10 px-6 md:px-10 py-3 mb-6 glass">
           <div className="flex items-center justify-between max-w-5xl mx-auto">
             <h1 className="font-display text-xl">
@@ -354,6 +354,14 @@ export default function App() {
         </>
       )}
 
+      {/* Comparison Phase (full page) */}
+      {phase === 'comparison' && comparison && (
+        <ComparisonPage
+          comparison={comparison}
+          onBack={() => { resetComparison(); setPhase('result'); }}
+        />
+      )}
+
       {/* Settings Panel */}
       {showSettings && (
         <SettingsPanel onClose={() => setShowSettings(false)} />
@@ -373,10 +381,11 @@ export default function App() {
       {/* Compare mode: select another analysis from history */}
       {compareMode && !comparison && (
         <HistoryPanel
-          onLoad={(otherId) => {
+          onLoad={async (otherId) => {
             setCompareMode(false);
             if (uploadId) {
-              compare(uploadId, otherId);
+              await compare(uploadId, otherId);
+              setPhase('comparison');
             }
           }}
           onClose={() => setCompareMode(false)}
@@ -399,18 +408,13 @@ export default function App() {
           <div className="glass rounded-xl px-8 py-6 text-center max-w-md border-red-900/50 shadow-elevated" onClick={(e) => e.stopPropagation()}>
             <p className="text-red-400 mb-4">{compareError}</p>
             <button
-              onClick={resetComparison}
+              onClick={() => { resetComparison(); setPhase('result'); }}
               className="btn-ghost text-sm"
             >
               Close
             </button>
           </div>
         </div>
-      )}
-
-      {/* Comparison result */}
-      {comparison && (
-        <ComparisonView comparison={comparison} onClose={resetComparison} />
       )}
 
       {/* Batch Upload Modal */}
