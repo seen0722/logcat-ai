@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useComparison } from './hooks/useComparison';
-import { IconSettings, IconMenu } from './components/Icons';
+import { IconSettings, IconMenu, IconLogoMark } from './components/Icons';
 import { BatchAggregation, BatchFileResult } from './lib/types';
 import UploadZone from './components/UploadZone';
 import ProgressView from './components/ProgressView';
@@ -141,6 +141,7 @@ export default function App() {
         <div className="sticky top-0 z-30 -mx-6 md:-mx-10 px-6 md:px-10 py-3 mb-6 glass">
           <div className="flex items-center justify-between max-w-5xl mx-auto">
             <div className="flex items-center gap-3">
+              <IconLogoMark size={28} />
               <h1 className="font-display text-xl">
                 Logcat <span className="text-warm">AI</span>
               </h1>

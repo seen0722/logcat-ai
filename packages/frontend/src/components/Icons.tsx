@@ -11,6 +11,19 @@ interface IconProps {
 
 const defaults = { size: 24 };
 
+// ── Brand Logo ──
+
+export function IconLogoMark({ className, size = 28 }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 512 512" fill="none">
+      <rect width="512" height="512" rx="108" fill="#0c1222"/>
+      <path d="M100,160 L200,256 L100,352" stroke="#3a4a6a" strokeWidth="36" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="230" y="238" width="200" height="36" rx="18" fill="#d4a06a" opacity="0.95"/>
+      <path d="M388,96 C392,120 400,128 424,132 C400,136 392,144 388,168 C384,144 376,136 352,132 C376,128 384,120 388,96Z" fill="#4f8ff7"/>
+    </svg>
+  );
+}
+
 // ── Navigation & UI ──
 
 export function IconSettings({ className, size = defaults.size }: IconProps) {
