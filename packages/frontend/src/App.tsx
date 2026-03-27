@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useComparison } from './hooks/useComparison';
-import { IconSettings, IconMenu, IconLogoMark } from './components/Icons';
+import { IconSettings, IconMenu, IconLogoMark, IconSun, IconMoon } from './components/Icons';
+import { useTheme } from './hooks/useTheme';
 import { BatchAggregation, BatchFileResult } from './lib/types';
 import UploadZone from './components/UploadZone';
 import ProgressView from './components/ProgressView';
@@ -27,6 +28,7 @@ import LandingPage from './components/LandingPage';
 
 export default function App() {
   const { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
+  const { theme, toggleTheme } = useTheme();
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -171,6 +173,13 @@ export default function App() {
               {uploadId && <span className="hidden sm:inline-flex"><ExportMenu uploadId={uploadId} hasPowerData={!!result?.powerStatus?.batteryStats} hasTelephonyData={!!result?.telephonyStatus?.serviceState} /></span>}
               {/* Desktop: show all buttons */}
               <button
+                onClick={toggleTheme}
+                className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? <IconSun className="w-4 h-4" /> : <IconMoon className="w-4 h-4" />}
+              </button>
+              <button
                 onClick={() => setShowSettings(true)}
                 className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
                 title="LLM Settings"
@@ -223,6 +232,12 @@ export default function App() {
                           </button>
                         </>
                       )}
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); toggleTheme(); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-hover transition-colors"
+                      >
+                        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                      </button>
                       <button
                         onClick={() => { setShowHeaderMenu(false); setShowSettings(true); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-hover transition-colors"

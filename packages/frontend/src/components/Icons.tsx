@@ -16,10 +16,27 @@ const defaults = { size: 24 };
 export function IconLogoMark({ className, size = 28 }: IconProps) {
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 512 512" fill="none">
-      <rect width="512" height="512" rx="108" fill="#0c1222"/>
-      <path d="M100,160 L200,256 L100,352" stroke="#3a4a6a" strokeWidth="36" strokeLinecap="round" strokeLinejoin="round"/>
-      <rect x="230" y="238" width="200" height="36" rx="18" fill="#d4a06a" opacity="0.95"/>
-      <path d="M388,96 C392,120 400,128 424,132 C400,136 392,144 388,168 C384,144 376,136 352,132 C376,128 384,120 388,96Z" fill="#4f8ff7"/>
+      <rect width="512" height="512" rx="108" fill="rgb(var(--color-surface-card))" stroke="rgb(var(--color-border))" strokeWidth="8"/>
+      <path d="M100,160 L200,256 L100,352" stroke="rgb(var(--color-border))" strokeWidth="36" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="230" y="238" width="200" height="36" rx="18" fill="rgb(var(--color-warm))" opacity="0.95"/>
+      <path d="M388,96 C392,120 400,128 424,132 C400,136 392,144 388,168 C384,144 376,136 352,132 C376,128 384,120 388,96Z" fill="rgb(var(--color-accent))"/>
+    </svg>
+  );
+}
+
+export function IconSun({ className, size = defaults.size }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+export function IconMoon({ className, size = defaults.size }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </svg>
   );
 }
@@ -29,8 +46,9 @@ export function IconLogoMark({ className, size = 28 }: IconProps) {
 export function IconSettings({ className, size = defaults.size }: IconProps) {
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
+      {/* AI sparkle — 4-pointed star with smaller companion */}
+      <path d="M12 2C12.5 7 17 7.5 22 8C17 8.5 12.5 9 12 14C11.5 9 7 8.5 2 8C7 7.5 11.5 7 12 2Z" />
+      <path d="M17 14C17.3 16.5 19.5 16.8 22 17C19.5 17.2 17.3 17.5 17 20C16.7 17.5 14.5 17.2 12 17C14.5 16.8 16.7 16.5 17 14Z" />
     </svg>
   );
 }

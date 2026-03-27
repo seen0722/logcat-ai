@@ -10,23 +10,23 @@ export default {
       },
       colors: {
         surface: {
-          DEFAULT: '#0c1222',
-          card: '#131b2e',
-          hover: '#1a2540',
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          card: 'rgb(var(--color-surface-card) / <alpha-value>)',
+          hover: 'rgb(var(--color-surface-hover) / <alpha-value>)',
         },
         border: {
-          DEFAULT: '#243049',
-          focus: '#4f8ff7',
+          DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
+          focus: 'rgb(var(--color-border-focus) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#4f8ff7',
-          dark: '#2d6de0',
-          light: '#7cb3ff',
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          dark: 'rgb(var(--color-accent-dark) / <alpha-value>)',
+          light: 'rgb(var(--color-accent-light) / <alpha-value>)',
         },
         warm: {
-          DEFAULT: '#d4a06a',
-          light: '#e8c9a0',
-          dark: '#b8864e',
+          DEFAULT: 'rgb(var(--color-warm) / <alpha-value>)',
+          light: 'rgb(var(--color-warm-light) / <alpha-value>)',
+          dark: 'rgb(var(--color-warm-dark) / <alpha-value>)',
         },
         severity: {
           critical: '#ef4444',
@@ -38,9 +38,9 @@ export default {
         xl: '14px',
       },
       boxShadow: {
-        'card': '0 4px 12px rgba(12,18,34,0.3), 0 1px 3px rgba(12,18,34,0.2)',
-        'card-hover': '0 12px 28px rgba(12,18,34,0.4), 0 4px 10px rgba(12,18,34,0.2)',
-        'elevated': '0 24px 48px rgba(12,18,34,0.5), 0 8px 16px rgba(12,18,34,0.3)',
+        'card': 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
+        'elevated': 'var(--shadow-elevated)',
         'glow': '0 0 24px rgba(79,143,247,0.15)',
         'warm-glow': '0 0 24px rgba(212,160,106,0.15)',
       },
