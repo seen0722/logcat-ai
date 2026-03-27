@@ -8,6 +8,7 @@ import {
   SmsEvent,
   RatChangeEvent,
   DumpsysOosPeriod,
+  DataNetworkOosPeriod,
   TransportError,
   SimState,
   BugreportSection,
@@ -75,6 +76,13 @@ export function parseTelephonySections(
       const periods = parseDumpsysOosPeriods(c);
       if (periods.length > 0) {
         result.dumpsysOosPeriods = periods;
+      }
+    }
+    // Parse DataNetworkController Local logs for connect/disconnect events
+    if (c.includes('DataNetworkController') && c.includes('onDataNetwork')) {
+      const dnPeriods = parseDataNetworkOosPeriods(c);
+      if (dnPeriods.length > 0) {
+        result.dataNetworkOosPeriods = dnPeriods;
       }
     }
     if (c.includes('DUMP OF SERVICE isub') || c.includes('updateSimState:')) {
@@ -544,6 +552,72 @@ export function parseDumpsysOosPeriods(content: string): DumpsysOosPeriod[] {
   // If still in OOS at dump time, record open period
   if (currentOosStart) {
     periods.push({ start: currentOosStart });
+  }
+
+  return periods;
+}
+
+// ============================================================
+// Dumpsys Phone — DataNetworkController OOS Period Detection
+// ============================================================
+
+// Format: "2026-03-26T13:50:21.517435 - onDataNetworkDisconnected: [DataNetwork: DN-101-C, internet, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=NONE"
+const DN_CONNECTED_RE = /(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+-\s+onDataNetworkConnected:\s+\[DataNetwork:\s+(DN-[\w-]+)/;
+const DN_DISCONNECTED_RE = /(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+-\s+onDataNetworkDisconnected:\s+\[DataNetwork:\s+(DN-[\w-]+)[^\]]*\],?\s*cause=([^,\s)]+(?:\([^)]*\))*)/;
+
+/**
+ * Parse OOS periods from DataNetworkController Local logs in dumpsys phone.
+ * Pairs onDataNetworkDisconnected → onDataNetworkConnected as OOS gaps.
+ */
+export function parseDataNetworkOosPeriods(content: string): DataNetworkOosPeriod[] {
+  const periods: DataNetworkOosPeriod[] = [];
+
+  // Collect all connect/disconnect events in chronological order
+  const events: Array<{ type: 'connected' | 'disconnected'; timestamp: string; networkId: string; cause?: string }> = [];
+
+  for (const line of content.split('\n')) {
+    const discMatch = line.match(DN_DISCONNECTED_RE);
+    if (discMatch) {
+      events.push({ type: 'disconnected', timestamp: discMatch[1], networkId: discMatch[2], cause: discMatch[3] });
+      continue;
+    }
+    const connMatch = line.match(DN_CONNECTED_RE);
+    if (connMatch) {
+      events.push({ type: 'connected', timestamp: connMatch[1], networkId: connMatch[2] });
+    }
+  }
+
+  // Pair: disconnected → next connected = OOS gap
+  let pendingDisconnect: { timestamp: string; cause?: string; networkId: string } | null = null;
+
+  for (const evt of events) {
+    if (evt.type === 'disconnected') {
+      pendingDisconnect = { timestamp: evt.timestamp, cause: evt.cause, networkId: evt.networkId };
+    } else if (evt.type === 'connected' && pendingDisconnect) {
+      const startMs = new Date(pendingDisconnect.timestamp).getTime();
+      const endMs = new Date(evt.timestamp).getTime();
+      const durationMs = endMs - startMs;
+      // Skip very short gaps (<2s) — typically immediate reconnects, not real OOS
+      if (durationMs >= 2000) {
+        periods.push({
+          disconnectedAt: pendingDisconnect.timestamp,
+          connectedAt: evt.timestamp,
+          durationMs,
+          cause: pendingDisconnect.cause,
+          networkId: pendingDisconnect.networkId,
+        });
+      }
+      pendingDisconnect = null;
+    }
+  }
+
+  // If still disconnected at dump time, record open period
+  if (pendingDisconnect) {
+    periods.push({
+      disconnectedAt: pendingDisconnect.timestamp,
+      cause: pendingDisconnect.cause,
+      networkId: pendingDisconnect.networkId,
+    });
   }
 
   return periods;

@@ -463,6 +463,15 @@ export interface TelephonyParseResult {
   modemRestartReasons?: string[];
   transportErrors?: TransportError[];
   radioLogTimeRange?: { start: string; end: string };
+  dataNetworkOosPeriods?: DataNetworkOosPeriod[];
+}
+
+export interface DataNetworkOosPeriod {
+  disconnectedAt: string;
+  connectedAt?: string;
+  durationMs?: number;
+  cause?: string;
+  networkId?: string;
 }
 
 export interface AnalysisResult {

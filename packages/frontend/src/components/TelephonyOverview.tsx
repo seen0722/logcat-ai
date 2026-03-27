@@ -58,16 +58,16 @@ export default function TelephonyOverview({ telephonyStatus, powerStatus }: Prop
   const [showDetails, setShowDetails] = useState(false);
   const tel = telephonyStatus;
 
-  // OOS data: prefer RAT distribution (since last charge) > dumpsys > radio log
+  // OOS data: RAT distribution for time/%, DataNetwork events for count
   const ratOos = powerStatus?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
-  const dumpsysPeriods = tel.dumpsysOosPeriods ?? [];
-  const radioOosStarts = tel.oosEvents.filter(e => e.type === 'oos_start');
-  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : radioOosStarts.length;
+  const dnPeriods = tel.dataNetworkOosPeriods ?? [];
+  const oosCount = dnPeriods.length;
   const totalOosMs = ratOos ? ratOos.timeMs
-    : dumpsysPeriods.length > 0 ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0)
-    : tel.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+    : dnPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
   const oosPercentage = ratOos?.percentage;
-  const hasRatOos = ratOos !== undefined;
+  const hasOosData = ratOos !== undefined || dnPeriods.length > 0;
+  // Legacy fallback references
+  const dumpsysPeriods = tel.dumpsysOosPeriods ?? [];
   const hasDumpsysData = dumpsysPeriods.length > 0;
 
   const criticalRilErrors = tel.rilErrors.filter(
@@ -153,24 +153,26 @@ export default function TelephonyOverview({ telephonyStatus, powerStatus }: Prop
               }
             />
 
-            {/* OOS */}
-            <MetricCard
-              icon={<IconNoService className="w-4 h-4" />}
-              label="OOS"
-              value={hasRatOos
-                ? `${oosPercentage!.toFixed(1)}%`
-                : oosCount
-              }
-              color={
-                hasRatOos
-                  ? (oosPercentage! > 5 ? 'text-red-400' : oosPercentage! > 0 ? 'text-warm' : 'text-gray-300')
-                  : (oosCount >= 3 ? 'text-red-400' : oosCount > 0 ? 'text-warm' : 'text-gray-300')
-              }
-              sub={hasRatOos
-                ? (totalOosMs > 0 ? formatDuration(totalOosMs) : undefined)
-                : (totalOosMs > 0 ? `${formatDuration(totalOosMs)} total` : undefined)
-              }
-            />
+            {/* OOS — only show when we have data */}
+            {hasOosData && (
+              <MetricCard
+                icon={<IconNoService className="w-4 h-4" />}
+                label="OOS"
+                value={ratOos
+                  ? `${oosPercentage!.toFixed(1)}%`
+                  : oosCount > 0 ? oosCount : '-'
+                }
+                color={
+                  ratOos
+                    ? (oosPercentage! > 5 ? 'text-red-400' : oosPercentage! > 0 ? 'text-warm' : 'text-gray-300')
+                    : (oosCount >= 3 ? 'text-red-400' : oosCount > 0 ? 'text-warm' : 'text-gray-300')
+                }
+                sub={ratOos
+                  ? `${formatDuration(totalOosMs)}${oosCount > 0 ? ` / ${oosCount} times` : ''}`
+                  : (totalOosMs > 0 ? `${formatDuration(totalOosMs)} total` : undefined)
+                }
+              />
+            )}
 
             {/* RIL Errors */}
             <MetricCard

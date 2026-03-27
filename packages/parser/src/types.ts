@@ -729,6 +729,16 @@ export interface TelephonyParseResult {
   transportErrors?: TransportError[];
   /** Radio log buffer time coverage */
   radioLogTimeRange?: { start: string; end: string };
+  /** Data network OOS periods from dumpsys phone DataNetworkController Local logs */
+  dataNetworkOosPeriods?: DataNetworkOosPeriod[];
+}
+
+export interface DataNetworkOosPeriod {
+  disconnectedAt: string;  // ISO timestamp
+  connectedAt?: string;    // ISO timestamp (undefined if still disconnected at dump time)
+  durationMs?: number;     // only present if connectedAt exists
+  cause?: string;          // e.g. "LOST_CONNECTION(0x10004)(65540)"
+  networkId?: string;      // e.g. "DN-101-C"
 }
 
 export interface TransportError {
