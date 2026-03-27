@@ -39,7 +39,7 @@ export function exportTelephonyReport(result: AnalysisResult): string {
   };
 
   // Section 1: Executive Summary
-  const summaryHtml = renderExecutiveSummary(ts);
+  const summaryHtml = renderExecutiveSummary(ts, result);
   if (summaryHtml) addSection('summary', '1. Executive Summary', summaryHtml);
 
   // Section 2: Service State & SIM
@@ -407,18 +407,21 @@ function renderSummaryCards(ts: TelephonyParseResult, power?: PowerParseResult):
   const simLabel = ts.simState ?? 'N/A';
   cards.push(metricCard('SIM State', simLabel, `Slot count: ${ts.simSlotCount}`, simCls));
 
-  // OOS — prefer RAT distribution > dumpsys > radio log
+  // OOS — prefer RAT distribution for time/%, DataNetwork events for count
   const ratOos = power?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
-  if (ratOos) {
-    const oosCls = ratOos.percentage > 5 ? 'danger' : ratOos.percentage > 0 ? 'warn' : 'ok';
-    cards.push(metricCard('OOS', `${ratOos.percentage.toFixed(1)}%`, fmtMs(ratOos.timeMs), oosCls));
-  } else {
-    const dumpsysOosCount = ts.dumpsysOosPeriods?.length ?? 0;
-    const radioOosCount = ts.oosEvents.filter(e => e.type === 'oos_start').length;
-    const oosCount = dumpsysOosCount > 0 ? dumpsysOosCount : radioOosCount;
-    const oosCls = oosCount >= 3 ? 'danger' : oosCount > 0 ? 'warn' : 'ok';
-    const oosSource = dumpsysOosCount > 0 ? 'dumpsys' : 'radio log';
-    cards.push(metricCard('OOS Events', String(oosCount), `Source: ${oosSource}`, oosCls));
+  const dnPeriods = ts.dataNetworkOosPeriods ?? [];
+  const hasOosData = ratOos || dnPeriods.length > 0;
+  if (hasOosData) {
+    const dnCount = dnPeriods.length;
+    if (ratOos) {
+      const oosCls = ratOos.percentage > 5 ? 'danger' : ratOos.percentage > 0 ? 'warn' : 'ok';
+      const sub = dnCount > 0 ? `${fmtMs(ratOos.timeMs)} / ${dnCount} times` : fmtMs(ratOos.timeMs);
+      cards.push(metricCard('OOS', `${ratOos.percentage.toFixed(1)}%`, sub, oosCls));
+    } else {
+      const totalMs = dnPeriods.reduce((s, p) => s + (p.durationMs ?? 0), 0);
+      const oosCls = dnCount >= 3 ? 'danger' : dnCount > 0 ? 'warn' : 'ok';
+      cards.push(metricCard('OOS', String(dnCount), totalMs > 0 ? fmtMs(totalMs) : undefined, oosCls));
+    }
   }
 
   // Signal Level
@@ -444,7 +447,7 @@ ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}
 // Section Renderers
 // ============================================================
 
-function renderExecutiveSummary(ts: TelephonyParseResult): string {
+function renderExecutiveSummary(ts: TelephonyParseResult, result: AnalysisResult): string {
   const bullets: string[] = [];
 
   // Voice/Data state
@@ -464,16 +467,16 @@ function renderExecutiveSummary(ts: TelephonyParseResult): string {
     bullets.push(`SIM card is in <strong>ERROR</strong> state. The SIM may be damaged or incompatible.`);
   }
 
-  // OOS count & duration
-  const dumpsysPeriods = ts.dumpsysOosPeriods ?? [];
-  const oosStarts = ts.oosEvents.filter(e => e.type === 'oos_start');
-  const oosCount = dumpsysPeriods.length > 0 ? dumpsysPeriods.length : oosStarts.length;
-  if (oosCount > 0) {
-    const totalMs = dumpsysPeriods.length > 0
-      ? dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs || 0), 0)
-      : ts.oosEvents.filter(e => e.type === 'oos_end').reduce((sum, e) => sum + (e.durationMs || 0), 0);
+  // OOS count & duration — prefer RAT + DataNetwork over legacy sources
+  const execRatOos = result.powerStatus?.connectivityStats?.cellularRatDistribution?.find(e => e.rat === 'oos');
+  const execDnPeriods = ts.dataNetworkOosPeriods ?? [];
+  if (execRatOos) {
+    const countStr = execDnPeriods.length > 0 ? `<strong>${execDnPeriods.length}</strong> ` : '';
+    bullets.push(`${countStr}out-of-service event${execDnPeriods.length !== 1 ? 's' : ''} detected, total <strong>${fmtMs(execRatOos.timeMs)}</strong> (${execRatOos.percentage.toFixed(1)}% of battery time).`);
+  } else if (execDnPeriods.length > 0) {
+    const totalMs = execDnPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
     const durStr = totalMs > 0 ? ` with total duration <strong>${fmtMs(totalMs)}</strong>` : '';
-    bullets.push(`<strong>${oosCount}</strong> out-of-service event${oosCount > 1 ? 's' : ''} detected${durStr}.`);
+    bullets.push(`<strong>${execDnPeriods.length}</strong> out-of-service event${execDnPeriods.length > 1 ? 's' : ''} detected${durStr}.`);
   }
 
   // Modem restarts
@@ -577,48 +580,29 @@ function renderSignalStrength(sig: SignalStrengthSnapshot): string {
 }
 
 function renderOosHistory(ts: TelephonyParseResult): string {
-  const dumpsysPeriods = ts.dumpsysOosPeriods ?? [];
-  const hasRadioOos = ts.oosEvents.length > 0;
+  const dnPeriods = ts.dataNetworkOosPeriods ?? [];
 
-  if (dumpsysPeriods.length === 0 && !hasRadioOos) return '';
+  if (dnPeriods.length === 0) return '';
 
   let html = '';
 
-  // Prefer dumpsys periods
-  if (dumpsysPeriods.length > 0) {
-    html += '<h3>OOS Periods (dumpsys \u2014 full uptime)</h3>';
-    const rows = dumpsysPeriods.map((p, i) => [
+  html += '<h3>DataNetwork Disconnect/Reconnect History</h3>';
+  const rows = dnPeriods.map((p, i) => {
+    const durStr = p.durationMs != null ? fmtMs(p.durationMs) : 'ongoing';
+    const cause = p.cause?.replace(/\([^)]*\)/g, '').trim() || '';
+    return [
       String(i + 1),
-      esc(p.start),
-      p.end ? esc(p.end) : '(ongoing)',
-      p.durationMs != null ? fmtMs(p.durationMs) : 'N/A',
-    ]);
-    html += table(['#', 'Start', 'End', 'Duration'], rows);
+      esc(p.disconnectedAt.replace('T', ' ').slice(0, 19)),
+      p.connectedAt ? esc(p.connectedAt.replace('T', ' ').slice(0, 19)) : '(ongoing)',
+      esc(cause),
+      durStr,
+    ];
+  });
+  html += table(['#', 'Disconnected', 'Reconnected', 'Cause', 'Duration'], rows);
 
-    const totalMs = dumpsysPeriods.reduce((sum, p) => sum + (p.durationMs || 0), 0);
-    if (totalMs > 0) {
-      html += `<p>Total OOS duration: <strong>${fmtMs(totalMs)}</strong> across ${dumpsysPeriods.length} period${dumpsysPeriods.length > 1 ? 's' : ''}</p>`;
-    }
-  }
-
-  // Radio log OOS events (always show if available as supplementary)
-  if (hasRadioOos) {
-    if (dumpsysPeriods.length > 0) {
-      html += '<h3>OOS Events (radio log)</h3>';
-    }
-    const rows = ts.oosEvents.map((e, i) => [
-      String(i + 1),
-      esc(e.timestamp),
-      esc(e.type),
-      esc(e.domain),
-      e.durationMs != null ? fmtMs(e.durationMs) : 'N/A',
-    ]);
-    html += table(['#', 'Timestamp', 'Type', 'Domain', 'Duration'], rows);
-  }
-
-  // Radio log coverage warning
-  if (ts.radioLogTimeRange) {
-    html += `<div class="callout">Radio log buffer coverage: <strong>${esc(ts.radioLogTimeRange.start)}</strong> to <strong>${esc(ts.radioLogTimeRange.end)}</strong>. Events outside this window are not captured in radio log OOS events.</div>`;
+  const totalMs = dnPeriods.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
+  if (totalMs > 0) {
+    html += `<p>Total OOS duration: <strong>${fmtMs(totalMs)}</strong> across ${dnPeriods.length} event${dnPeriods.length > 1 ? 's' : ''}</p>`;
   }
 
   return html;
@@ -797,14 +781,13 @@ function renderFindings(ts: TelephonyParseResult): string {
   }
 
   // P1: OOS count >= 3
-  const dumpsysOosCount = ts.dumpsysOosPeriods?.length ?? 0;
-  const radioOosCount = ts.oosEvents.filter(e => e.type === 'oos_start').length;
-  const oosCount = dumpsysOosCount > 0 ? dumpsysOosCount : radioOosCount;
-  if (oosCount >= 3) {
+  const findDnPeriods = ts.dataNetworkOosPeriods ?? [];
+  if (findDnPeriods.length >= 3) {
+    const totalMs = findDnPeriods.reduce((s, p) => s + (p.durationMs ?? 0), 0);
     findings.push({
       priority: 'P1',
       issue: 'Frequent service outages',
-      evidence: `${oosCount} OOS events detected`,
+      evidence: `${findDnPeriods.length} data network disconnections, total ${fmtMs(totalMs)}`,
       recommendation: 'Investigate RF path, antenna connection, and network coverage. Cross-reference with modem restart events.',
     });
   }

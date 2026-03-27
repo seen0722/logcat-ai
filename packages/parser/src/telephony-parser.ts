@@ -563,7 +563,7 @@ export function parseDumpsysOosPeriods(content: string): DumpsysOosPeriod[] {
 
 // Format: "2026-03-26T13:50:21.517435 - onDataNetworkDisconnected: [DataNetwork: DN-101-C, internet, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=NONE"
 const DN_CONNECTED_RE = /(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+-\s+onDataNetworkConnected:\s+\[DataNetwork:\s+(DN-[\w-]+)/;
-const DN_DISCONNECTED_RE = /(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+-\s+onDataNetworkDisconnected:\s+\[DataNetwork:\s+(DN-[\w-]+)[^\]]*\],?\s*cause=([^,\s)]+(?:\([^)]*\))*)/;
+const DN_DISCONNECTED_RE = /(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+-\s+onDataNetworkDisconnected:\s+\[DataNetwork:\s+(DN-[\w-]+)[^\]]*\],?\s*cause=([^,]+)/;
 
 /**
  * Parse OOS periods from DataNetworkController Local logs in dumpsys phone.
