@@ -211,69 +211,48 @@ export default function TelephonyOverview({ telephonyStatus, powerStatus }: Prop
       {/* ── Detailed sections - collapsible ── */}
       {showDetails && (
         <div className="space-y-4">
-          {/* OOS Event History — prefer dumpsys (full uptime) over radio log */}
-          {(hasDumpsysData || tel.oosEvents.length > 0) && (
+          {/* OOS Event History — from DataNetworkController Local logs */}
+          {dnPeriods.length > 0 && (
             <div className="card space-y-3">
               <h3 className="font-display text-base text-gray-200">
                 OOS Event History
-                {hasDumpsysData && (
-                  <span className="ml-2 text-xs font-normal text-accent">(dumpsys — full uptime)</span>
-                )}
+                <span className="ml-2 text-xs font-normal text-accent">(DataNetwork — dumpsys phone)</span>
               </h3>
               <div className="overflow-x-auto">
-                {hasDumpsysData ? (
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-[10px] text-gray-600 uppercase tracking-wider border-b border-border/50">
-                        <th className="text-left py-1.5 pr-2">#</th>
-                        <th className="text-left py-1.5 px-2">OOS Start</th>
-                        <th className="text-left py-1.5 px-2">OOS End</th>
-                        <th className="text-right py-1.5 pl-2">Duration</th>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[10px] text-gray-600 uppercase tracking-wider border-b border-border/50">
+                      <th className="text-left py-1.5 pr-2">#</th>
+                      <th className="text-left py-1.5 px-2">Disconnected</th>
+                      <th className="text-left py-1.5 px-2">Reconnected</th>
+                      <th className="text-left py-1.5 px-2">Cause</th>
+                      <th className="text-right py-1.5 pl-2">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dnPeriods.map((p, i) => (
+                      <tr key={i} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors">
+                        <td className="py-1.5 pr-2 text-gray-500">{i + 1}</td>
+                        <td className="py-1.5 px-2 text-red-400 font-mono whitespace-nowrap">
+                          {p.disconnectedAt.replace('T', ' ').slice(5, 19)}
+                        </td>
+                        <td className="py-1.5 px-2 text-green-400 font-mono whitespace-nowrap">
+                          {p.connectedAt ? p.connectedAt.replace('T', ' ').slice(5, 19) : <span className="text-amber-400">ongoing</span>}
+                        </td>
+                        <td className="py-1.5 px-2 text-gray-500 truncate max-w-[200px]" title={p.cause}>
+                          {p.cause?.replace(/\([^)]*\)/g, '').trim() || '—'}
+                        </td>
+                        <td className={`py-1.5 pl-2 text-right font-mono ${
+                          p.durationMs && p.durationMs >= 300_000 ? 'text-red-400 font-semibold'
+                          : p.durationMs && p.durationMs >= 30_000 ? 'text-warm'
+                          : 'text-gray-400'
+                        }`}>
+                          {p.durationMs ? formatDuration(p.durationMs) : '—'}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {dumpsysPeriods.map((p, i) => (
-                        <tr key={i} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors">
-                          <td className="py-1.5 pr-2 text-gray-500">{i + 1}</td>
-                          <td className="py-1.5 px-2 text-red-400 font-mono whitespace-nowrap">
-                            {p.start.replace('T', ' ').slice(5, 19)}
-                          </td>
-                          <td className="py-1.5 px-2 text-green-400 font-mono whitespace-nowrap">
-                            {p.end ? p.end.replace('T', ' ').slice(5, 19) : <span className="text-amber-400">ongoing</span>}
-                          </td>
-                          <td className="py-1.5 pl-2 text-right text-gray-400">
-                            {p.durationMs ? formatDuration(p.durationMs) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-[10px] text-gray-600 uppercase tracking-wider border-b border-border/50">
-                        <th className="text-left py-1.5 pr-2">Timestamp</th>
-                        <th className="text-left py-1.5 px-2">Type</th>
-                        <th className="text-left py-1.5 px-2">Domain</th>
-                        <th className="text-right py-1.5 pl-2">Duration</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tel.oosEvents.map((oos, i) => (
-                        <tr key={i} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors">
-                          <td className="py-1.5 pr-2 text-gray-300 font-mono whitespace-nowrap">{oos.timestamp}</td>
-                          <td className={`py-1.5 px-2 ${oos.type === 'oos_start' ? 'text-red-400' : 'text-green-400'}`}>
-                            {oos.type === 'oos_start' ? 'OOS Start' : 'OOS End'}
-                          </td>
-                          <td className="py-1.5 px-2 text-gray-400">{oos.domain}</td>
-                          <td className="py-1.5 pl-2 text-right text-gray-400">
-                            {oos.durationMs ? formatDuration(oos.durationMs) : oos.type === 'oos_start' ? '' : 'ongoing'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
