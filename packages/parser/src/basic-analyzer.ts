@@ -1709,14 +1709,31 @@ export function buildTimeline(
 
   // Telephony events
   if (telephonyStatus) {
-    for (const oos of telephonyStatus.oosEvents) {
-      if (oos.type === 'oos_start') {
+    // Prefer DataNetwork OOS periods (dumpsys) over radio log events
+    const dnPeriods = telephonyStatus.dataNetworkOosPeriods ?? [];
+    if (dnPeriods.length > 0) {
+      for (const p of dnPeriods) {
+        const dur = p.durationMs ? ` (${Math.round(p.durationMs / 1000)}s)` : '';
+        // Use MM-DD HH:mm:ss format for timeline compatibility
+        const ts = p.disconnectedAt.replace('T', ' ').slice(5, 23);
         events.push({
-          timestamp: oos.timestamp,
+          timestamp: ts,
           source: 'telephony',
-          severity: 'warning',
-          label: `OOS start (${oos.domain})`,
+          severity: p.durationMs && p.durationMs >= 300_000 ? 'critical' : 'warning',
+          label: `Data network disconnected${dur}`,
+          details: p.cause?.replace(/\([^)]*\)/g, '').trim(),
         });
+      }
+    } else {
+      for (const oos of telephonyStatus.oosEvents) {
+        if (oos.type === 'oos_start') {
+          events.push({
+            timestamp: oos.timestamp,
+            source: 'telephony',
+            severity: 'warning',
+            label: `OOS start (${oos.domain})`,
+          });
+        }
       }
     }
     for (const err of telephonyStatus.rilErrors) {
