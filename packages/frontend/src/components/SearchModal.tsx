@@ -199,11 +199,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Data Loading ──
 
-  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string }) => {
+  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; bufferOverride?: string }) => {
     const effectiveSource = opts?.src ?? source;
     const effectiveTag = opts?.tagOverride ?? tag;
     const effectiveSt = opts?.st ?? startTime;
     const effectiveEt = opts?.et ?? endTime;
+    const effectiveBuffer = opts?.bufferOverride ?? buffer;
 
     setLoading(true);
     setError('');
@@ -223,6 +224,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       } else {
         const res = await searchLogcat(uploadId, {
           tag: effectiveTag.trim() || undefined,
+          buffer: effectiveBuffer.trim() || undefined,
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
           limit: MAX_ENTRIES,
@@ -239,7 +241,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     } finally {
       setLoading(false);
     }
-  }, [uploadId, source, tag, startTime, endTime]);
+  }, [uploadId, source, tag, buffer, startTime, endTime]);
 
   // ── Client-side Filtering ──
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
@@ -417,7 +419,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setFocusIndex(-1);
     setTimeout(() => {
       inputRef.current?.focus();
-      loadData({ src: newSource, tagOverride: '', st: '', et: '' });
+      loadData({ src: newSource, tagOverride: '', st: '', et: '', bufferOverride: '' });
     }, 0);
   };
 
@@ -553,7 +555,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <label className="text-[11px] text-gray-500">Buffer</label>
                 <select
                   value={buffer}
-                  onChange={(e) => setBuffer(e.target.value)}
+                  onChange={(e) => { setBuffer(e.target.value); loadData({ bufferOverride: e.target.value }); }}
                   className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
