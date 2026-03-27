@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TelephonyParseResult, PowerParseResult } from '../lib/types';
+import { TelephonyParseResult, PowerParseResult, RilError } from '../lib/types';
 import { IconSignal, IconNoService, IconWarningTriangle, IconAntenna, IconChevronDown } from './Icons';
 
 interface Props {
@@ -278,39 +278,8 @@ export default function TelephonyOverview({ telephonyStatus, powerStatus }: Prop
 
           {/* RIL/Modem Errors */}
           {tel.rilErrors.length > 0 && (
-            <div className="card space-y-3">
-              <h3 className="font-display text-base text-gray-200">RIL/Modem Errors ({tel.rilErrors.length})</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-[10px] text-gray-600 uppercase tracking-wider border-b border-border/50">
-                      <th className="text-left py-1.5 pr-2">Timestamp</th>
-                      <th className="text-left py-1.5 px-2">Error Type</th>
-                      <th className="text-left py-1.5 pl-2">Message</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tel.rilErrors.slice(0, 20).map((err, i) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors">
-                        <td className="py-1.5 pr-2 text-gray-300 font-mono whitespace-nowrap">{err.timestamp}</td>
-                        <td className={`py-1.5 px-2 whitespace-nowrap ${
-                          err.errorType === 'radio_crash' || err.errorType === 'modem_restart'
-                            ? 'text-red-400 font-medium' : 'text-warm'
-                        }`}>
-                          {err.errorType}
-                        </td>
-                        <td className="py-1.5 pl-2 text-gray-400 truncate max-w-[300px]" title={err.message}>
-                          {err.message.slice(0, 120)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {tel.rilErrors.length > 20 && (
-                  <div className="text-xs text-gray-600 mt-1">...and {tel.rilErrors.length - 20} more</div>
-                )}
-              </div>
-            </div>
+            <RilErrorsTable errors={tel.rilErrors} />
+
           )}
 
           {/* Call/SMS Events */}
@@ -448,6 +417,55 @@ export default function TelephonyOverview({ telephonyStatus, powerStatus }: Prop
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── RIL Errors Table with full message display ──
+
+const INITIAL_SHOW = 20;
+
+function RilErrorsTable({ errors }: { errors: RilError[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const displayed = showAll ? errors : errors.slice(0, INITIAL_SHOW);
+  const hasMore = errors.length > INITIAL_SHOW;
+
+  return (
+    <div className="card space-y-3">
+      <h3 className="font-display text-base text-gray-200">RIL/Modem Errors ({errors.length})</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[10px] text-gray-600 uppercase tracking-wider border-b border-border/50">
+              <th className="text-left py-1.5 pr-2">Timestamp</th>
+              <th className="text-left py-1.5 px-2">Error Type</th>
+              <th className="text-left py-1.5 pl-2">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((err, i) => (
+              <tr key={i} className="border-b border-border/50 hover:bg-surface-hover/50 transition-colors align-top">
+                <td className="py-1.5 pr-2 text-gray-300 font-mono whitespace-nowrap">{err.timestamp}</td>
+                <td className={`py-1.5 px-2 whitespace-nowrap ${
+                  err.errorType === 'radio_crash' || err.errorType === 'modem_restart'
+                    ? 'text-red-400 font-medium' : 'text-warm'
+                }`}>
+                  {err.errorType}
+                </td>
+                <td className="py-1.5 pl-2 text-gray-400 font-mono break-all">{err.message}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {hasMore && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowAll(!showAll); }}
+            className="mt-2 text-xs text-accent hover:text-accent-light transition-colors"
+          >
+            {showAll ? 'Show less' : `Show all ${errors.length} errors`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
