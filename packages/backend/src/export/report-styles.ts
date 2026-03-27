@@ -26,14 +26,14 @@ export const THEME_POWER: ReportTheme = {
   accent: '#4f8ff7',
   accentLight: '#7cb3ff',
   accentGlow: 'rgba(79,143,247,0.12)',
-  reportType: 'Power Management Report',
+  reportType: 'Power Report',
 };
 
 export const THEME_TELEPHONY: ReportTheme = {
   accent: '#d4a06a',
   accentLight: '#e8c9a0',
   accentGlow: 'rgba(212,160,106,0.12)',
-  reportType: 'Telephony Analysis Report',
+  reportType: 'Telephony Report',
 };
 
 /**

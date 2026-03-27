@@ -102,7 +102,7 @@ function buildHtml(
   body: string,
   isDeep = false,
 ): string {
-  const title = `Power Management Analysis — ${esc(meta.deviceModel)}`;
+  const title = `Power Report — ${esc(meta.deviceModel)}`;
   const tocHtml = toc.map(t => `<a href="#${t.id}" data-target="${t.id}">${esc(t.label)}</a>`).join('\n');
 
   return `<!DOCTYPE html>
@@ -244,7 +244,7 @@ ${tocHtml}
 </nav>
 <main>
 <div class="report-header">
-<div class="type-badge">Power Management Report &mdash; ${isDeep ? 'AI Deep' : 'Quick'}</div>
+<div class="type-badge">Power Report &mdash; ${isDeep ? 'AI Deep' : 'Quick'}</div>
 <h1>Logcat <span class="brand">AI</span></h1>
 <div class="report-header subtitle" style="margin-top:4px">${esc(meta.deviceModel)} &mdash; ${esc(meta.manufacturer)}</div>
 <div class="meta-grid">
