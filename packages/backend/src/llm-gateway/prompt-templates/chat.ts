@@ -15,7 +15,8 @@ You have already performed an analysis on this bugreport. The user is now asking
 Context from the analysis:
 - Device: ${result.metadata.deviceModel} (Android ${result.metadata.androidVersion})
 - Health Score: ${result.healthScore.overall}/100
-- Key Issues Found: ${result.insights.slice(0, 5).map((i) => i.title).join('; ')}
+- Insights (${result.insights.length} total):
+${result.insights.map((i) => `  [${i.severity}] ${i.id}: ${i.title}`).join('\n')}
 - ANR Processes: ${result.anrAnalyses.map((a) => {
     const primary = a.blockedThread ?? a.mainThread;
     const thread = a.blockedThreadName ?? 'main';

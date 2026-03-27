@@ -218,9 +218,7 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
           {insight.relatedLogSnippet && (
             <div>
               <span className="text-[10px] uppercase tracking-wider text-gray-600">Related Logs</span>
-              <pre className="mt-1 p-2 bg-surface rounded text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap">
-                {insight.relatedLogSnippet}
-              </pre>
+              <LogSnippet content={insight.relatedLogSnippet} />
             </div>
           )}
 
@@ -274,5 +272,85 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Log Snippet with syntax highlighting ──
+
+// Logcat: "03-26 12:43:32.378  1000  1512  1512 I Watchdog: message"
+const LOGCAT_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(\S+?)\s*:\s*(.*)$/;
+// Kernel dmesg: "[12345.678] message" or "<6>[12345.678] message"
+const KERNEL_RE = /^(?:<\d+>)?\[\s*([\d.]+)\]\s+(.*)$/;
+
+function LogSnippet({ content }: { content: string }) {
+  const lines = content.split('\n').filter(Boolean);
+
+  return (
+    <div className="mt-1 rounded-lg overflow-hidden border border-border/50 bg-[#0a0e17]">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-mono border-collapse">
+          <tbody>
+            {lines.map((line, i) => {
+              const logcat = line.match(LOGCAT_RE);
+              if (logcat) {
+                const [, ts, , pid, tid, level, tag, msg] = logcat;
+                return <LogcatRow key={i} n={i+1} ts={ts} pid={pid} tid={tid} level={level} tag={tag} msg={msg} />;
+              }
+              const kernel = line.match(KERNEL_RE);
+              if (kernel) {
+                const [, ts, msg] = kernel;
+                return <KernelRow key={i} n={i+1} ts={ts} msg={msg} />;
+              }
+              return <PlainRow key={i} n={i+1} text={line} />;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const LEVEL_STYLE: Record<string, { text: string; bg: string }> = {
+  F: { text: 'text-red-300 font-bold',   bg: 'bg-red-950/40' },
+  E: { text: 'text-red-400',             bg: 'bg-red-950/25' },
+  W: { text: 'text-yellow-400',          bg: '' },
+  I: { text: 'text-blue-400',            bg: '' },
+  D: { text: 'text-gray-500',            bg: '' },
+  V: { text: 'text-gray-600',            bg: '' },
+};
+
+function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
+  n: number; ts: string; pid: string; tid: string; level: string; tag: string; msg: string;
+}) {
+  const style = LEVEL_STYLE[level] ?? LEVEL_STYLE.D;
+  return (
+    <tr className={`${style.bg} hover:bg-white/[0.03] transition-colors`}>
+      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
+      <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">{ts}</td>
+      <td className={`py-[2px] px-1 ${style.text} w-4 text-center font-semibold`}>{level}</td>
+      <td className="py-[2px] px-1 text-gray-500 whitespace-nowrap">{pid}/{tid}</td>
+      <td className="py-[2px] px-1.5 text-accent font-medium whitespace-nowrap max-w-[140px] truncate" title={tag}>{tag}</td>
+      <td className="py-[2px] px-1.5 text-gray-300 whitespace-pre-wrap break-all">{msg}</td>
+    </tr>
+  );
+}
+
+function KernelRow({ n, ts, msg }: { n: number; ts: string; msg: string }) {
+  const isErr = /error|fail|panic|oops|bug/i.test(msg);
+  return (
+    <tr className={`${isErr ? 'bg-red-950/25' : ''} hover:bg-white/[0.03] transition-colors`}>
+      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
+      <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">[{ts}]</td>
+      <td colSpan={4} className={`py-[2px] px-1.5 ${isErr ? 'text-red-400' : 'text-gray-300'} whitespace-pre-wrap break-all`}>{msg}</td>
+    </tr>
+  );
+}
+
+function PlainRow({ n, text }: { n: number; text: string }) {
+  return (
+    <tr className="hover:bg-white/[0.03] transition-colors">
+      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
+      <td colSpan={5} className="py-[2px] px-1.5 text-gray-400 whitespace-pre-wrap break-all">{text}</td>
+    </tr>
   );
 }

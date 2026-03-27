@@ -6,9 +6,10 @@ import { IconClose, IconDelete } from './Icons';
 interface Props {
   onLoad: (id: string) => void;
   onClose: () => void;
+  excludeId?: string;
 }
 
-export default function HistoryPanel({ onLoad, onClose }: Props) {
+export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
   const [items, setItems] = useState<AnalysisSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -125,7 +126,7 @@ export default function HistoryPanel({ onLoad, onClose }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              {items.filter((item) => !filterText || item.filename.toLowerCase().includes(filterText.toLowerCase())).map((item) => (
+              {items.filter((item) => (!excludeId || item.id !== excludeId) && (!filterText || item.filename.toLowerCase().includes(filterText.toLowerCase()))).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onLoad(item.id)}

@@ -41,6 +41,19 @@ function formatDate(iso?: string): string {
   } catch { return iso; }
 }
 
+// Extract a short build identifier from fingerprint
+// "Trimble/T70/thorpe:15/AQ3A.250408.001/02.01.03.260131:user/release-keys"
+// → "AQ3A.250408.001 / 02.01.03.260131"
+function shortBuild(fingerprint: string): string {
+  const parts = fingerprint.split('/');
+  if (parts.length >= 5) {
+    const buildId = parts[3]; // "AQ3A.250408.001"
+    const buildNum = parts[4]?.split(':')[0]; // "02.01.03.260131"
+    return buildNum ? `${buildId} / ${buildNum}` : buildId;
+  }
+  return fingerprint.split('/').slice(-2).join('/');
+}
+
 function severityBadge(severity: string): string {
   switch (severity) {
     case 'critical': return 'bg-red-900/50 text-red-300 border-red-700/50';
@@ -67,13 +80,15 @@ function ScoreRing({ score, size = 80, label }: { score: number; size?: number; 
   const color = score >= 80 ? '#4ade80' : score >= 60 ? '#fbbf24' : '#f87171';
   return (
     <div className="flex flex-col items-center gap-1">
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-gray-800" />
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="4"
-          strokeDasharray={`${c * pct} ${c * (1 - pct)}`} strokeLinecap="round" />
-      </svg>
-      <div className="absolute flex flex-col items-center justify-center" style={{ width: size, height: size }}>
-        <span className="text-xl font-bold text-gray-100">{score}</span>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="currentColor" strokeWidth="4" className="text-gray-800" />
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="4"
+            strokeDasharray={`${c * pct} ${c * (1 - pct)}`} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xl font-bold text-gray-100">{score}</span>
+        </div>
       </div>
       <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
     </div>
@@ -159,12 +174,12 @@ export default function ComparisonPage({ comparison, onBack }: Props) {
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr]">
           {/* Left device */}
           <div className="p-5 border-b md:border-b-0 md:border-r border-border/50">
-            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Before (Left)</div>
+            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Before</div>
             <div className="text-lg font-display text-gray-100">{metadataDiff.left.deviceModel}</div>
             <div className="text-xs text-gray-400">{metadataDiff.left.manufacturer}</div>
             <div className="mt-2 space-y-0.5 text-xs text-gray-500">
               <div>Android {metadataDiff.left.androidVersion} · {metadataDiff.left.buildType}</div>
-              <div className="font-mono truncate" title={metadataDiff.left.buildFingerprint}>{metadataDiff.left.buildFingerprint.split('/').slice(-1)[0]}</div>
+              <div className="font-mono truncate" title={metadataDiff.left.buildFingerprint}>{shortBuild(metadataDiff.left.buildFingerprint)}</div>
               {metadataDiff.left.bugreportTimestamp && <div>{formatDate(metadataDiff.left.bugreportTimestamp)}</div>}
             </div>
           </div>
@@ -206,12 +221,12 @@ export default function ComparisonPage({ comparison, onBack }: Props) {
 
           {/* Right device */}
           <div className="p-5 border-t md:border-t-0 md:border-l border-border/50">
-            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">After (Right)</div>
+            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">After</div>
             <div className="text-lg font-display text-gray-100">{metadataDiff.right.deviceModel}</div>
             <div className="text-xs text-gray-400">{metadataDiff.right.manufacturer}</div>
             <div className="mt-2 space-y-0.5 text-xs text-gray-500">
               <div>Android {metadataDiff.right.androidVersion} · {metadataDiff.right.buildType}</div>
-              <div className="font-mono truncate" title={metadataDiff.right.buildFingerprint}>{metadataDiff.right.buildFingerprint.split('/').slice(-1)[0]}</div>
+              <div className="font-mono truncate" title={metadataDiff.right.buildFingerprint}>{shortBuild(metadataDiff.right.buildFingerprint)}</div>
               {metadataDiff.right.bugreportTimestamp && <div>{formatDate(metadataDiff.right.bugreportTimestamp)}</div>}
             </div>
           </div>
@@ -221,9 +236,11 @@ export default function ComparisonPage({ comparison, onBack }: Props) {
       {/* ── Section 2: Health Dimensions ── */}
       <section id="section-cmp-health" className="card">
         <h2 className="section-title mb-4">Health Score Comparison</h2>
-        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-wider mb-1 px-[calc(7rem+0.75rem)]">
-          <span>Before</span>
-          <span>After</span>
+        <div className="flex items-center gap-3 mb-1">
+          <span className="w-28 shrink-0" />
+          <div className="flex-1 text-[10px] text-gray-500 uppercase tracking-wider text-center">Before</div>
+          <span className="w-10" />
+          <div className="flex-1 text-[10px] text-gray-500 uppercase tracking-wider text-center">After</div>
         </div>
         <div className="divide-y divide-border/30">
           <DiffBar label="Stability" item={healthDiff.stability} />

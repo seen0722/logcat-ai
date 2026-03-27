@@ -18,7 +18,7 @@ export interface InsightContext {
   temporalContext: string[];
 }
 
-const MAX_TOTAL_TOKENS = 20_000;
+const MAX_TOTAL_TOKENS = 60_000;
 const CHARS_PER_TOKEN = 3.5;
 const MAX_TOTAL_CHARS = MAX_TOTAL_TOKENS * CHARS_PER_TOKEN;
 const MAX_CONTEXT_INSIGHTS = 20;
@@ -67,7 +67,7 @@ export function buildInsightContexts(result: AnalysisResult): InsightContext[] {
     }
 
     // Temporal window: W/E/F entries within +/- 2 seconds of insight timestamp
-    if (insight.timestamp && insight.severity === 'critical') {
+    if (insight.timestamp && (insight.severity === 'critical' || insight.severity === 'warning')) {
       collectTemporalContext(ctx, insight, result);
     }
 

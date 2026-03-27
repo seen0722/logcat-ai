@@ -577,7 +577,7 @@ interface DeepAnalysisResult extends Omit<DeepAnalysisOverview, 'correlationFind
   insights: DeepAnalysisInsightItem[];
 }
 
-function tryParseDeepAnalysis(content: string): DeepAnalysisResult | null {
+export function tryParseDeepAnalysis(content: string): DeepAnalysisResult | null {
   // Try each regex pattern in order, attempting to parse each match
   const patterns: RegExp[] = [
     /```(?:json)?\s*([\s\S]*?)```/,

@@ -381,6 +381,7 @@ export default function App() {
       {/* Compare mode: select another analysis from history */}
       {compareMode && !comparison && (
         <HistoryPanel
+          excludeId={uploadId ?? undefined}
           onLoad={async (otherId) => {
             setCompareMode(false);
             if (uploadId) {
