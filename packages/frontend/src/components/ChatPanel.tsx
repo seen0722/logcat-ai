@@ -199,11 +199,11 @@ export default function ChatPanel({ uploadId, criticalInsights }: Props) {
             <div
               className={`text-sm rounded-lg p-3 ${
                 msg.role === 'user'
-                  ? 'bg-accent/20 text-gray-200 ml-8'
-                  : 'bg-surface text-gray-300 mr-8'
+                  ? 'bg-accent/15 border border-accent/20 ml-8'
+                  : 'bg-surface-hover border border-border/50 mr-8'
               }`}
             >
-              <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:text-accent-light prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-surface prose-pre:rounded prose-pre:p-2 prose-pre:text-xs">
+              <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:text-accent-light prose-code:bg-surface prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-surface prose-pre:rounded prose-pre:p-2 prose-pre:text-xs [&_*]:!text-[color:rgb(var(--color-text))]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
               </div>
             </div>
