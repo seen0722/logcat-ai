@@ -530,6 +530,7 @@ export interface AnalysisSummary {
   insightCount: number;
   criticalCount: number;
   anrCount: number;
+  hasDeepAnalysis?: boolean;
   notes?: string;
   tags?: string;
 }

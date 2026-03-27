@@ -13,6 +13,7 @@ export interface AnalysisSummary {
   insightCount: number;
   criticalCount: number;
   anrCount: number;
+  hasDeepAnalysis?: boolean;
   notes?: string;
   tags?: string;
 }
@@ -55,16 +56,18 @@ export const historyStore = {
     };
     const resultJson = JSON.stringify(slim);
 
+    const hasDeep = result.deepAnalysisOverview ? 1 : 0;
+
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO analyses
         (id, filename, file_size, device_model, manufacturer, android_ver,
-         health_overall, insight_count, critical_count, anr_count, result_json)
+         health_overall, insight_count, critical_count, anr_count, has_deep, result_json)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(id, filename, fileSize, deviceModel, manufacturer, androidVer,
-      healthOverall, insightCount, criticalCount, anrCount, resultJson);
+      healthOverall, insightCount, criticalCount, anrCount, hasDeep, resultJson);
   },
 
   /**
@@ -97,7 +100,7 @@ export const historyStore = {
     const rows = db.prepare(`
       SELECT id, filename, file_size, created_at, device_model, manufacturer,
              android_ver, health_overall, insight_count, critical_count, anr_count,
-             notes, tags
+             has_deep, notes, tags
       FROM analyses
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
@@ -113,6 +116,7 @@ export const historyStore = {
       insight_count: number;
       critical_count: number;
       anr_count: number;
+      has_deep: number | null;
       notes: string | null;
       tags: string | null;
     }>;
@@ -129,6 +133,7 @@ export const historyStore = {
       insightCount: row.insight_count,
       criticalCount: row.critical_count,
       anrCount: row.anr_count,
+      hasDeepAnalysis: row.has_deep === 1,
       notes: row.notes ?? undefined,
       tags: row.tags ?? undefined,
     }));

@@ -140,9 +140,16 @@ export default function App() {
       {phase !== 'upload' && phase !== 'landing' && phase !== 'comparison' && (
         <div className="sticky top-0 z-30 -mx-6 md:-mx-10 px-6 md:px-10 py-3 mb-6 glass">
           <div className="flex items-center justify-between max-w-5xl mx-auto">
-            <h1 className="font-display text-xl">
-              Logcat <span className="text-warm">AI</span>
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-xl">
+                Logcat <span className="text-warm">AI</span>
+              </h1>
+              {phase === 'result' && result && (
+                result.deepAnalysisOverview
+                  ? <span className="text-[10px] font-semibold uppercase tracking-wider text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">AI Deep</span>
+                  : <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 bg-surface px-2 py-0.5 rounded border border-border/50">Quick</span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {uploadId && phase === 'result' && (
                 <>

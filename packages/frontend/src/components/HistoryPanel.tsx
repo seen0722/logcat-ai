@@ -152,6 +152,11 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                     {item.deviceModel && (
                       <span className="text-gray-400 bg-surface px-2 py-0.5 rounded-lg border border-border/50">{item.deviceModel}</span>
                     )}
+                    {item.hasDeepAnalysis ? (
+                      <span className="text-accent bg-accent/10 px-2 py-0.5 rounded-lg border border-accent/20 font-medium">AI Deep</span>
+                    ) : (
+                      <span className="text-gray-500 bg-surface px-2 py-0.5 rounded-lg border border-border/50">Quick</span>
+                    )}
                     {item.androidVer && (
                       <span className="text-gray-500">Android {item.androidVer}</span>
                     )}

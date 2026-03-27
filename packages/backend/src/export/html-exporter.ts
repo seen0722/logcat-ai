@@ -270,7 +270,7 @@ ${getReportCSS(THEME_GENERAL)}
   </nav>
   <main>
     <div class="report-header">
-      <div class="type-badge">${escapeHtml(THEME_GENERAL.reportType)}</div>
+      <div class="type-badge">${escapeHtml(THEME_GENERAL.reportType)} &mdash; ${result.deepAnalysisOverview ? 'AI Deep' : 'Quick'}</div>
       <h1>Logcat <span class="brand">AI</span></h1>
       <div class="subtitle">
         ${m.deviceModel ? `<div>Device: ${escapeHtml(m.deviceModel)}${m.manufacturer ? ` (${escapeHtml(m.manufacturer)})` : ''}</div>` : ''}

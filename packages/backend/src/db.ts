@@ -39,6 +39,7 @@ export function initDatabase(): void {
       insight_count   INTEGER DEFAULT 0,
       critical_count  INTEGER DEFAULT 0,
       anr_count       INTEGER DEFAULT 0,
+      has_deep        INTEGER DEFAULT 0,
       result_json     TEXT NOT NULL,
       notes           TEXT,
       tags            TEXT

@@ -73,8 +73,9 @@ export function exportTelephonyReport(result: AnalysisResult): string {
 
   // Summary cards
   const summaryCards = renderSummaryCards(ts, result.powerStatus);
+  const isDeep = !!result.deepAnalysisOverview;
 
-  return buildHtml(meta, summaryCards, tocEntries, sections.join('\n'));
+  return buildHtml(meta, summaryCards, tocEntries, sections.join('\n'), isDeep);
 }
 
 // ============================================================
@@ -86,6 +87,7 @@ function buildHtml(
   summaryCards: string,
   toc: Array<{ id: string; label: string }>,
   body: string,
+  isDeep = false,
 ): string {
   const title = `Telephony Analysis \u2014 ${esc(meta.deviceModel)}`;
   const tocHtml = toc.map(t => `<a href="#${t.id}" data-target="${t.id}">${esc(t.label)}</a>`).join('\n');
@@ -355,7 +357,7 @@ h3.p2 { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--a
 </nav>
 <main>
 <div class="report-header">
-  <div class="type-badge">Telephony Analysis Report</div>
+  <div class="type-badge">Telephony Analysis Report &mdash; ${isDeep ? 'AI Deep' : 'Quick'}</div>
   <h1>Logcat <span class="brand">AI</span></h1>
   <div class="subtitle">
     <strong>${esc(meta.deviceModel)}</strong> &mdash; ${esc(meta.manufacturer)}<br>
