@@ -333,48 +333,45 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
   // level/pid/buffer filter immediately via useMemo
 
+  // Single-pass filter — avoids creating intermediate arrays for 200K+ entries
   const filteredEntries = useMemo(() => {
     if (source === 'logcat') {
-      let logcat = allEntries as LogcatEntry[];
-      if (level) {
-        const levels = ['V', 'D', 'I', 'W', 'E', 'F'];
-        const minIdx = levels.indexOf(level);
-        if (minIdx >= 0) {
-          logcat = logcat.filter(e => levels.indexOf(e.level) >= minIdx);
-        }
+      const logcat = allEntries as LogcatEntry[];
+      const hasLevel = !!level;
+      const levelIdx = hasLevel ? ['V', 'D', 'I', 'W', 'E', 'F'].indexOf(level) : -1;
+      const hasPid = !!pid;
+      const pidNum = hasPid ? Number(pid) : NaN;
+      const hasBuffer = !!buffer;
+      const hasIncludeTags = tag.includes(',');
+      const includeTags = hasIncludeTags ? new Set(tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)) : null;
+      const hasExclude = !!excludeTags.trim();
+      const excludeSet = hasExclude ? new Set(excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)) : null;
+      const levels = ['V', 'D', 'I', 'W', 'E', 'F'];
+
+      // No filters active — return as-is (no copy)
+      if (!hasLevel && !hasPid && !hasBuffer && !hasIncludeTags && !hasExclude) return logcat;
+
+      const result: LogcatEntry[] = [];
+      for (let i = 0; i < logcat.length; i++) {
+        const e = logcat[i];
+        if (hasLevel && levels.indexOf(e.level) < levelIdx) continue;
+        if (hasPid && e.pid !== pidNum) continue;
+        if (hasBuffer && e.buffer !== buffer) continue;
+        if (includeTags && !includeTags.has((e.tag ?? '').toLowerCase())) continue;
+        if (excludeSet && excludeSet.has((e.tag ?? '').toLowerCase())) continue;
+        result.push(e);
       }
-      if (pid) {
-        const pidNum = Number(pid);
-        if (!isNaN(pidNum)) logcat = logcat.filter(e => e.pid === pidNum);
-      }
-      if (buffer) {
-        logcat = logcat.filter(e => e.buffer === buffer);
-      }
-      // Multi-tag client-side filter: "RIL,RILJ" → include only those tags
-      // Single tag without comma is already filtered server-side via API
-      if (tag.includes(',')) {
-        const includeTags = tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-        if (includeTags.length > 0) {
-          logcat = logcat.filter(e => includeTags.includes((e.tag ?? '').toLowerCase()));
-        }
-      }
-      if (excludeTags.trim()) {
-        const excluded = excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-        if (excluded.length > 0) {
-          logcat = logcat.filter(e => !excluded.includes((e.tag ?? '').toLowerCase()));
-        }
-      }
-      return logcat;
+      return result;
     } else {
-      let kernel = allEntries as KernelEntry[];
-      if (level) {
-        const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
-        kernel = kernel.filter(e => {
-          const n = parseInt(e.level.replace(/[<>]/g, ''), 10);
-          return n <= levelNum;
-        });
+      const kernel = allEntries as KernelEntry[];
+      if (!level) return kernel;
+      const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
+      const result: KernelEntry[] = [];
+      for (let i = 0; i < kernel.length; i++) {
+        const n = parseInt(kernel[i].level.replace(/[<>]/g, ''), 10);
+        if (n <= levelNum) result.push(kernel[i]);
       }
-      return kernel;
+      return result;
     }
   }, [allEntries, source, level, pid, buffer, tag, excludeTags]);
 
