@@ -49,6 +49,7 @@ interface RowExtraProps {
 
 const MAX_ENTRIES = 50_000;
 const ROW_HEIGHT = 22;
+const DETAIL_HEIGHT = 200;
 
 // ── Logcat helpers ──
 
@@ -201,6 +202,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const detailContentRef = useRef<HTMLPreElement>(null);
   const detailMetaRef = useRef<HTMLDivElement>(null);
   const detailEntryRef = useRef<(LogcatEntry | KernelEntry) | null>(null);
+  const listWrapRef = useRef<HTMLDivElement>(null);
+  const originalListHeight = useRef<number>(0);
   // Logcat-only filters
   const [tag, setTag] = useState(initialTag ?? '');
   const [pid, setPid] = useState('');
@@ -504,11 +507,17 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const handleExpandToggleStable = useCallback((_idx: number) => {
     const entry = filteredEntriesRef.current[_idx] as any;
     if (!entry || !detailPanelRef.current || !detailContentRef.current || !detailMetaRef.current) return;
+    const listEl = listWrapRef.current?.querySelector('[style*="height"]') as HTMLElement | null;
     if (detailEntryRef.current === entry) {
-      // Toggle off
+      // Toggle off — same row clicked
       detailEntryRef.current = null;
-      detailPanelRef.current.classList.add('hidden');
+      detailPanelRef.current.style.display = 'none';
+      if (listEl && originalListHeight.current) listEl.style.height = `${originalListHeight.current}px`;
       return;
+    }
+    // Save original height on first expand
+    if (!detailEntryRef.current && listEl) {
+      originalListHeight.current = listEl.getBoundingClientRect().height;
     }
     detailEntryRef.current = entry;
     // Update meta
@@ -519,8 +528,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     detailMetaRef.current.textContent = [ts, pid, tag, buf].filter(Boolean).join('  ');
     // Update content
     detailContentRef.current.textContent = entry.message;
-    // Show panel
-    detailPanelRef.current.classList.remove('hidden');
+    // Show panel and shrink list from original height
+    detailPanelRef.current.style.display = 'flex';
+    if (listEl && originalListHeight.current) {
+      listEl.style.height = `${Math.max(originalListHeight.current - DETAIL_HEIGHT, 150)}px`;
+    }
   }, []);
 
   const rowProps = useMemo<RowExtraProps>(() => ({
@@ -839,7 +851,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           )}
 
           {/* Virtual scroll list */}
-          <div className="flex-1 min-h-0">
+          <div ref={listWrapRef} className="flex-1 min-h-0">
             <List
               listRef={listRef}
               rowCount={filteredEntries.length}
@@ -853,7 +865,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </div>
 
           {/* Detail panel — always in DOM, toggled via hidden class (no React re-render) */}
-          <div ref={detailPanelRef} className="hidden max-h-[35vh] border-t-2 border-accent/40 bg-[#0a0e17] flex flex-col shrink-0">
+          <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/40 bg-[#080c18] flex flex-col shrink-0">
             <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60 shrink-0">
               <span className="text-[10px] text-accent font-semibold uppercase tracking-wider">Detail</span>
               <div ref={detailMetaRef} className="text-[10px] text-gray-500 font-mono" />
@@ -865,7 +877,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   Copy
                 </button>
                 <button
-                  onClick={() => { detailEntryRef.current = null; detailPanelRef.current?.classList.add('hidden'); }}
+                  onClick={() => {
+                    detailEntryRef.current = null;
+                    if (detailPanelRef.current) detailPanelRef.current.style.display = 'none';
+                    const listEl = listWrapRef.current?.querySelector('[style*="height"]') as HTMLElement | null;
+                    if (listEl && originalListHeight.current) listEl.style.height = `${originalListHeight.current}px`;
+                  }}
                   className="text-gray-500 hover:text-gray-300 text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
                 >
                   &times;
