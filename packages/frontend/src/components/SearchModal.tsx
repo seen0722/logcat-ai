@@ -808,6 +808,46 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               Clear
             </button>
           )}
+          {/* Quick time navigation */}
+          <span className="text-gray-700 mx-0.5">|</span>
+          {allEntries.length > 0 && (
+            <button
+              onClick={() => {
+                const first = (allEntries[0] as any).timestamp as string;
+                if (!first) return;
+                // Parse MM-DD HH:mm:ss.SSS and go 5 minutes earlier
+                const m = first.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+                if (!m) return;
+                const [, md, hh, mm] = m;
+                let min = parseInt(mm) - 5;
+                let hr = parseInt(hh);
+                if (min < 0) { min += 60; hr -= 1; }
+                const ts = `${md} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
+                setEndTime(first.slice(0, 18));
+                setStartTime(ts);
+                loadData({ st: ts, et: first.slice(0, 18) });
+              }}
+              disabled={loading}
+              className="text-[11px] text-accent hover:text-accent-light disabled:opacity-50 transition-colors"
+            >
+              ← Earlier
+            </button>
+          )}
+          {allEntries.length > 0 && (
+            <button
+              onClick={() => {
+                const last = (allEntries[allEntries.length - 1] as any).timestamp as string;
+                if (!last) return;
+                setStartTime(last.slice(0, 18));
+                setEndTime('');
+                loadData({ st: last.slice(0, 18), et: '' });
+              }}
+              disabled={loading}
+              className="text-[11px] text-accent hover:text-accent-light disabled:opacity-50 transition-colors"
+            >
+              Later →
+            </button>
+          )}
         </div>
 
         {/* Saved tag presets */}
@@ -825,6 +865,27 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }}
                   className="text-gray-600 hover:text-red-400 ml-0.5 transition-colors"
                 >×</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Quick time presets */}
+        {allEntries.length > 0 && (
+          <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0">
+            <span className="text-[10px] text-gray-600">Jump:</span>
+            {[
+              { label: 'All', st: '', et: '' },
+              { label: 'First 5min', st: (allEntries[0] as any).timestamp?.slice(0, 18) ?? '', et: (() => { const f = (allEntries[0] as any).timestamp; if (!f) return ''; const m = f.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/); if (!m) return ''; let min = parseInt(m[3]) + 5; let hr = parseInt(m[2]); if (min >= 60) { min -= 60; hr += 1; } return `${m[1]} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`; })() },
+              { label: 'Last 5min', st: (() => { const l = (allEntries[allEntries.length - 1] as any).timestamp; if (!l) return ''; const m = l.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/); if (!m) return ''; let min = parseInt(m[3]) - 5; let hr = parseInt(m[2]); if (min < 0) { min += 60; hr -= 1; } return `${m[1]} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`; })(), et: '' },
+            ].map(p => (
+              <button
+                key={p.label}
+                onClick={() => { setStartTime(p.st); setEndTime(p.et); if (p.st || p.et) loadData({ st: p.st, et: p.et }); else loadData({ st: '', et: '' }); }}
+                disabled={loading}
+                className="text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors"
+              >
+                {p.label}
               </button>
             ))}
           </div>
