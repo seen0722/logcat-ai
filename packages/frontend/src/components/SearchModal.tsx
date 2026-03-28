@@ -207,6 +207,22 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Logcat-only filters
   const [tag, setTag] = useState(initialTag ?? '');
   const [excludeTags, setExcludeTags] = useState('');
+  // Saved tag presets (localStorage)
+  const [savedTags, setSavedTags] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('logcat-ai-saved-tags') || '[]'); } catch { return []; }
+  });
+  const saveCurrentTag = useCallback(() => {
+    const t = tag.trim();
+    if (!t || savedTags.includes(t)) return;
+    const updated = [...savedTags, t];
+    setSavedTags(updated);
+    try { localStorage.setItem('logcat-ai-saved-tags', JSON.stringify(updated)); } catch {}
+  }, [tag, savedTags]);
+  const removeSavedTag = useCallback((t: string) => {
+    const updated = savedTags.filter(s => s !== t);
+    setSavedTags(updated);
+    try { localStorage.setItem('logcat-ai-saved-tags', JSON.stringify(updated)); } catch {}
+  }, [savedTags]);
   const [pid, setPid] = useState('');
   const [buffer, setBuffer] = useState('');
   // Shared filters
@@ -663,6 +679,13 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   placeholder="e.g. RIL,RILJ"
                   className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
+                {tag.trim() && (
+                  <button
+                    onClick={saveCurrentTag}
+                    className="text-gray-500 hover:text-accent text-xs px-1 transition-colors"
+                    title="Save tag preset"
+                  >+</button>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <label className="text-[11px] text-gray-500">Exclude</label>
@@ -777,6 +800,26 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </button>
           )}
         </div>
+
+        {/* Saved tag presets */}
+        {source === 'logcat' && savedTags.length > 0 && (
+          <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
+            <span className="text-[10px] text-gray-600">Saved:</span>
+            {savedTags.map(t => (
+              <button
+                key={t}
+                onClick={() => { setTag(t); loadData({ tagOverride: t }); }}
+                className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-300 hover:border-accent/40 hover:text-accent transition-colors"
+              >
+                {t}
+                <span
+                  onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }}
+                  className="text-gray-600 hover:text-red-400 ml-0.5 transition-colors"
+                >×</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Status bar — always rendered to prevent layout shift */}
         <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-[#161b22] border-b border-gray-700/40 shrink-0">
