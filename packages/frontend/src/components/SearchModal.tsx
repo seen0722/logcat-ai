@@ -42,7 +42,6 @@ interface RowExtraProps {
   currentMatchIndex: number;
   matchIndices: Set<number>;
   focusIdx: number;
-  expandedIdx: number;
   onExpandToggle: (idx: number) => void;
   highlightPattern: RegExp | null;
 }
@@ -119,20 +118,17 @@ function HighlightText({ text, pattern }: { text: string; pattern: RegExp | null
 
 // ── Row Component (shared for logcat + kernel) ──
 
-function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, expandedIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
+function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
   const isCurrentMatch = index === currentMatchIndex;
   const isMatch = matchIndices.has(index);
   const isFocus = index === focusIdx;
-  const isExpanded = index === expandedIdx;
 
   if (source === 'logcat') {
     const entry = (entries as LogcatEntry[])[index];
     if (!entry) return null;
 
     let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${levelBg(entry.level)}`;
-    if (isExpanded) {
-      rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
-    } else if (isCurrentMatch) {
+    if (isCurrentMatch) {
       rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
@@ -154,7 +150,7 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
             {entry.level}/{entry.tag}
           </span>
           <span className={`px-2 flex-1 truncate ${levelColor(entry.level)}`}>
-{entry.message}
+            {highlightPattern ? <HighlightText text={entry.message} pattern={highlightPattern} /> : entry.message}
           </span>
         </div>
       </div>
@@ -164,9 +160,7 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
     if (!entry) return null;
 
     let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
-    if (isExpanded) {
-      rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
-    } else if (isCurrentMatch) {
+    if (isCurrentMatch) {
       rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
@@ -185,7 +179,7 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
             {kernelLevelLabel(entry.level)}
           </span>
           <span className={`px-2 flex-1 truncate ${kernelLevelColor(entry.level)}`}>
-{entry.message}
+            {highlightPattern ? <HighlightText text={entry.message} pattern={highlightPattern} /> : entry.message}
           </span>
         </div>
       </div>
@@ -299,7 +293,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     } finally {
       setLoading(false);
     }
-  }, [uploadId, source, startTime, endTime]);
+  }, [uploadId, source, startTime, endTime]); // tag/buffer/level intentionally omitted — filtering is always client-side
 
   // ── Client-side Filtering ──
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
@@ -572,9 +566,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     currentMatchIndex,
     matchIndices,
     focusIdx: focusIndex,
-    expandedIdx: -1, // not used for row styling
     onExpandToggle: handleExpandToggleStable,
-    highlightPattern: null,
+    highlightPattern: searchPattern,
   }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex, handleExpandToggleStable]);
 
   // Effective list height: subtract column header height (~20px)
@@ -810,13 +803,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any)?.timestamp ?? '').slice(0, 18);
           const lastTs = (lastEntry?.timestamp ?? '').slice(0, 18);
           const addMin = (ts: string, delta: number) => {
-            const m = ts.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/);
+            const m = ts.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
             if (!m) return ts;
-            let min = parseInt(m[3]) + delta;
-            let hr = parseInt(m[2]);
-            while (min >= 60) { min -= 60; hr++; }
-            while (min < 0) { min += 60; hr--; }
-            return `${m[1]} ${String(Math.max(0, hr)).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+            const d = new Date(2026, parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]), parseInt(m[5]));
+            d.setMinutes(d.getMinutes() + delta);
+            const pad = (n: number) => String(n).padStart(2, '0');
+            return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
           };
           const jumpBtn = (label: string, st: string, et: string, isNav?: boolean) => (
             <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et }); }} disabled={loading}
