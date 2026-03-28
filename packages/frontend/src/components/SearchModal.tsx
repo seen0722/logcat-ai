@@ -256,12 +256,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Data Loading ──
 
-  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; bufferOverride?: string }) => {
+  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string }) => {
     const effectiveSource = opts?.src ?? source;
     const effectiveTag = opts?.tagOverride ?? tag;
     const effectiveSt = opts?.st ?? startTime;
     const effectiveEt = opts?.et ?? endTime;
-    const effectiveBuffer = opts?.bufferOverride ?? buffer;
 
     setLoading(true);
     setError('');
@@ -280,8 +279,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         setTruncated(res.totalMatches > MAX_ENTRIES);
       } else {
         const res = await searchLogcat(uploadId, {
-          tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
-          buffer: effectiveBuffer.trim() || undefined,
+          // Tag filtering is always client-side to avoid reload on change
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
           limit: MAX_ENTRIES,
@@ -299,7 +297,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     } finally {
       setLoading(false);
     }
-  }, [uploadId, source, tag, buffer, startTime, endTime]);
+  }, [uploadId, source, startTime, endTime]);
 
   // ── Client-side Filtering ──
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
@@ -322,9 +320,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       if (buffer) {
         logcat = logcat.filter(e => e.buffer === buffer);
       }
-      // Multi-tag client-side filter: "RIL,RILJ" → include only those tags
-      // Single tag without comma is already filtered server-side via API
-      if (tag.includes(',')) {
+      // Tag filter — always client-side (single or multi-tag)
+      if (tag.trim()) {
         const includeTags = tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
         if (includeTags.length > 0) {
           logcat = logcat.filter(e => includeTags.includes((e.tag ?? '').toLowerCase()));
@@ -501,7 +498,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setFocusIndex(-1);
     setTimeout(() => {
       inputRef.current?.focus();
-      loadData({ src: newSource, tagOverride: '', st: '', et: '', bufferOverride: '' });
+      loadData({ src: newSource, tagOverride: '', st: '', et: '' });
     }, 0);
   };
 
@@ -676,7 +673,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   type="text"
                   value={tag}
                   onChange={(e) => setTag(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') loadData({ tagOverride: tag }); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                   placeholder="e.g. RIL,RILJ"
                   className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
@@ -703,7 +700,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <label className="text-[11px] text-gray-500">Buffer</label>
                 <select
                   value={buffer}
-                  onChange={(e) => { setBuffer(e.target.value); loadData({ bufferOverride: e.target.value }); }}
+                  onChange={(e) => setBuffer(e.target.value)}
                   className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
@@ -809,7 +806,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             {savedTags.map(t => (
               <button
                 key={t}
-                onClick={() => { setTag(t); loadData({ tagOverride: t }); }}
+                onClick={() => setTag(t)}
                 className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-300 hover:border-accent/40 hover:text-accent transition-colors"
               >
                 {t}
