@@ -283,7 +283,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         })
       : (limit: number, offset: number) => searchLogcat(uploadId, {
           tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
-          buffer: effectiveBuffer.trim() || undefined,
+          // buffer filter is client-side only — always load all buffers
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
           limit, offset, export: true,
@@ -731,7 +731,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <label className="text-[11px] text-gray-500">Buffer</label>
                 <select
                   value={buffer}
-                  onChange={(e) => { setBuffer(e.target.value); loadData({ bufferOverride: e.target.value }); }}
+                  onChange={(e) => setBuffer(e.target.value)}
                   className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
