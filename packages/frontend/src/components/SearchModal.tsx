@@ -206,6 +206,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const originalListHeight = useRef<number>(0);
   // Logcat-only filters
   const [tag, setTag] = useState(initialTag ?? '');
+  const [excludeTags, setExcludeTags] = useState('');
   const [pid, setPid] = useState('');
   const [buffer, setBuffer] = useState('');
   // Shared filters
@@ -304,6 +305,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       if (buffer) {
         logcat = logcat.filter(e => e.buffer === buffer);
       }
+      if (excludeTags.trim()) {
+        const excluded = excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        if (excluded.length > 0) {
+          logcat = logcat.filter(e => !excluded.includes((e.tag ?? '').toLowerCase()));
+        }
+      }
       return logcat;
     } else {
       let kernel = allEntries as KernelEntry[];
@@ -316,7 +323,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       }
       return kernel;
     }
-  }, [allEntries, source, level, pid, buffer]);
+  }, [allEntries, source, level, pid, buffer, excludeTags]);
 
   // ── Find Next/Prev ──
 
@@ -644,8 +651,20 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   type="text"
                   value={tag}
                   onChange={(e) => setTag(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') loadData({ tagOverride: tag }); }}
                   placeholder="e.g. ActivityManager"
                   className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <label className="text-[11px] text-gray-500">Exclude</label>
+                <input
+                  type="text"
+                  value={excludeTags}
+                  onChange={(e) => setExcludeTags(e.target.value)}
+                  placeholder="tag1,tag2"
+                  title="Comma-separated tags to hide"
+                  className="w-28 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
               </div>
               <div className="flex items-center gap-1">
@@ -781,6 +800,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               {truncated && (
                 <span className="text-yellow-400 text-[11px]">
                   Showing first 50,000 of {totalAvailable.toLocaleString()} — narrow time range for full data
+                  {allEntries.length > 0 && (
+                    <span className="text-gray-500 ml-1">
+                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
+                    </span>
+                  )}
                 </span>
               )}
             </>
