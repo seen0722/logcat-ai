@@ -808,76 +808,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               Clear
             </button>
           )}
-          {/* Quick time navigation */}
-          <span className="text-gray-700 mx-0.5">|</span>
-          {allEntries.length > 0 && (
-            <button
-              onClick={() => {
-                const first = (allEntries[0] as any).timestamp as string;
-                if (!first) return;
-                // Parse MM-DD HH:mm:ss.SSS and go 5 minutes earlier
-                const m = first.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
-                if (!m) return;
-                const [, md, hh, mm] = m;
-                let min = parseInt(mm) - 5;
-                let hr = parseInt(hh);
-                if (min < 0) { min += 60; hr -= 1; }
-                const ts = `${md} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
-                setEndTime(first.slice(0, 18));
-                setStartTime(ts);
-                loadData({ st: ts, et: first.slice(0, 18) });
-              }}
-              disabled={loading}
-              className="text-[11px] text-accent hover:text-accent-light disabled:opacity-50 transition-colors"
-            >
-              ← Earlier
-            </button>
-          )}
-          {allEntries.length > 0 && (
-            <button
-              onClick={() => {
-                const last = (allEntries[allEntries.length - 1] as any).timestamp as string;
-                if (!last) return;
-                setStartTime(last.slice(0, 18));
-                setEndTime('');
-                loadData({ st: last.slice(0, 18), et: '' });
-              }}
-              disabled={loading}
-              className="text-[11px] text-accent hover:text-accent-light disabled:opacity-50 transition-colors"
-            >
-              Later →
-            </button>
-          )}
         </div>
 
-        {/* Saved tag presets */}
-        {source === 'logcat' && savedTags.length > 0 && (
-          <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
-            <span className="text-[10px] text-gray-600">Saved:</span>
-            {savedTags.map(t => (
-              <button
-                key={t}
-                onClick={() => setTag(t)}
-                className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-300 hover:border-accent/40 hover:text-accent transition-colors"
-              >
-                {t}
-                <span
-                  onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }}
-                  className="text-gray-600 hover:text-red-400 ml-0.5 transition-colors"
-                >×</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Quick time presets */}
-        {allEntries.length > 0 && (() => {
-          // Find first entry with real timestamp (skip 01-01 boot artifacts)
+        {/* Quick bar: Saved tags + Time navigation — single compact row */}
+        {(allEntries.length > 0 || (source === 'logcat' && savedTags.length > 0)) && (() => {
           const firstReal = allEntries.find((e: any) => e.timestamp && !e.timestamp.startsWith('01-01')) as any;
           const lastEntry = allEntries[allEntries.length - 1] as any;
-          const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any).timestamp ?? '').slice(0, 18);
+          const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any)?.timestamp ?? '').slice(0, 18);
           const lastTs = (lastEntry?.timestamp ?? '').slice(0, 18);
-
           const addMin = (ts: string, delta: number) => {
             const m = ts.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/);
             if (!m) return ts;
@@ -887,26 +825,32 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             while (min < 0) { min += 60; hr--; }
             return `${m[1]} ${String(Math.max(0, hr)).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
           };
-
-          const presets = [
-            { label: 'All', st: '', et: '' },
-            { label: 'First 5min', st: firstTs, et: addMin(firstTs, 5) },
-            { label: 'Last 5min', st: addMin(lastTs, -5), et: '' },
-          ];
-
+          const jumpBtn = (label: string, st: string, et: string) => (
+            <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et }); }} disabled={loading}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors">{label}</button>
+          );
           return (
-            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0">
-              <span className="text-[10px] text-gray-600">Jump:</span>
-              {presets.map(p => (
-                <button
-                  key={p.label}
-                  onClick={() => { setStartTime(p.st); setEndTime(p.et); loadData({ st: p.st, et: p.et }); }}
-                  disabled={loading}
-                  className="text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors"
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
+              {source === 'logcat' && savedTags.length > 0 && (
+                <>
+                  {savedTags.map(t => (
+                    <button key={t} onClick={() => setTag(t)}
+                      className="group flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-300 hover:border-accent/40 hover:text-accent transition-colors">
+                      {t}<span onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }} className="text-gray-600 hover:text-red-400 ml-0.5 transition-colors">×</span>
+                    </button>
+                  ))}
+                  <span className="text-gray-700">|</span>
+                </>
+              )}
+              {allEntries.length > 0 && (
+                <>
+                  {jumpBtn('← Earlier', addMin(firstTs, -5), firstTs)}
+                  {jumpBtn('All', '', '')}
+                  {jumpBtn('First 5min', firstTs, addMin(firstTs, 5))}
+                  {jumpBtn('Last 5min', addMin(lastTs, -5), '')}
+                  {jumpBtn('Later →', lastTs, '')}
+                </>
+              )}
             </div>
           );
         })()}
