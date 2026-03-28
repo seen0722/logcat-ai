@@ -6,7 +6,6 @@ test.describe('Upload & Analysis Result', () => {
 
     // System Overview
     await expect(page.locator('#section-overview')).toBeVisible();
-    await expect(page.locator('h2', { hasText: 'System Overview' })).toBeVisible();
 
     // Insights
     await expect(page.locator('#section-insights')).toBeVisible();
@@ -70,9 +69,9 @@ test.describe('Upload & Analysis Result', () => {
 
     // Feature cards
     await expect(page.locator('text=ANR Deep Analysis')).toBeVisible();
-    await expect(page.locator('text=Health Score')).toBeVisible();
-    await expect(page.locator('text=Full-text Search & AI Chat')).toBeVisible();
-    await expect(page.locator('text=Power Management')).toBeVisible();
+    await expect(page.locator('text=Health Scoring')).toBeVisible();
+    await expect(page.locator('text=FTS5 Log Search')).toBeVisible();
+    await expect(page.locator('text=Power Analysis')).toBeVisible();
 
     // Supported formats (text appears in hero subtitle and format list)
     await expect(page.getByText('bugreport.zip').first()).toBeVisible();

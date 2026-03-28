@@ -60,6 +60,13 @@ function handleLogcatInMemory(
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
   }
 
+  // Full time range of the unfiltered dataset (for UI position indicator)
+  const fullTimeRange = {
+    first: entries[0].timestamp.slice(0, 18),
+    last: entries[entries.length - 1].timestamp.slice(0, 18),
+    total: entries.length,
+  };
+
   // Try FTS5 first if only keyword search (no tag/level/pid filters)
   if (q && !tag && !level && !pid) {
     const ftsResult = searchLogcatFTS(id, q, limit, offset, buffer, startTime, endTime);
@@ -69,6 +76,7 @@ function handleLogcatInMemory(
           totalMatches: ftsResult.totalMatches,
           showing: ftsResult.entries.length,
           method: 'fts5',
+          fullTimeRange,
           columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
           rows: ftsResult.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
         });
@@ -77,6 +85,7 @@ function handleLogcatInMemory(
         totalMatches: ftsResult.totalMatches,
         showing: ftsResult.entries.length,
         method: 'fts5',
+        fullTimeRange,
         entries: ftsResult.entries.map(e => ({
           lineNumber: e.lineNumber,
           timestamp: e.timestamp,
@@ -135,6 +144,7 @@ function handleLogcatInMemory(
       totalMatches,
       showing: results.length,
       method: 'keyword',
+      fullTimeRange,
       columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
       rows: results.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
     });
@@ -143,6 +153,7 @@ function handleLogcatInMemory(
     totalMatches,
     showing: results.length,
     method: 'keyword',
+    fullTimeRange,
     entries: results.map(e => ({
       lineNumber: e.lineNumber,
       timestamp: e.timestamp,
@@ -261,6 +272,13 @@ function handleKernelSearch(
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
   }
 
+  // Full time range for kernel entries (convert boot-relative seconds to display strings)
+  const kernelFullTimeRange = (() => {
+    const firstTs = bootEpochMs != null ? formatEpochToDisplay(bootEpochMs + entries[0].timestamp * 1000) : String(entries[0].timestamp);
+    const lastTs = bootEpochMs != null ? formatEpochToDisplay(bootEpochMs + entries[entries.length - 1].timestamp * 1000) : String(entries[entries.length - 1].timestamp);
+    return { first: firstTs.slice(0, 18), last: lastTs.slice(0, 18), total: entries.length };
+  })();
+
   // Try FTS5 first if only keyword search (no level filter)
   if (q && !level) {
     const ftsResult = searchKernelFTS(id, q, limit, offset, startTime, endTime);
@@ -269,6 +287,7 @@ function handleKernelSearch(
         totalMatches: ftsResult.totalMatches,
         showing: ftsResult.entries.length,
         method: 'fts5',
+        fullTimeRange: kernelFullTimeRange,
         entries: ftsResult.entries.map(e => ({
           entryIndex: e.entryIndex,
           timestamp: e.timestamp,
@@ -319,6 +338,7 @@ function handleKernelSearch(
     totalMatches,
     showing: results.length,
     method: 'keyword',
+    fullTimeRange: kernelFullTimeRange,
     entries: results.map(e => ({
       entryIndex: e.entryIndex,
       timestamp: e.displayTs,

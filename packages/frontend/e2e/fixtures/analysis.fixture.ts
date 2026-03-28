@@ -62,8 +62,8 @@ export const test = base.extend<{
     // Click the first (most recent) history item
     await historyItems.first().click();
 
-    // Wait for result page to load (System Overview heading)
-    await page.locator('h2', { hasText: 'System Overview' }).waitFor({ timeout: 30_000 });
+    // Wait for result page to load (overview section)
+    await page.locator('#section-overview').waitFor({ timeout: 30_000 });
 
     // Brief wait for all sections to render
     await page.waitForTimeout(500);

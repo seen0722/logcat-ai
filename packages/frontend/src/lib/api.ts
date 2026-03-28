@@ -260,10 +260,17 @@ export function downloadExport(id: string, format: 'json' | 'html' | 'power-html
 
 // ---- Search API ----
 
+export interface SearchFullTimeRange {
+  first: string;
+  last: string;
+  total: number;
+}
+
 export interface LogcatSearchResult {
   totalMatches: number;
   showing: number;
   method: 'fts5' | 'keyword';
+  fullTimeRange?: SearchFullTimeRange;
   entries: Array<{
     lineNumber: number;
     timestamp: string;
@@ -321,6 +328,7 @@ export interface KernelSearchResult {
   totalMatches: number;
   showing: number;
   method: 'fts5' | 'keyword';
+  fullTimeRange?: SearchFullTimeRange;
   entries: Array<{
     entryIndex: number;
     timestamp: string;

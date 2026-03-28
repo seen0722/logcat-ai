@@ -41,7 +41,7 @@ test.describe('History Panel', () => {
     await firstItem.click();
 
     // Should navigate to result page
-    await page.locator('h2', { hasText: 'System Overview' }).waitFor({ timeout: 30_000 });
+    await page.locator('#section-overview').waitFor({ timeout: 30_000 });
     await expect(page.locator('#section-overview')).toBeVisible();
   });
 });

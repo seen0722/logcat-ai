@@ -228,6 +228,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Data states — allEntries in ref to avoid React managing 411K objects
   const allEntriesRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
   const filteredRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
+  // Full time range of the entire unfiltered dataset — from backend response
+  const [fullTimeRange, setFullTimeRange] = useState<{ first: string; last: string; total: number } | null>(null);
   const [dataVersion, setDataVersion] = useState(0); // increments on every loadData to invalidate useMemo
   const [totalAvailable, setTotalAvailable] = useState(0);
   const [method, setMethod] = useState<string>('');
@@ -252,11 +254,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Data Loading ──
 
-  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string }) => {
+  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; offsetOverride?: number }) => {
     const effectiveSource = opts?.src ?? source;
     const effectiveTag = opts?.tagOverride ?? tag;
     const effectiveSt = opts?.st ?? startTime;
     const effectiveEt = opts?.et ?? endTime;
+    const effectiveOffset = opts?.offsetOverride ?? 0;
 
     setLoading(true);
     setError('');
@@ -266,20 +269,20 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
           limit: MAX_ENTRIES,
-          offset: 0,
+          offset: effectiveOffset,
           export: true,
         });
         allEntriesRef.current = res.entries as KernelEntry[]; setDataVersion(v => v + 1);
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
+        if (res.fullTimeRange) setFullTimeRange(res.fullTimeRange);
       } else {
         const res = await searchLogcat(uploadId, {
-          // Tag filtering is always client-side to avoid reload on change
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
           limit: MAX_ENTRIES,
-          offset: 0,
+          offset: effectiveOffset,
           export: true,
           compact: true,
         });
@@ -287,6 +290,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
+        if (res.fullTimeRange) setFullTimeRange(res.fullTimeRange);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Load failed');
@@ -486,6 +490,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setStartTime('');
     setEndTime('');
     allEntriesRef.current = []; filteredRef.current = []; setDataVersion(v => v + 1);
+    setFullTimeRange(null);
     setTotalAvailable(0);
     setMethod('');
     setTruncated(false);
@@ -798,6 +803,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
         {/* Quick bar: Saved tags + Time navigation — single compact row */}
         {(allEntries.length > 0 || (source === 'logcat' && savedTags.length > 0)) && (() => {
+          // Current loaded range timestamps (for Earlier/Later navigation)
           const firstReal = allEntries.find((e: any) => e.timestamp && !e.timestamp.startsWith('01-01')) as any;
           const lastEntry = allEntries[allEntries.length - 1] as any;
           const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any)?.timestamp ?? '').slice(0, 18);
@@ -816,6 +822,16 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 isNav ? 'text-accent border-accent/30 hover:bg-accent/10' : 'bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40'
               }`}>{label}</button>
           );
+          // "Latest" loads the last MAX_ENTRIES from the full log (no time filter, offset from end)
+          const latestOffset = Math.max(0, (fullTimeRange?.total ?? 0) - MAX_ENTRIES);
+          const handleLatest = () => {
+            setStartTime(''); setEndTime('');
+            loadData({ st: '', et: '', offsetOverride: latestOffset });
+          };
+          const handleOldest = () => {
+            setStartTime(''); setEndTime('');
+            loadData({ st: '', et: '', offsetOverride: 0 });
+          };
           return (
             <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
               {source === 'logcat' && savedTags.length > 0 && (
@@ -833,8 +849,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <>
                   {jumpBtn('← Earlier', addMin(firstTs, -5), firstTs, true)}
                   {jumpBtn('All', '', '')}
-                  {jumpBtn('First 5min', firstTs, addMin(firstTs, 5))}
-                  {jumpBtn('Last 5min', addMin(lastTs, -5), '')}
+                  <button key="Oldest" onClick={handleOldest} disabled={loading}
+                    className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Oldest</button>
+                  <button key="Latest" onClick={handleLatest} disabled={loading}
+                    className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Latest</button>
                   {jumpBtn('Later →', lastTs, '', true)}
                 </>
               )}
@@ -871,10 +889,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               )}
               {truncated && (
                 <span className="text-yellow-400 text-[11px]">
-                  Showing first 50,000 of {totalAvailable.toLocaleString()} — narrow time range for full data
+                  Showing {allEntries.length.toLocaleString()} of {(fullTimeRange?.total ?? totalAvailable).toLocaleString()}
                   {allEntries.length > 0 && (
                     <span className="text-gray-500 ml-1">
-                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
+                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)}
+                      {fullTimeRange && (
+                        <span> · full: {fullTimeRange.first.slice(0, 14)} ~ {fullTimeRange.last.slice(0, 14)}</span>
+                      )}
+                      )
                     </span>
                   )}
                 </span>
