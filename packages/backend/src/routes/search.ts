@@ -21,7 +21,8 @@ router.get('/:id', (req: Request, res: Response) => {
   const startTime = req.query.startTime ? String(req.query.startTime) : undefined;
   const endTime = req.query.endTime ? String(req.query.endTime) : undefined;
   const isExport = req.query.export === 'true';
-  const maxLimit = isExport ? 500_000 : 500;
+  const compact = req.query.compact === 'true';
+  const maxLimit = isExport ? 1_000_000 : 500;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), maxLimit);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
@@ -37,11 +38,11 @@ router.get('/:id', (req: Request, res: Response) => {
 
   // ── Logcat search (default) ──
   if (rawData) {
-    return handleLogcatInMemory(id, rawData.logcatEntries, { q, tag, level, pid, buffer, startTime, endTime, limit, offset }, res);
+    return handleLogcatInMemory(id, rawData.logcatEntries, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact }, res);
   }
 
   // FTS5 SQL fallback for logcat
-  return handleLogcatFallback(id, { q, tag, level, pid, buffer, startTime, endTime, limit, offset }, res);
+  return handleLogcatFallback(id, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact }, res);
 });
 
 /**
@@ -50,10 +51,10 @@ router.get('/:id', (req: Request, res: Response) => {
 function handleLogcatInMemory(
   id: string,
   entries: LogEntry[],
-  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean },
   res: Response,
 ) {
-  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset } = params;
+  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact } = params;
 
   if (entries.length === 0) {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
@@ -63,6 +64,15 @@ function handleLogcatInMemory(
   if (q && !tag && !level && !pid) {
     const ftsResult = searchLogcatFTS(id, q, limit, offset, buffer, startTime, endTime);
     if (ftsResult) {
+      if (compact) {
+        return res.json({
+          totalMatches: ftsResult.totalMatches,
+          showing: ftsResult.entries.length,
+          method: 'fts5',
+          columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
+          rows: ftsResult.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+        });
+      }
       return res.json({
         totalMatches: ftsResult.totalMatches,
         showing: ftsResult.entries.length,
@@ -120,6 +130,15 @@ function handleLogcatInMemory(
   const totalMatches = filtered.length;
   const results = filtered.slice(offset, offset + limit);
 
+  if (compact) {
+    return res.json({
+      totalMatches,
+      showing: results.length,
+      method: 'keyword',
+      columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
+      rows: results.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+    });
+  }
   return res.json({
     totalMatches,
     showing: results.length,
@@ -142,7 +161,7 @@ function handleLogcatInMemory(
  */
 function handleLogcatFallback(
   id: string,
-  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean },
   res: Response,
 ) {
   if (!hasLogcatIndex(id)) {
@@ -154,6 +173,15 @@ function handleLogcatFallback(
     return res.json({ totalMatches: 0, showing: 0, method: 'fts5-sql', entries: [] });
   }
 
+  if (params.compact) {
+    return res.json({
+      totalMatches: result.totalMatches,
+      showing: result.entries.length,
+      method: 'fts5-sql',
+      columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
+      rows: result.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+    });
+  }
   return res.json({
     totalMatches: result.totalMatches,
     showing: result.entries.length,

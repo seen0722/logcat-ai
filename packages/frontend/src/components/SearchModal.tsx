@@ -47,9 +47,7 @@ interface RowExtraProps {
   highlightPattern: RegExp | null;
 }
 
-const INITIAL_BATCH = 5_000;
-const BATCH_SIZE = 50_000;
-const MAX_ENTRIES = 500_000;
+const MAX_ENTRIES = 1_000_000;
 const ROW_HEIGHT = 22;
 const DETAIL_HEIGHT = 200;
 
@@ -239,10 +237,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const [method, setMethod] = useState<string>('');
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [bgLoading, setBgLoading] = useState(false);
-  const [bgProgress, setBgProgress] = useState('');
   const [error, setError] = useState('');
-  const bgAbortRef = useRef(false);
 
   // Find navigation
   const [currentMatchPos, setCurrentMatchPos] = useState(0);
@@ -268,63 +263,40 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     const effectiveEt = opts?.et ?? endTime;
     const effectiveBuffer = opts?.bufferOverride ?? buffer;
 
-    // Abort any previous background loading
-    bgAbortRef.current = true;
-    setBgLoading(false);
-    setBgProgress('');
     setLoading(true);
     setError('');
-
-    const searchFn = effectiveSource === 'kernel'
-      ? (limit: number, offset: number) => searchKernel(uploadId, {
-          startTime: effectiveSt.trim() || undefined,
-          endTime: effectiveEt.trim() || undefined,
-          limit, offset, export: true,
-        })
-      : (limit: number, offset: number) => searchLogcat(uploadId, {
-          tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
-          // buffer filter is client-side only — always load all buffers
-          startTime: effectiveSt.trim() || undefined,
-          endTime: effectiveEt.trim() || undefined,
-          limit, offset, export: true,
-        });
-
     try {
-      // Phase 1: load initial batch for instant display
-      const res = await searchFn(INITIAL_BATCH, 0);
-      setAllEntries(res.entries as any);
-      setTotalAvailable(res.totalMatches);
-      setMethod(res.method);
-      setTruncated(res.totalMatches > INITIAL_BATCH);
-      setLoading(false);
-
-      // Phase 2: background load remaining batches
-      if (res.totalMatches > INITIAL_BATCH) {
-        bgAbortRef.current = false;
-        setBgLoading(true);
-        let loaded = res.entries.length;
-        const total = Math.min(res.totalMatches, MAX_ENTRIES);
-        let accumulated = [...res.entries] as any[];
-
-        while (loaded < total && !bgAbortRef.current) {
-          const batchSize = Math.min(BATCH_SIZE, total - loaded);
-          setBgProgress(`Loading ${loaded.toLocaleString()} / ${total.toLocaleString()}...`);
-          try {
-            const batch = await searchFn(batchSize, loaded);
-            if (bgAbortRef.current) break;
-            for (const e of batch.entries) accumulated.push(e);
-            loaded = accumulated.length;
-            setAllEntries([...accumulated] as any);
-            setTruncated(res.totalMatches > loaded);
-          } catch {
-            break; // Network error — stop background loading, keep what we have
-          }
-        }
-        setBgLoading(false);
-        setBgProgress('');
+      if (effectiveSource === 'kernel') {
+        const res = await searchKernel(uploadId, {
+          startTime: effectiveSt.trim() || undefined,
+          endTime: effectiveEt.trim() || undefined,
+          limit: MAX_ENTRIES,
+          offset: 0,
+          export: true,
+        });
+        setAllEntries(res.entries as KernelEntry[]);
+        setTotalAvailable(res.totalMatches);
+        setMethod(res.method);
+        setTruncated(res.totalMatches > MAX_ENTRIES);
+      } else {
+        const res = await searchLogcat(uploadId, {
+          tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
+          buffer: effectiveBuffer.trim() || undefined,
+          startTime: effectiveSt.trim() || undefined,
+          endTime: effectiveEt.trim() || undefined,
+          limit: MAX_ENTRIES,
+          offset: 0,
+          export: true,
+          compact: true,
+        });
+        setAllEntries(res.entries as LogcatEntry[]);
+        setTotalAvailable(res.totalMatches);
+        setMethod(res.method);
+        setTruncated(res.totalMatches > MAX_ENTRIES);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Load failed');
+    } finally {
       setLoading(false);
     }
   }, [uploadId, source, tag, buffer, startTime, endTime]);
@@ -333,45 +305,48 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
   // level/pid/buffer filter immediately via useMemo
 
-  // Single-pass filter — avoids creating intermediate arrays for 200K+ entries
   const filteredEntries = useMemo(() => {
     if (source === 'logcat') {
-      const logcat = allEntries as LogcatEntry[];
-      const hasLevel = !!level;
-      const levelIdx = hasLevel ? ['V', 'D', 'I', 'W', 'E', 'F'].indexOf(level) : -1;
-      const hasPid = !!pid;
-      const pidNum = hasPid ? Number(pid) : NaN;
-      const hasBuffer = !!buffer;
-      const hasIncludeTags = tag.includes(',');
-      const includeTags = hasIncludeTags ? new Set(tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)) : null;
-      const hasExclude = !!excludeTags.trim();
-      const excludeSet = hasExclude ? new Set(excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)) : null;
-      const levels = ['V', 'D', 'I', 'W', 'E', 'F'];
-
-      // No filters active — return as-is (no copy)
-      if (!hasLevel && !hasPid && !hasBuffer && !hasIncludeTags && !hasExclude) return logcat;
-
-      const result: LogcatEntry[] = [];
-      for (let i = 0; i < logcat.length; i++) {
-        const e = logcat[i];
-        if (hasLevel && levels.indexOf(e.level) < levelIdx) continue;
-        if (hasPid && e.pid !== pidNum) continue;
-        if (hasBuffer && e.buffer !== buffer) continue;
-        if (includeTags && !includeTags.has((e.tag ?? '').toLowerCase())) continue;
-        if (excludeSet && excludeSet.has((e.tag ?? '').toLowerCase())) continue;
-        result.push(e);
+      let logcat = allEntries as LogcatEntry[];
+      if (level) {
+        const levels = ['V', 'D', 'I', 'W', 'E', 'F'];
+        const minIdx = levels.indexOf(level);
+        if (minIdx >= 0) {
+          logcat = logcat.filter(e => levels.indexOf(e.level) >= minIdx);
+        }
       }
-      return result;
+      if (pid) {
+        const pidNum = Number(pid);
+        if (!isNaN(pidNum)) logcat = logcat.filter(e => e.pid === pidNum);
+      }
+      if (buffer) {
+        logcat = logcat.filter(e => e.buffer === buffer);
+      }
+      // Multi-tag client-side filter: "RIL,RILJ" → include only those tags
+      // Single tag without comma is already filtered server-side via API
+      if (tag.includes(',')) {
+        const includeTags = tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        if (includeTags.length > 0) {
+          logcat = logcat.filter(e => includeTags.includes((e.tag ?? '').toLowerCase()));
+        }
+      }
+      if (excludeTags.trim()) {
+        const excluded = excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        if (excluded.length > 0) {
+          logcat = logcat.filter(e => !excluded.includes((e.tag ?? '').toLowerCase()));
+        }
+      }
+      return logcat;
     } else {
-      const kernel = allEntries as KernelEntry[];
-      if (!level) return kernel;
-      const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
-      const result: KernelEntry[] = [];
-      for (let i = 0; i < kernel.length; i++) {
-        const n = parseInt(kernel[i].level.replace(/[<>]/g, ''), 10);
-        if (n <= levelNum) result.push(kernel[i]);
+      let kernel = allEntries as KernelEntry[];
+      if (level) {
+        const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
+        kernel = kernel.filter(e => {
+          const n = parseInt(e.level.replace(/[<>]/g, ''), 10);
+          return n <= levelNum;
+        });
       }
-      return result;
+      return kernel;
     }
   }, [allEntries, source, level, pid, buffer, tag, excludeTags]);
 
@@ -728,7 +703,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <label className="text-[11px] text-gray-500">Buffer</label>
                 <select
                   value={buffer}
-                  onChange={(e) => setBuffer(e.target.value)}
+                  onChange={(e) => { setBuffer(e.target.value); loadData({ bufferOverride: e.target.value }); }}
                   className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
@@ -874,17 +849,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   {method}
                 </span>
               )}
-              {bgLoading && (
-                <span className="text-accent text-[11px] animate-pulse-subtle">
-                  {bgProgress}
-                </span>
-              )}
-              {truncated && !bgLoading && (
+              {truncated && (
                 <span className="text-yellow-400 text-[11px]">
-                  {allEntries.length.toLocaleString()} of {totalAvailable.toLocaleString()} loaded
+                  Showing first 50,000 of {totalAvailable.toLocaleString()} — narrow time range for full data
                   {allEntries.length > 0 && (
                     <span className="text-gray-500 ml-1">
-                      ({(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
+                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
                     </span>
                   )}
                 </span>
