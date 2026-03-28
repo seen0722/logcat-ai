@@ -825,9 +825,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             while (min < 0) { min += 60; hr--; }
             return `${m[1]} ${String(Math.max(0, hr)).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
           };
-          const jumpBtn = (label: string, st: string, et: string) => (
+          const jumpBtn = (label: string, st: string, et: string, isNav?: boolean) => (
             <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et }); }} disabled={loading}
-              className="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors">{label}</button>
+              className={`text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors ${
+                isNav ? 'text-accent border-accent/30 hover:bg-accent/10' : 'bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40'
+              }`}>{label}</button>
           );
           return (
             <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
@@ -835,20 +837,20 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <>
                   {savedTags.map(t => (
                     <button key={t} onClick={() => setTag(t)}
-                      className="group flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-300 hover:border-accent/40 hover:text-accent transition-colors">
-                      {t}<span onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }} className="text-gray-600 hover:text-red-400 ml-0.5 transition-colors">×</span>
+                      className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-warm/10 border border-warm/20 text-warm hover:bg-warm/20 transition-colors">
+                      {t}<span onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }} className="text-warm/40 hover:text-red-400 ml-0.5 transition-colors">×</span>
                     </button>
                   ))}
-                  <span className="text-gray-700">|</span>
+                  <span className="text-gray-700 mx-0.5">|</span>
                 </>
               )}
               {allEntries.length > 0 && (
                 <>
-                  {jumpBtn('← Earlier', addMin(firstTs, -5), firstTs)}
+                  {jumpBtn('← Earlier', addMin(firstTs, -5), firstTs, true)}
                   {jumpBtn('All', '', '')}
                   {jumpBtn('First 5min', firstTs, addMin(firstTs, 5))}
                   {jumpBtn('Last 5min', addMin(lastTs, -5), '')}
-                  {jumpBtn('Later →', lastTs, '')}
+                  {jumpBtn('Later →', lastTs, '', true)}
                 </>
               )}
             </div>
