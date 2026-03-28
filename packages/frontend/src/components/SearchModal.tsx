@@ -231,8 +231,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const [startTime, setStartTime] = useState(initialStartTime ?? '');
   const [endTime, setEndTime] = useState(initialEndTime ?? '');
 
-  // Data states
-  const [allEntries, setAllEntries] = useState<LogcatEntry[] | KernelEntry[]>([]);
+  // Data states — allEntries in ref to avoid React managing 411K objects
+  const allEntriesRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
+  const filteredRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
+  const [rowCount, setRowCount] = useState(0); // only this triggers react-window update
   const [totalAvailable, setTotalAvailable] = useState(0);
   const [method, setMethod] = useState<string>('');
   const [truncated, setTruncated] = useState(false);
@@ -273,7 +275,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           offset: 0,
           export: true,
         });
-        setAllEntries(res.entries as KernelEntry[]);
+        allEntriesRef.current = res.entries as KernelEntry[]; refilter();
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -287,7 +289,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           export: true,
           compact: true,
         });
-        setAllEntries(res.entries as LogcatEntry[]);
+        allEntriesRef.current = res.entries as LogcatEntry[]; refilter();
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -303,10 +305,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
   // level/pid/buffer filter immediately via useMemo
 
-  const filteredEntries = useMemo(() => {
+  // Refilter: runs filter logic, writes to filteredRef, updates rowCount state
+  const refilter = useCallback(() => {
+    const allEntries = allEntriesRef.current;
     if (source === 'logcat') {
       const entries = allEntries as LogcatEntry[];
-      // Pre-compute filter criteria once
       const levelMap: Record<string, number> = { V: 0, D: 1, I: 2, W: 3, E: 4, F: 5 };
       const minLevelIdx = level ? (levelMap[level] ?? -1) : -1;
       const pidNum = pid ? Number(pid) : NaN;
@@ -318,21 +321,21 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         : null;
       const hasAnyFilter = minLevelIdx >= 0 || !isNaN(pidNum) || !!buffer || includeSet || excludeSet;
 
-      // No filters → return original array (same reference, no allocation)
-      if (!hasAnyFilter) return entries;
-
-      // Single-pass filter — one iteration, no intermediate arrays
-      const result: LogcatEntry[] = [];
-      for (let i = 0; i < entries.length; i++) {
-        const e = entries[i];
-        if (minLevelIdx >= 0 && (levelMap[e.level] ?? 0) < minLevelIdx) continue;
-        if (!isNaN(pidNum) && e.pid !== pidNum) continue;
-        if (buffer && e.buffer !== buffer) continue;
-        if (includeSet) { const t = (e.tag ?? '').toLowerCase(); if (!includeSet.has(t)) continue; }
-        if (excludeSet) { const t = (e.tag ?? '').toLowerCase(); if (excludeSet.has(t)) continue; }
-        result.push(e);
+      if (!hasAnyFilter) {
+        filteredRef.current = entries;
+      } else {
+        const result: LogcatEntry[] = [];
+        for (let i = 0; i < entries.length; i++) {
+          const e = entries[i];
+          if (minLevelIdx >= 0 && (levelMap[e.level] ?? 0) < minLevelIdx) continue;
+          if (!isNaN(pidNum) && e.pid !== pidNum) continue;
+          if (buffer && e.buffer !== buffer) continue;
+          if (includeSet) { const t = (e.tag ?? '').toLowerCase(); if (!includeSet.has(t)) continue; }
+          if (excludeSet) { const t = (e.tag ?? '').toLowerCase(); if (excludeSet.has(t)) continue; }
+          result.push(e);
+        }
+        filteredRef.current = result;
       }
-      return result;
     } else {
       let kernel = allEntries as KernelEntry[];
       if (level) {
@@ -342,9 +345,16 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           return n <= levelNum;
         });
       }
-      return kernel;
+      filteredRef.current = kernel;
     }
-  }, [allEntries, source, level, pid, buffer, tag, excludeTags]);
+    setRowCount(filteredRef.current.length);
+  }, [source, level, pid, buffer, tag, excludeTags]);
+
+  // Trigger refilter when filter deps change
+  useEffect(() => { refilter(); }, [refilter]);
+
+  // Convenience alias
+  const filteredEntries = filteredRef.current;
 
   // ── Find Next/Prev ──
 
@@ -405,18 +415,18 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // ── FocusTime ──
 
   useEffect(() => {
-    if (!initialFocusTime || allEntries.length === 0) return;
-    // Find closest entry <= focusTime
+    const entries = allEntriesRef.current;
+    if (!initialFocusTime || entries.length === 0) return;
     let best = 0;
-    for (let i = 0; i < allEntries.length; i++) {
-      const ts = (allEntries[i] as any).timestamp ?? '';
+    for (let i = 0; i < entries.length; i++) {
+      const ts = (entries[i] as any).timestamp ?? '';
       if (ts <= initialFocusTime) best = i;
     }
     setFocusIndex(best);
     requestAnimationFrame(() => {
       listRef.current?.scrollToRow({ index: best, align: 'center' });
     });
-  }, [allEntries, initialFocusTime, listRef]);
+  }, [rowCount, initialFocusTime, listRef]);
 
   // ── Initial Load ──
 
@@ -488,7 +498,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setLevel('');
     setStartTime('');
     setEndTime('');
-    setAllEntries([]);
+    allEntriesRef.current = []; filteredRef.current = []; setRowCount(0);
     setTotalAvailable(0);
     setMethod('');
     setTruncated(false);
@@ -576,6 +586,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // Effective list height: subtract column header height (~20px)
   const listHeight = Math.max(containerHeight - 20, 200);
+
+  const allEntries = allEntriesRef.current;
 
   return (
     <div
@@ -926,7 +938,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           <div ref={listWrapRef} className="flex-1 min-h-0">
             <List
               listRef={listRef}
-              rowCount={filteredEntries.length}
+              rowCount={rowCount}
               rowHeight={ROW_HEIGHT}
               rowComponent={RowComponent}
               rowProps={rowProps}
