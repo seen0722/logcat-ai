@@ -47,7 +47,7 @@ interface RowExtraProps {
   highlightPattern: RegExp | null;
 }
 
-const MAX_ENTRIES = 1_000_000;
+const MAX_ENTRIES = 50_000;
 const ROW_HEIGHT = 22;
 const DETAIL_HEIGHT = 200;
 
