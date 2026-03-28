@@ -71,6 +71,9 @@ export function exportTelephonyReport(result: AnalysisResult): string {
   const findingsHtml = renderFindings(ts);
   if (findingsHtml) addSection('findings', '8. Findings & Recommendations', findingsHtml);
 
+  // Section 9: Data Sources
+  addSection('data-sources', '9. Data Sources Used', renderDataSources(ts, result.powerStatus));
+
   // Summary cards
   const summaryCards = renderSummaryCards(ts, result.powerStatus);
   const isDeep = !!result.deepAnalysisOverview;
@@ -940,4 +943,30 @@ function simStateClass(simState?: SimState): string {
     case 'UNKNOWN': return 'warn';
     default: return 'info';
   }
+}
+
+function renderDataSources(ts: TelephonyParseResult, power?: PowerParseResult): string {
+  const sources: string[][] = [];
+  if (ts.serviceState) sources.push(['Service State', 'DUMPSYS PHONE (mServiceState)']);
+  if (ts.signalStrength) sources.push(['Signal Strength', 'DUMPSYS PHONE (mSignalStrength)']);
+  if (ts.dataNetworkOosPeriods && ts.dataNetworkOosPeriods.length > 0) {
+    sources.push(['OOS Event History', 'DUMPSYS PHONE (DataNetworkController Local logs)']);
+  } else if (ts.dumpsysOosPeriods && ts.dumpsysOosPeriods.length > 0) {
+    sources.push(['OOS Event History', 'DUMPSYS PHONE (updateDataRoamingStatus)']);
+  } else if (ts.oosEvents.length > 0) {
+    sources.push(['OOS Event History', 'RADIO LOG (SST Poll ServiceState)']);
+  }
+  if (power?.connectivityStats?.cellularRatDistribution) {
+    sources.push(['OOS Time / Percentage', 'DUMPSYS BATTERYSTATS (Cellular Radio Access Technology)']);
+  }
+  if (ts.rilErrors.length > 0) sources.push(['RIL / Modem Errors', 'RADIO LOG (RILJ / RIL tags)']);
+  if (ts.callEvents.length > 0 || ts.smsEvents.length > 0) sources.push(['Call & SMS Events', 'RADIO LOG']);
+  if (ts.ratChanges.length > 0) sources.push(['RAT Changes', 'RADIO LOG (SST Poll ServiceState)']);
+  if (ts.transportErrors && ts.transportErrors.length > 0) sources.push(['Transport Errors', 'RADIO LOG (RIL TransportErrorCallback)']);
+  if (ts.simState) sources.push(['SIM State', 'DUMPSYS ISUB (updateSimState)']);
+  if (ts.modemRestartCount) sources.push(['Modem Restart Count', 'DUMPSYS ISUB (SIM state UNKNOWN cycles)']);
+  if (ts.radioLogTimeRange) {
+    sources.push(['Radio Log Coverage', `${esc(ts.radioLogTimeRange.start)} \u2014 ${esc(ts.radioLogTimeRange.end)}`]);
+  }
+  return table(['Section', 'Data Source'], sources);
 }
