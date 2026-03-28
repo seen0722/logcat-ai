@@ -228,7 +228,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Data states — allEntries in ref to avoid React managing 411K objects
   const allEntriesRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
   const filteredRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
-  const [rowCount, setRowCount] = useState(0); // only this triggers react-window update
+  const [dataVersion, setDataVersion] = useState(0); // increments on every loadData to invalidate useMemo
   const [totalAvailable, setTotalAvailable] = useState(0);
   const [method, setMethod] = useState<string>('');
   const [truncated, setTruncated] = useState(false);
@@ -269,7 +269,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           offset: 0,
           export: true,
         });
-        allEntriesRef.current = res.entries as KernelEntry[]; setRowCount(res.entries.length);
+        allEntriesRef.current = res.entries as KernelEntry[]; setDataVersion(v => v + 1);
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -283,7 +283,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           export: true,
           compact: true,
         });
-        allEntriesRef.current = res.entries as LogcatEntry[]; setRowCount(res.entries.length);
+        allEntriesRef.current = res.entries as LogcatEntry[]; setDataVersion(v => v + 1);
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -341,7 +341,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       filteredRef.current = kernel;
       return kernel;
     }
-  }, [rowCount, source, level, pid, buffer, tag, excludeTags]); // rowCount changes when data loads
+  }, [dataVersion, source, level, pid, buffer, tag, excludeTags]); // dataVersion increments on every loadData
 
   // ── Find Next/Prev ──
 
@@ -413,7 +413,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     requestAnimationFrame(() => {
       listRef.current?.scrollToRow({ index: best, align: 'center' });
     });
-  }, [rowCount, initialFocusTime, listRef]);
+  }, [dataVersion, initialFocusTime, listRef]);
 
   // ── Initial Load ──
 
@@ -485,7 +485,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setLevel('');
     setStartTime('');
     setEndTime('');
-    allEntriesRef.current = []; filteredRef.current = []; setRowCount(0);
+    allEntriesRef.current = []; filteredRef.current = []; setDataVersion(v => v + 1);
     setTotalAvailable(0);
     setMethod('');
     setTruncated(false);
