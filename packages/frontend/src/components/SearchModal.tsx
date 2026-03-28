@@ -264,7 +264,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         setTruncated(res.totalMatches > MAX_ENTRIES);
       } else {
         const res = await searchLogcat(uploadId, {
-          tag: effectiveTag.trim() || undefined,
+          tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
           buffer: effectiveBuffer.trim() || undefined,
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
@@ -305,6 +305,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       if (buffer) {
         logcat = logcat.filter(e => e.buffer === buffer);
       }
+      // Multi-tag client-side filter: "RIL,RILJ" → include only those tags
+      // Single tag without comma is already filtered server-side via API
+      if (tag.includes(',')) {
+        const includeTags = tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        if (includeTags.length > 0) {
+          logcat = logcat.filter(e => includeTags.includes((e.tag ?? '').toLowerCase()));
+        }
+      }
       if (excludeTags.trim()) {
         const excluded = excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
         if (excluded.length > 0) {
@@ -323,7 +331,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       }
       return kernel;
     }
-  }, [allEntries, source, level, pid, buffer, excludeTags]);
+  }, [allEntries, source, level, pid, buffer, tag, excludeTags]);
 
   // ── Find Next/Prev ──
 
@@ -652,7 +660,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   value={tag}
                   onChange={(e) => setTag(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') loadData({ tagOverride: tag }); }}
-                  placeholder="e.g. ActivityManager"
+                  placeholder="e.g. RIL,RILJ"
                   className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
                 />
               </div>
