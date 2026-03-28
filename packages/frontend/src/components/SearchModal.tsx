@@ -871,25 +871,45 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         )}
 
         {/* Quick time presets */}
-        {allEntries.length > 0 && (
-          <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0">
-            <span className="text-[10px] text-gray-600">Jump:</span>
-            {[
-              { label: 'All', st: '', et: '' },
-              { label: 'First 5min', st: (allEntries[0] as any).timestamp?.slice(0, 18) ?? '', et: (() => { const f = (allEntries[0] as any).timestamp; if (!f) return ''; const m = f.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/); if (!m) return ''; let min = parseInt(m[3]) + 5; let hr = parseInt(m[2]); if (min >= 60) { min -= 60; hr += 1; } return `${m[1]} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`; })() },
-              { label: 'Last 5min', st: (() => { const l = (allEntries[allEntries.length - 1] as any).timestamp; if (!l) return ''; const m = l.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/); if (!m) return ''; let min = parseInt(m[3]) - 5; let hr = parseInt(m[2]); if (min < 0) { min += 60; hr -= 1; } return `${m[1]} ${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`; })(), et: '' },
-            ].map(p => (
-              <button
-                key={p.label}
-                onClick={() => { setStartTime(p.st); setEndTime(p.et); if (p.st || p.et) loadData({ st: p.st, et: p.et }); else loadData({ st: '', et: '' }); }}
-                disabled={loading}
-                className="text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {allEntries.length > 0 && (() => {
+          // Find first entry with real timestamp (skip 01-01 boot artifacts)
+          const firstReal = allEntries.find((e: any) => e.timestamp && !e.timestamp.startsWith('01-01')) as any;
+          const lastEntry = allEntries[allEntries.length - 1] as any;
+          const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any).timestamp ?? '').slice(0, 18);
+          const lastTs = (lastEntry?.timestamp ?? '').slice(0, 18);
+
+          const addMin = (ts: string, delta: number) => {
+            const m = ts.match(/^(\d{2}-\d{2})\s+(\d{2}):(\d{2})/);
+            if (!m) return ts;
+            let min = parseInt(m[3]) + delta;
+            let hr = parseInt(m[2]);
+            while (min >= 60) { min -= 60; hr++; }
+            while (min < 0) { min += 60; hr--; }
+            return `${m[1]} ${String(Math.max(0, hr)).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+          };
+
+          const presets = [
+            { label: 'All', st: '', et: '' },
+            { label: 'First 5min', st: firstTs, et: addMin(firstTs, 5) },
+            { label: 'Last 5min', st: addMin(lastTs, -5), et: '' },
+          ];
+
+          return (
+            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0">
+              <span className="text-[10px] text-gray-600">Jump:</span>
+              {presets.map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => { setStartTime(p.st); setEndTime(p.et); loadData({ st: p.st, et: p.et }); }}
+                  disabled={loading}
+                  className="text-[10px] px-2 py-0.5 rounded bg-surface-hover border border-border/50 text-gray-400 hover:text-accent hover:border-accent/40 disabled:opacity-50 transition-colors"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Status bar — always rendered to prevent layout shift */}
         <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-[#161b22] border-b border-gray-700/40 shrink-0">
