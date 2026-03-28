@@ -47,7 +47,9 @@ interface RowExtraProps {
   highlightPattern: RegExp | null;
 }
 
-const MAX_ENTRIES = 200_000;
+const INITIAL_BATCH = 5_000;
+const BATCH_SIZE = 50_000;
+const MAX_ENTRIES = 500_000;
 const ROW_HEIGHT = 22;
 const DETAIL_HEIGHT = 200;
 
@@ -237,7 +239,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const [method, setMethod] = useState<string>('');
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [bgLoading, setBgLoading] = useState(false);
+  const [bgProgress, setBgProgress] = useState('');
   const [error, setError] = useState('');
+  const bgAbortRef = useRef(false);
 
   // Find navigation
   const [currentMatchPos, setCurrentMatchPos] = useState(0);
@@ -263,39 +268,63 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     const effectiveEt = opts?.et ?? endTime;
     const effectiveBuffer = opts?.bufferOverride ?? buffer;
 
+    // Abort any previous background loading
+    bgAbortRef.current = true;
+    setBgLoading(false);
+    setBgProgress('');
     setLoading(true);
     setError('');
-    try {
-      if (effectiveSource === 'kernel') {
-        const res = await searchKernel(uploadId, {
+
+    const searchFn = effectiveSource === 'kernel'
+      ? (limit: number, offset: number) => searchKernel(uploadId, {
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
-          limit: MAX_ENTRIES,
-          offset: 0,
-          export: true,
-        });
-        setAllEntries(res.entries as KernelEntry[]);
-        setTotalAvailable(res.totalMatches);
-        setMethod(res.method);
-        setTruncated(res.totalMatches > MAX_ENTRIES);
-      } else {
-        const res = await searchLogcat(uploadId, {
+          limit, offset, export: true,
+        })
+      : (limit: number, offset: number) => searchLogcat(uploadId, {
           tag: effectiveTag.includes(',') ? undefined : effectiveTag.trim() || undefined,
           buffer: effectiveBuffer.trim() || undefined,
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
-          limit: MAX_ENTRIES,
-          offset: 0,
-          export: true,
+          limit, offset, export: true,
         });
-        setAllEntries(res.entries as LogcatEntry[]);
-        setTotalAvailable(res.totalMatches);
-        setMethod(res.method);
-        setTruncated(res.totalMatches > MAX_ENTRIES);
+
+    try {
+      // Phase 1: load initial batch for instant display
+      const res = await searchFn(INITIAL_BATCH, 0);
+      setAllEntries(res.entries as any);
+      setTotalAvailable(res.totalMatches);
+      setMethod(res.method);
+      setTruncated(res.totalMatches > INITIAL_BATCH);
+      setLoading(false);
+
+      // Phase 2: background load remaining batches
+      if (res.totalMatches > INITIAL_BATCH) {
+        bgAbortRef.current = false;
+        setBgLoading(true);
+        let loaded = res.entries.length;
+        const total = Math.min(res.totalMatches, MAX_ENTRIES);
+        let accumulated = [...res.entries] as any[];
+
+        while (loaded < total && !bgAbortRef.current) {
+          const batchSize = Math.min(BATCH_SIZE, total - loaded);
+          setBgProgress(`Loading ${loaded.toLocaleString()} / ${total.toLocaleString()}...`);
+          try {
+            const batch = await searchFn(batchSize, loaded);
+            if (bgAbortRef.current) break;
+            for (const e of batch.entries) accumulated.push(e);
+            loaded = accumulated.length;
+            setAllEntries([...accumulated] as any);
+            setTruncated(res.totalMatches > loaded);
+          } catch {
+            break; // Network error — stop background loading, keep what we have
+          }
+        }
+        setBgLoading(false);
+        setBgProgress('');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Load failed');
-    } finally {
       setLoading(false);
     }
   }, [uploadId, source, tag, buffer, startTime, endTime]);
@@ -848,12 +877,17 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                   {method}
                 </span>
               )}
-              {truncated && (
+              {bgLoading && (
+                <span className="text-accent text-[11px] animate-pulse-subtle">
+                  {bgProgress}
+                </span>
+              )}
+              {truncated && !bgLoading && (
                 <span className="text-yellow-400 text-[11px]">
-                  Showing first {MAX_ENTRIES.toLocaleString()} of {totalAvailable.toLocaleString()} — narrow time range for full data
+                  {allEntries.length.toLocaleString()} of {totalAvailable.toLocaleString()} loaded
                   {allEntries.length > 0 && (
                     <span className="text-gray-500 ml-1">
-                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
+                      ({(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})
                     </span>
                   )}
                 </span>
