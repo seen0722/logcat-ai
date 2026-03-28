@@ -254,12 +254,13 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Data Loading ──
 
-  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; offsetOverride?: number }) => {
+  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; offsetOverride?: number; bufferOverride?: string }) => {
     const effectiveSource = opts?.src ?? source;
     const effectiveTag = opts?.tagOverride ?? tag;
     const effectiveSt = opts?.st ?? startTime;
     const effectiveEt = opts?.et ?? endTime;
     const effectiveOffset = opts?.offsetOverride ?? 0;
+    const effectiveBuffer = opts?.bufferOverride ?? '';
 
     setLoading(true);
     setError('');
@@ -281,6 +282,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         const res = await searchLogcat(uploadId, {
           startTime: effectiveSt.trim() || undefined,
           endTime: effectiveEt.trim() || undefined,
+          buffer: effectiveBuffer || undefined,
           limit: MAX_ENTRIES,
           offset: effectiveOffset,
           export: true,
@@ -702,7 +704,15 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 <label className="text-[11px] text-gray-500">Buffer</label>
                 <select
                   value={buffer}
-                  onChange={(e) => setBuffer(e.target.value)}
+                  onChange={(e) => {
+                    const newBuf = e.target.value;
+                    setBuffer(newBuf);
+                    // When data is truncated, reload from server with buffer filter
+                    // so we don't miss entries from the selected buffer
+                    if (truncated) {
+                      loadData({ bufferOverride: newBuf });
+                    }
+                  }}
                   className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
                 >
                   <option value="">All</option>
@@ -785,7 +795,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             />
           </div>
           <button
-            onClick={() => loadData()}
+            onClick={() => loadData({ bufferOverride: buffer })}
             disabled={loading}
             className="px-3 py-1 text-[11px] font-medium bg-accent hover:bg-accent disabled:opacity-50 text-white rounded-md transition-colors"
           >
@@ -817,7 +827,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
           };
           const jumpBtn = (label: string, st: string, et: string, isNav?: boolean) => (
-            <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et }); }} disabled={loading}
+            <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et, bufferOverride: buffer }); }} disabled={loading}
               className={`text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors ${
                 isNav ? 'text-accent border-accent/30 hover:bg-accent/10' : 'bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40'
               }`}>{label}</button>
@@ -826,11 +836,11 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           const latestOffset = Math.max(0, (fullTimeRange?.total ?? 0) - MAX_ENTRIES);
           const handleLatest = () => {
             setStartTime(''); setEndTime('');
-            loadData({ st: '', et: '', offsetOverride: latestOffset });
+            loadData({ st: '', et: '', offsetOverride: latestOffset, bufferOverride: buffer });
           };
           const handleOldest = () => {
             setStartTime(''); setEndTime('');
-            loadData({ st: '', et: '', offsetOverride: 0 });
+            loadData({ st: '', et: '', offsetOverride: 0, bufferOverride: buffer });
           };
           return (
             <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
