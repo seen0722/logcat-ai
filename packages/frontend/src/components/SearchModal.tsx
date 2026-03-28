@@ -47,7 +47,7 @@ interface RowExtraProps {
   highlightPattern: RegExp | null;
 }
 
-const MAX_ENTRIES = 50_000;
+const MAX_ENTRIES = 200_000;
 const ROW_HEIGHT = 22;
 const DETAIL_HEIGHT = 200;
 
@@ -850,7 +850,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               )}
               {truncated && (
                 <span className="text-yellow-400 text-[11px]">
-                  Showing first 50,000 of {totalAvailable.toLocaleString()} — narrow time range for full data
+                  Showing first {MAX_ENTRIES.toLocaleString()} of {totalAvailable.toLocaleString()} — narrow time range for full data
                   {allEntries.length > 0 && (
                     <span className="text-gray-500 ml-1">
                       (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)})

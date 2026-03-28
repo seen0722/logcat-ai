@@ -21,7 +21,7 @@ router.get('/:id', (req: Request, res: Response) => {
   const startTime = req.query.startTime ? String(req.query.startTime) : undefined;
   const endTime = req.query.endTime ? String(req.query.endTime) : undefined;
   const isExport = req.query.export === 'true';
-  const maxLimit = isExport ? 100_000 : 500;
+  const maxLimit = isExport ? 500_000 : 500;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), maxLimit);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
