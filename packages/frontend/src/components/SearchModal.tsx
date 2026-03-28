@@ -49,7 +49,7 @@ interface RowExtraProps {
 
 const MAX_ENTRIES = 50_000;
 const ROW_HEIGHT = 22;
-const DETAIL_HEIGHT = 200;
+const DETAIL_HEIGHT = 100;
 
 // ── Logcat helpers ──
 
