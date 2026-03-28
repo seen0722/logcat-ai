@@ -133,11 +133,11 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
     if (isExpanded) {
       rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
     } else if (isCurrentMatch) {
-      rowClass += ' bg-accent/20';
+      rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
     } else if (isMatch) {
-      rowClass += ' border-l-2 border-l-accent/30';
+      rowClass += ' border-l-[3px] border-l-yellow-400/60 !bg-yellow-900/15';
     }
 
     return (
@@ -167,11 +167,11 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
     if (isExpanded) {
       rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
     } else if (isCurrentMatch) {
-      rowClass += ' bg-accent/20';
+      rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
     } else if (isMatch) {
-      rowClass += ' border-l-2 border-l-accent/30';
+      rowClass += ' border-l-[3px] border-l-yellow-400/60 !bg-yellow-900/15';
     }
 
     return (
