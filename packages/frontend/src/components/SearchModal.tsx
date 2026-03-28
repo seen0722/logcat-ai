@@ -275,7 +275,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           offset: 0,
           export: true,
         });
-        allEntriesRef.current = res.entries as KernelEntry[]; refilter();
+        allEntriesRef.current = res.entries as KernelEntry[]; setRowCount(res.entries.length);
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -289,7 +289,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           export: true,
           compact: true,
         });
-        allEntriesRef.current = res.entries as LogcatEntry[]; refilter();
+        allEntriesRef.current = res.entries as LogcatEntry[]; setRowCount(res.entries.length);
         setTotalAvailable(res.totalMatches);
         setMethod(res.method);
         setTruncated(res.totalMatches > MAX_ENTRIES);
@@ -306,10 +306,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // level/pid/buffer filter immediately via useMemo
 
   // Refilter: runs filter logic, writes to filteredRef, updates rowCount state
-  const refilter = useCallback(() => {
-    const allEntries = allEntriesRef.current;
+  // Synchronous filter — runs during render, writes to ref, no useEffect needed
+  // useMemo ensures it only re-runs when deps change (not on every render)
+  const filteredEntries = useMemo(() => {
+    const all = allEntriesRef.current;
     if (source === 'logcat') {
-      const entries = allEntries as LogcatEntry[];
+      const entries = all as LogcatEntry[];
       const levelMap: Record<string, number> = { V: 0, D: 1, I: 2, W: 3, E: 4, F: 5 };
       const minLevelIdx = level ? (levelMap[level] ?? -1) : -1;
       const pidNum = pid ? Number(pid) : NaN;
@@ -320,24 +322,21 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         ? new Set(excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))
         : null;
       const hasAnyFilter = minLevelIdx >= 0 || !isNaN(pidNum) || !!buffer || includeSet || excludeSet;
-
-      if (!hasAnyFilter) {
-        filteredRef.current = entries;
-      } else {
-        const result: LogcatEntry[] = [];
-        for (let i = 0; i < entries.length; i++) {
-          const e = entries[i];
-          if (minLevelIdx >= 0 && (levelMap[e.level] ?? 0) < minLevelIdx) continue;
-          if (!isNaN(pidNum) && e.pid !== pidNum) continue;
-          if (buffer && e.buffer !== buffer) continue;
-          if (includeSet) { const t = (e.tag ?? '').toLowerCase(); if (!includeSet.has(t)) continue; }
-          if (excludeSet) { const t = (e.tag ?? '').toLowerCase(); if (excludeSet.has(t)) continue; }
-          result.push(e);
-        }
-        filteredRef.current = result;
+      if (!hasAnyFilter) { filteredRef.current = entries; return entries; }
+      const result: LogcatEntry[] = [];
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        if (minLevelIdx >= 0 && (levelMap[e.level] ?? 0) < minLevelIdx) continue;
+        if (!isNaN(pidNum) && e.pid !== pidNum) continue;
+        if (buffer && e.buffer !== buffer) continue;
+        if (includeSet) { const t = (e.tag ?? '').toLowerCase(); if (!includeSet.has(t)) continue; }
+        if (excludeSet) { const t = (e.tag ?? '').toLowerCase(); if (excludeSet.has(t)) continue; }
+        result.push(e);
       }
+      filteredRef.current = result;
+      return result;
     } else {
-      let kernel = allEntries as KernelEntry[];
+      let kernel = all as KernelEntry[];
       if (level) {
         const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
         kernel = kernel.filter(e => {
@@ -346,15 +345,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         });
       }
       filteredRef.current = kernel;
+      return kernel;
     }
-    setRowCount(filteredRef.current.length);
-  }, [source, level, pid, buffer, tag, excludeTags]);
-
-  // Trigger refilter when filter deps change
-  useEffect(() => { refilter(); }, [refilter]);
-
-  // Convenience alias
-  const filteredEntries = filteredRef.current;
+  }, [rowCount, source, level, pid, buffer, tag, excludeTags]); // rowCount changes when data loads
 
   // ── Find Next/Prev ──
 
@@ -965,7 +958,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           <div ref={listWrapRef} className="flex-1 min-h-0">
             <List
               listRef={listRef}
-              rowCount={rowCount}
+              rowCount={filteredEntries.length}
               rowHeight={ROW_HEIGHT}
               rowComponent={RowComponent}
               rowProps={rowProps}
