@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from 'react';
 import { List, useListRef } from 'react-window';
 import type { RowComponentProps } from 'react-window';
 import { searchLogcat, searchKernel } from '../lib/api';
@@ -42,6 +42,9 @@ interface RowExtraProps {
   currentMatchIndex: number;
   matchIndices: Set<number>;
   focusIdx: number;
+  expandedIdx: number;
+  onExpandToggle: (idx: number) => void;
+  highlightPattern: RegExp | null;
 }
 
 const MAX_ENTRIES = 50_000;
@@ -94,19 +97,41 @@ function kernelLevelLabel(level: string): string {
   return labels[num] ?? level;
 }
 
+// ── Inline text highlight helper ──
+
+function HighlightText({ text, pattern }: { text: string; pattern: RegExp | null }) {
+  if (!pattern) return <>{text}</>;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+  let safety = 0;
+  while ((match = re.exec(text)) !== null && safety++ < 200) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push(<mark key={match.index} className="bg-accent/40 text-inherit rounded-sm px-[1px]">{match[0]}</mark>);
+    lastIndex = re.lastIndex;
+    if (match[0].length === 0) re.lastIndex++;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
+}
+
 // ── Row Component (shared for logcat + kernel) ──
 
-function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx }: RowComponentProps<RowExtraProps>) {
+function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, expandedIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
   const isCurrentMatch = index === currentMatchIndex;
   const isMatch = matchIndices.has(index);
   const isFocus = index === focusIdx;
+  const isExpanded = index === expandedIdx;
 
   if (source === 'logcat') {
     const entry = (entries as LogcatEntry[])[index];
     if (!entry) return null;
 
-    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 hover:bg-gray-800/30 ${levelBg(entry.level)}`;
-    if (isCurrentMatch) {
+    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${levelBg(entry.level)}`;
+    if (isExpanded) {
+      rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
+    } else if (isCurrentMatch) {
       rowClass += ' bg-accent/20';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
@@ -115,28 +140,32 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
     }
 
     return (
-      <div style={style} className={rowClass}>
-        <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-          {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
-          {entry.timestamp}
-        </span>
-        <span className="text-gray-600 px-1 whitespace-nowrap w-[75px] shrink-0">
-          {entry.pid ?? '?'}/{entry.tid ?? '?'}
-        </span>
-        <span className={`px-1 whitespace-nowrap w-[130px] shrink-0 font-semibold truncate ${levelColor(entry.level)}`}>
-          {entry.level}/{entry.tag}
-        </span>
-        <span className={`px-2 flex-1 truncate ${levelColor(entry.level)}`}>
-          {entry.message}
-        </span>
+      <div style={style}>
+        <div className={rowClass} onClick={() => onExpandToggle(index)}>
+          <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
+            {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
+            {entry.timestamp}
+          </span>
+          <span className="text-gray-600 px-1 whitespace-nowrap w-[75px] shrink-0">
+            {entry.pid ?? '?'}/{entry.tid ?? '?'}
+          </span>
+          <span className={`px-1 whitespace-nowrap w-[130px] shrink-0 font-semibold truncate ${levelColor(entry.level)}`}>
+            {entry.level}/{entry.tag}
+          </span>
+          <span className={`px-2 flex-1 truncate ${levelColor(entry.level)}`}>
+{entry.message}
+          </span>
+        </div>
       </div>
     );
   } else {
     const entry = (entries as KernelEntry[])[index];
     if (!entry) return null;
 
-    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
-    if (isCurrentMatch) {
+    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
+    if (isExpanded) {
+      rowClass += ' bg-accent/15 border-l-[3px] border-l-accent';
+    } else if (isCurrentMatch) {
       rowClass += ' bg-accent/20';
     } else if (isFocus) {
       rowClass += ' border-l-[3px] border-l-accent';
@@ -145,17 +174,19 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
     }
 
     return (
-      <div style={style} className={rowClass}>
-        <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-          {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
-          [{entry.timestamp}]
-        </span>
-        <span className={`px-1 whitespace-nowrap w-[70px] shrink-0 font-semibold ${kernelLevelColor(entry.level)}`}>
-          {kernelLevelLabel(entry.level)}
-        </span>
-        <span className={`px-2 flex-1 truncate ${kernelLevelColor(entry.level)}`}>
-          {entry.message}
-        </span>
+      <div style={style}>
+        <div className={rowClass} onClick={() => onExpandToggle(index)}>
+          <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
+            {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
+            [{entry.timestamp}]
+          </span>
+          <span className={`px-1 whitespace-nowrap w-[70px] shrink-0 font-semibold ${kernelLevelColor(entry.level)}`}>
+            {kernelLevelLabel(entry.level)}
+          </span>
+          <span className={`px-2 flex-1 truncate ${kernelLevelColor(entry.level)}`}>
+{entry.message}
+          </span>
+        </div>
       </div>
     );
   }
@@ -164,6 +195,8 @@ function RowComponent({ index, style, entries, source, currentMatchIndex, matchI
 export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource, initialFocusTime }: Props) {
   const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
+  const [useRegex, setUseRegex] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState(-1);
   // Logcat-only filters
   const [tag, setTag] = useState(initialTag ?? '');
   const [pid, setPid] = useState('');
@@ -280,20 +313,30 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Find Next/Prev ──
 
+  // Build search pattern (regex or plain includes)
+  const searchPattern = useMemo((): RegExp | null => {
+    const kw = q.trim();
+    if (!kw) return null;
+    if (useRegex) {
+      try { return new RegExp(kw, 'gi'); } catch { return null; }
+    }
+    return new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  }, [q, useRegex]);
+
   const matchIndices = useMemo(() => {
-    const kw = q.trim().toLowerCase();
-    if (!kw) return new Set<number>();
+    if (!searchPattern) return new Set<number>();
     const indices = new Set<number>();
     for (let i = 0; i < filteredEntries.length; i++) {
       const e = filteredEntries[i] as any;
-      const msg = (e.message ?? '').toLowerCase();
-      const tagStr = (e.tag ?? '').toLowerCase();
-      if (msg.includes(kw) || tagStr.includes(kw)) {
-        indices.add(i);
-      }
+      const msg = e.message ?? '';
+      const tagStr = e.tag ?? '';
+      searchPattern.lastIndex = 0;
+      if (searchPattern.test(msg)) { indices.add(i); continue; }
+      searchPattern.lastIndex = 0;
+      if (searchPattern.test(tagStr)) { indices.add(i); }
     }
     return indices;
-  }, [filteredEntries, q]);
+  }, [filteredEntries, searchPattern]);
 
   const matchList = useMemo(() => Array.from(matchIndices).sort((a, b) => a - b), [matchIndices]);
   const currentMatchIndex = matchList.length > 0 ? (matchList[currentMatchPos] ?? -1) : -1;
@@ -366,7 +409,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setContainerHeight(el.clientHeight);
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
-        setContainerHeight(entry.contentRect.height);
+        // Only update when no detail panel open — avoids re-render loop
+        if (expandedIdxRef.current === -1) {
+          setContainerHeight(entry.contentRect.height);
+        }
       }
     });
     ro.observe(el);
@@ -450,13 +496,26 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // ── Row props (passed to RowComponent via react-window rowProps) ──
 
+
+  const expandedIdxRef = useRef(expandedIdx);
+  expandedIdxRef.current = expandedIdx;
+  // Stable callback — uses startTransition for low-priority update
+  const handleExpandToggleStable = useCallback((idx: number) => {
+    startTransition(() => {
+      setExpandedIdx(prev => prev === idx ? -1 : idx);
+    });
+  }, []);
+
   const rowProps = useMemo<RowExtraProps>(() => ({
     entries: filteredEntries,
     source,
     currentMatchIndex,
     matchIndices,
     focusIdx: focusIndex,
-  }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex]);
+    expandedIdx: -1,
+    onExpandToggle: handleExpandToggleStable,
+    highlightPattern: null, // inline highlight only in detail panel — too expensive for 50K rows
+  }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex, handleExpandToggleStable]);
 
   // Effective list height: subtract column header height (~20px)
   const listHeight = Math.max(containerHeight - 20, 200);
@@ -508,10 +567,19 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               className="w-full bg-[#161b22] border border-gray-700/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
             />
             {q.trim() && (
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+              <span className="absolute right-12 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
                 {matchList.length > 0 ? `${currentMatchPos + 1} / ${matchList.length}` : '0 / 0'}
               </span>
             )}
+            <button
+              onClick={() => setUseRegex(!useRegex)}
+              className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors ${
+                useRegex ? 'bg-accent/30 text-accent font-bold' : 'text-gray-500 hover:text-gray-300'
+              }`}
+              title={useRegex ? 'Regex enabled' : 'Enable regex'}
+            >
+              .*
+            </button>
           </div>
           <button
             onClick={goToPrevMatch}
@@ -753,8 +821,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </div>
           )}
 
-          {/* Virtual scroll list — always present, rowCount=0 when no data */}
-          <div className="flex-1 min-h-0">
+          {/* Virtual scroll list */}
+          <div className={`min-h-0 ${expandedIdx >= 0 ? 'flex-[3]' : 'flex-1'}`}>
             <List
               listRef={listRef}
               rowCount={filteredEntries.length}
@@ -763,9 +831,47 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               rowProps={rowProps}
               overscanCount={20}
               className="px-4"
-              style={{ height: listHeight }}
+              style={{ height: expandedIdx >= 0 ? '100%' : listHeight }}
             />
           </div>
+
+          {/* Expanded message detail panel */}
+          {expandedIdx >= 0 && expandedIdx < filteredEntries.length && (() => {
+            const entry = filteredEntries[expandedIdx] as any;
+            if (!entry) return null;
+            return (
+              <div className="flex-[2] min-h-[120px] border-t-2 border-accent/40 bg-[#0a0e17] flex flex-col">
+                <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60 shrink-0">
+                  <span className="text-[10px] text-accent font-semibold uppercase tracking-wider">Detail</span>
+                  <span className="text-[10px] text-gray-500 font-mono">{entry.timestamp}</span>
+                  {entry.pid != null && <span className="text-[10px] text-gray-500 font-mono">PID {entry.pid}/{entry.tid}</span>}
+                  {entry.tag ? (
+                    <span className={`text-[10px] font-mono font-semibold ${levelColor(entry.level)}`}>{entry.level}/{entry.tag}</span>
+                  ) : (
+                    <span className={`text-[10px] font-mono font-semibold ${kernelLevelColor(entry.level)}`}>{kernelLevelLabel(entry.level)}</span>
+                  )}
+                  {entry.buffer && <span className="text-[10px] text-gray-600 font-mono">buffer:{entry.buffer}</span>}
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(entry.message)}
+                      className="text-accent hover:text-accent-light text-[10px] border border-accent/30 px-2.5 py-1 rounded hover:bg-accent/10 transition-colors"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => setExpandedIdx(-1)}
+                      className="text-gray-500 hover:text-gray-300 text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+                <pre className="flex-1 overflow-y-auto px-4 py-3 text-[11px] font-mono whitespace-pre-wrap break-all leading-relaxed text-gray-300">
+                  <HighlightText text={entry.message} pattern={searchPattern} />
+                </pre>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
