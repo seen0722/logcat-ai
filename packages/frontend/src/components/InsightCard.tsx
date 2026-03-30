@@ -310,13 +310,14 @@ function LogSnippet({ content }: { content: string }) {
   );
 }
 
+// Colors match SearchModal's levelColor/levelBg for consistency
 const LEVEL_STYLE: Record<string, { text: string; bg: string }> = {
-  F: { text: 'text-red-300 font-bold',   bg: 'bg-red-950/40' },
-  E: { text: 'text-red-400',             bg: 'bg-red-950/25' },
-  W: { text: 'text-yellow-400',          bg: '' },
-  I: { text: 'text-blue-400',            bg: '' },
-  D: { text: 'text-gray-500',            bg: '' },
-  V: { text: 'text-gray-600',            bg: '' },
+  F: { text: 'text-red-400',             bg: 'bg-red-950/30' },
+  E: { text: 'text-red-400',             bg: 'bg-red-950/30' },
+  W: { text: 'text-yellow-400',          bg: 'bg-yellow-950/20' },
+  I: { text: 'text-green-400',           bg: '' },
+  D: { text: 'text-blue-400',            bg: '' },
+  V: { text: 'text-gray-400',            bg: '' },
 };
 
 function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
@@ -325,12 +326,10 @@ function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
   const style = LEVEL_STYLE[level] ?? LEVEL_STYLE.D;
   return (
     <tr className={`${style.bg} hover:bg-white/[0.03] transition-colors`}>
-      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
       <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">{ts}</td>
-      <td className={`py-[2px] px-1 ${style.text} w-4 text-center font-semibold`}>{level}</td>
       <td className="py-[2px] px-1 text-gray-500 whitespace-nowrap">{pid}/{tid}</td>
-      <td className="py-[2px] px-1.5 text-accent font-medium whitespace-nowrap max-w-[140px] truncate" title={tag}>{tag}</td>
-      <td className="py-[2px] px-1.5 text-gray-300 whitespace-pre-wrap break-all">{msg}</td>
+      <td className={`py-[2px] px-1 ${style.text} font-semibold whitespace-nowrap`}>{level}/{tag}</td>
+      <td className={`py-[2px] px-1.5 ${style.text} whitespace-pre-wrap break-all`}>{msg}</td>
     </tr>
   );
 }
@@ -339,9 +338,8 @@ function KernelRow({ n, ts, msg }: { n: number; ts: string; msg: string }) {
   const isErr = /error|fail|panic|oops|bug/i.test(msg);
   return (
     <tr className={`${isErr ? 'bg-red-950/25' : ''} hover:bg-white/[0.03] transition-colors`}>
-      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
       <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">[{ts}]</td>
-      <td colSpan={4} className={`py-[2px] px-1.5 ${isErr ? 'text-red-400' : 'text-gray-300'} whitespace-pre-wrap break-all`}>{msg}</td>
+      <td colSpan={3} className={`py-[2px] px-1.5 ${isErr ? 'text-red-400' : 'text-gray-300'} whitespace-pre-wrap break-all`}>{msg}</td>
     </tr>
   );
 }
@@ -349,8 +347,7 @@ function KernelRow({ n, ts, msg }: { n: number; ts: string; msg: string }) {
 function PlainRow({ n, text }: { n: number; text: string }) {
   return (
     <tr className="hover:bg-white/[0.03] transition-colors">
-      <td className="py-[2px] px-2 text-gray-700 text-right select-none w-6 border-r border-gray-800/60">{n}</td>
-      <td colSpan={5} className="py-[2px] px-1.5 text-gray-400 whitespace-pre-wrap break-all">{text}</td>
+      <td colSpan={4} className="py-[2px] px-1.5 text-gray-400 whitespace-pre-wrap break-all">{text}</td>
     </tr>
   );
 }
