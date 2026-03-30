@@ -70,6 +70,17 @@ export function initDatabase(): void {
     );
   `);
 
+  // ── Schema migrations for existing databases ──
+  // ALTER TABLE is idempotent via try/catch (SQLite has no IF NOT EXISTS for columns)
+  const migrations = [
+    'ALTER TABLE analyses ADD COLUMN has_deep INTEGER DEFAULT 0',
+    'ALTER TABLE analyses ADD COLUMN notes TEXT',
+    'ALTER TABLE analyses ADD COLUMN tags TEXT',
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* column already exists */ }
+  }
+
   console.log(`[logcat-ai] Database initialized at ${dbPath}`);
 }
 
