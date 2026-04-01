@@ -281,6 +281,8 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
 const LOGCAT_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(\S+?)\s*:\s*(.*)$/;
 // Kernel dmesg: "[12345.678] message" or "<6>[12345.678] message"
 const KERNEL_RE = /^(?:<\d+>)?\[\s*([\d.]+)\]\s+(.*)$/;
+// Kernel with wall-clock time: "03-26 12:43:32.736  <6> message" (converted from boot-relative)
+const KERNEL_WALL_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(<\d+>)\s+(.*)$/;
 
 function LogSnippet({ content }: { content: string }) {
   const lines = content.split('\n').filter(Boolean);
@@ -296,10 +298,15 @@ function LogSnippet({ content }: { content: string }) {
                 const [, ts, , pid, tid, level, tag, msg] = logcat;
                 return <LogcatRow key={i} n={i+1} ts={ts} pid={pid} tid={tid} level={level} tag={tag} msg={msg} />;
               }
+              const kernelWall = line.match(KERNEL_WALL_RE);
+              if (kernelWall) {
+                const [, ts, lvl, msg] = kernelWall;
+                return <KernelRow key={i} n={i+1} ts={ts} level={lvl} msg={msg} />;
+              }
               const kernel = line.match(KERNEL_RE);
               if (kernel) {
                 const [, ts, msg] = kernel;
-                return <KernelRow key={i} n={i+1} ts={ts} msg={msg} />;
+                return <KernelRow key={i} n={i+1} ts={`[${ts}]`} msg={msg} />;
               }
               return <PlainRow key={i} n={i+1} text={line} />;
             })}
@@ -334,12 +341,13 @@ function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
   );
 }
 
-function KernelRow({ n, ts, msg }: { n: number; ts: string; msg: string }) {
-  const isErr = /error|fail|panic|oops|bug/i.test(msg);
+function KernelRow({ n, ts, level, msg }: { n: number; ts: string; level?: string; msg: string }) {
+  const isErr = /error|fail|panic|oops|bug/i.test(msg) || level === '<3>' || level === '<0>';
   return (
     <tr className={`${isErr ? 'bg-red-950/25' : ''} hover:bg-white/[0.03] transition-colors`}>
-      <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">[{ts}]</td>
-      <td colSpan={3} className={`py-[2px] px-1.5 ${isErr ? 'text-red-400' : 'text-gray-300'} whitespace-pre-wrap break-all`}>{msg}</td>
+      <td className="py-[2px] px-1.5 text-gray-600 whitespace-nowrap">{ts}</td>
+      <td className={`py-[2px] px-1 ${isErr ? 'text-red-400' : 'text-yellow-400'} whitespace-nowrap font-semibold`}>{level ?? ''}</td>
+      <td colSpan={2} className={`py-[2px] px-1.5 ${isErr ? 'text-red-400' : 'text-gray-300'} whitespace-pre-wrap break-all`}>{msg}</td>
     </tr>
   );
 }

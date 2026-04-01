@@ -672,7 +672,16 @@ function kernelEventToInsight(event: KernelEvent, bootEpochMs?: number): Insight
     category,
     title: event.summary,
     description: describeKernelEvent(event),
-    relatedLogSnippet: event.entries.map((e) => e.raw).join('\n'),
+    relatedLogSnippet: event.entries.map((e) => {
+      if (bootEpochMs == null) return e.raw;
+      // Replace boot-relative timestamp with wall-clock time for display consistency
+      // e.g. "<6>[3772.736] msg" → "03-26 12:43:32.736  <6> msg"
+      return e.raw.replace(/^(?:<\d+>)?\[\s*([\d.]+)\]/, (_match, secStr) => {
+        const wallMs = bootEpochMs + parseFloat(secStr) * 1000;
+        const wallTs = formatEpochToDisplay(wallMs);
+        return `${wallTs}  ${e.level}`;
+      });
+    }).join('\n'),
     timestamp,
     source: 'kernel',
   };
