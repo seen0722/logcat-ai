@@ -132,6 +132,8 @@ router.get('/:id', async (req: Request, res: Response) => {
         // Free the large content string after parsing to reduce memory pressure
         (section as { content: string }).content = '';
       }
+      // Sort by timestamp so entries from all buffers are interleaved chronologically
+      allEntries.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
       const logcatResult = {
         entries: allEntries,
         anomalies: detectAnomalies(allEntries),

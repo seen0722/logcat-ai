@@ -275,6 +275,9 @@ async function analyzeFile(filePath: string): Promise<AnalysisResult> {
     parsedLines += result.parsedLines;
     (section as { content: string }).content = '';
   }
+  // Sort by timestamp so entries from all buffers (main, system, radio, etc.)
+  // are interleaved chronologically — prevents truncation from hiding entire buffers
+  allEntries.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
   const logcatResult = {
     entries: allEntries,
     anomalies: detectAnomalies(allEntries),
