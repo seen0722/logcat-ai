@@ -390,12 +390,13 @@ interface RilErrorRule {
   errorType: RilError['errorType'];
   pattern: RegExp;
   tags: Set<string>;
+  anyLevel?: boolean; // Skip W/E/F level filter — for critical events logged at I level
 }
 
 const RIL_ERROR_RULES: RilErrorRule[] = [
-  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|baseband.*reset/i, tags: new Set(['RILJ']) },
-  { errorType: 'radio_crash', pattern: /Radio.*crash|RILD.*died/i, tags: new Set(['RIL', 'RILJ']) },
-  { errorType: 'ril_restart', pattern: /RIL.*restart|rild.*start/i, tags: new Set(['RIL']) },
+  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|baseband.*reset/i, tags: new Set(['RILJ']), anyLevel: true },
+  { errorType: 'radio_crash', pattern: /Radio.*crash|RILD.*died/i, tags: new Set(['RIL', 'RILJ']), anyLevel: true },
+  { errorType: 'ril_restart', pattern: /RIL.*restart|rild.*start/i, tags: new Set(['RIL']), anyLevel: true },
   { errorType: 'modem_err', pattern: /E_MODEM_ERR|CommandException:\s*MODEM_ERR/, tags: new Set(['RIL', 'RILJ']) },
   { errorType: 'timeout', pattern: /RIL_REQUEST_TIMED_OUT|TIMEOUT/, tags: new Set(['RIL', 'RILJ']) },
   { errorType: 'request_not_supported', pattern: /E_REQUEST_NOT_SUPPORTED|CommandException:\s*REQUEST_NOT_SUPPORTED/, tags: new Set(['RIL', 'RILJ', 'RilRequest']) },
@@ -408,12 +409,13 @@ function detectRilErrors(entries: LogEntry[]): RilError[] {
   const errors: RilError[] = [];
 
   for (const entry of entries) {
-    // Only detect errors from Warning/Error/Fatal level logs
-    if (!RIL_ERROR_LEVELS.has(entry.level)) continue;
     const trimmedTag = entry.tag.trim();
     if (!RIL_TAGS.has(trimmedTag)) continue;
+    const isHighLevel = RIL_ERROR_LEVELS.has(entry.level);
 
     for (const rule of RIL_ERROR_RULES) {
+      // Skip D/I level logs unless rule explicitly allows any level
+      if (!isHighLevel && !rule.anyLevel) continue;
       if (!rule.tags.has(trimmedTag)) continue;
       if (rule.pattern.test(entry.message)) {
         errors.push({
