@@ -393,7 +393,7 @@ interface RilErrorRule {
 }
 
 const RIL_ERROR_RULES: RilErrorRule[] = [
-  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|modem.*restart|baseband.*reset/i, tags: new Set(['RILJ']) },
+  { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|baseband.*reset/i, tags: new Set(['RILJ']) },
   { errorType: 'radio_crash', pattern: /Radio.*crash|RILD.*died/i, tags: new Set(['RIL', 'RILJ']) },
   { errorType: 'ril_restart', pattern: /RIL.*restart|rild.*start/i, tags: new Set(['RIL']) },
   { errorType: 'modem_err', pattern: /E_MODEM_ERR|CommandException:\s*MODEM_ERR/, tags: new Set(['RIL', 'RILJ']) },
@@ -402,10 +402,14 @@ const RIL_ERROR_RULES: RilErrorRule[] = [
   { errorType: 'radio_not_available', pattern: /RADIO_NOT_AVAILABLE/, tags: new Set(['RILJ', 'RilRequest']) },
 ];
 
+const RIL_ERROR_LEVELS = new Set(['W', 'E', 'F']);
+
 function detectRilErrors(entries: LogEntry[]): RilError[] {
   const errors: RilError[] = [];
 
   for (const entry of entries) {
+    // Only detect errors from Warning/Error/Fatal level logs
+    if (!RIL_ERROR_LEVELS.has(entry.level)) continue;
     const trimmedTag = entry.tag.trim();
     if (!RIL_TAGS.has(trimmedTag)) continue;
 
