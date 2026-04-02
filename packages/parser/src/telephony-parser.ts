@@ -397,7 +397,7 @@ const RIL_ERROR_RULES: RilErrorRule[] = [
   { errorType: 'modem_restart', pattern: /UNSOL_MODEM_RESTART|baseband.*reset/i, tags: new Set(['RILJ']), anyLevel: true },
   { errorType: 'radio_crash', pattern: /Radio.*crash|RILD.*died/i, tags: new Set(['RIL', 'RILJ']), anyLevel: true },
   { errorType: 'ril_restart', pattern: /RIL.*restart|rild.*start/i, tags: new Set(['RIL']), anyLevel: true },
-  { errorType: 'modem_err', pattern: /E_MODEM_ERR|CommandException:\s*MODEM_ERR/, tags: new Set(['RIL', 'RILJ']) },
+  { errorType: 'modem_err', pattern: /E_MODEM_ERR|CommandException:\s*MODEM_ERR/, tags: new Set(['RIL', 'RILJ', 'RilRequest']), anyLevel: true },
   { errorType: 'timeout', pattern: /RIL_REQUEST_TIMED_OUT|TIMEOUT/, tags: new Set(['RIL', 'RILJ']) },
   { errorType: 'request_not_supported', pattern: /E_REQUEST_NOT_SUPPORTED|CommandException:\s*REQUEST_NOT_SUPPORTED/, tags: new Set(['RIL', 'RILJ', 'RilRequest']) },
   { errorType: 'radio_not_available', pattern: /RADIO_NOT_AVAILABLE/, tags: new Set(['RILJ', 'RilRequest']) },
