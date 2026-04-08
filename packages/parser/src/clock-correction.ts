@@ -2,13 +2,15 @@ import type { LogEntry, ClockCorrectionResult, ClockJump } from './types.js';
 
 const JUMP_THRESHOLD_MINUTES = 60;
 const MIN_ENTRIES_BEFORE_JUMP = 10;
+// After a candidate jump, require this many of the next N entries to stay
+// in the new time range (not bounce back). Ratio-based to handle interleaving.
+const CONFIRM_WINDOW = 30;
+const CONFIRM_RATIO = 0.8; // 80% of entries in window must stay in new range
 
-// Approximate days per month for minute calculation (no need for exact values)
 const MONTH_DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /**
  * Convert "MM-DD HH:mm:ss" to minutes since Jan 1 00:00.
- * Uses direct char slicing (no regex) for performance on 400K+ entries.
  */
 function timestampToMinutes(ts: string): number {
   const month = (ts.charCodeAt(0) - 48) * 10 + (ts.charCodeAt(1) - 48);
@@ -16,7 +18,6 @@ function timestampToMinutes(ts: string): number {
   const hour = (ts.charCodeAt(6) - 48) * 10 + (ts.charCodeAt(7) - 48);
   const min = (ts.charCodeAt(9) - 48) * 10 + (ts.charCodeAt(10) - 48);
 
-  // Sum days from previous months
   let totalDays = 0;
   for (let m = 1; m < month; m++) {
     totalDays += MONTH_DAYS[m];
@@ -26,53 +27,74 @@ function timestampToMinutes(ts: string): number {
   return totalDays * 1440 + hour * 60 + min;
 }
 
+function computeDelta(prevMin: number, currMin: number): number {
+  let delta = currMin - prevMin;
+  if (delta < -500_000) delta += 525_960;
+  if (delta < -40_000 && delta > -500_000) delta += 43_200;
+  return delta;
+}
+
 /**
  * Detect clock correction jumps in sorted logcat entries.
  *
- * Android devices may boot with an incorrect system clock (using build date
- * or epoch time) until NTP/NITZ corrects it. This creates timestamp jumps
- * in logcat that confuse users.
- *
- * Detection: scan consecutive entries for time gaps > 1 hour.
- * Skip the first few entries to avoid false positives from cross-buffer
- * interleaving after the multi-buffer sort.
+ * Strategy: find jumps > 1 hour, then confirm by checking that 80%+ of
+ * the next 30 entries stay in the new time range. This filters out
+ * cross-buffer interleaving artifacts where entries from different buffers
+ * alternate between two close time ranges.
  */
 export function detectClockCorrections(entries: LogEntry[]): ClockCorrectionResult {
   const jumps: ClockJump[] = [];
 
-  if (entries.length < MIN_ENTRIES_BEFORE_JUMP + 1) {
+  if (entries.length < MIN_ENTRIES_BEFORE_JUMP + CONFIRM_WINDOW) {
     return { jumps: [], lastCorrectionIndex: -1, preCorrectionCount: 0 };
   }
 
+  // Phase 1: Find candidate jumps
+  const candidates: { index: number; delta: number }[] = [];
   let prevMinutes = timestampToMinutes(entries[0].timestamp);
 
   for (let i = 1; i < entries.length; i++) {
     const currMinutes = timestampToMinutes(entries[i].timestamp);
-    let delta = currMinutes - prevMinutes;
-
-    // Adjust for year-boundary wrap (e.g. 12-31 → 01-01)
-    // A backward jump of ~365 days is actually a 1-day forward jump
-    if (delta < -500_000) {
-      // ~347 days backward = likely year wrap, actual forward ~18 days
-      delta += 525_960; // 365.25 days in minutes
-    }
-    // Adjust for normal month-boundary wrap false positives
-    // e.g. 01-31 23:59 → 02-01 00:01 looks like a backward jump
-    // but is actually ~2 minutes forward
-    if (delta < -40_000 && delta > -500_000) {
-      delta += 43_200; // ~30 days in minutes
-    }
+    const delta = computeDelta(prevMinutes, currMinutes);
 
     if (Math.abs(delta) > JUMP_THRESHOLD_MINUTES && i >= MIN_ENTRIES_BEFORE_JUMP) {
-      jumps.push({
-        entryIndex: i,
-        fromTimestamp: entries[i - 1].timestamp,
-        toTimestamp: entries[i].timestamp,
-        jumpMinutes: delta,
-      });
+      candidates.push({ index: i, delta });
     }
 
     prevMinutes = currMinutes;
+  }
+
+  // Phase 2: Confirm each candidate
+  for (const candidate of candidates) {
+    const jumpIdx = candidate.index;
+    const preJumpMinutes = timestampToMinutes(entries[jumpIdx - 1].timestamp);
+    const postJumpMinutes = timestampToMinutes(entries[jumpIdx].timestamp);
+
+    // Count how many of the next CONFIRM_WINDOW entries are closer to
+    // post-jump time than pre-jump time
+    const end = Math.min(jumpIdx + 1 + CONFIRM_WINDOW, entries.length);
+    let nearPost = 0;
+    let total = 0;
+    for (let j = jumpIdx + 1; j < end; j++) {
+      const jMin = timestampToMinutes(entries[j].timestamp);
+      const distToPre = Math.abs(computeDelta(preJumpMinutes, jMin));
+      const distToPost = Math.abs(computeDelta(postJumpMinutes, jMin));
+      if (distToPost <= distToPre) nearPost++;
+      total++;
+    }
+
+    if (total > 0 && nearPost / total >= CONFIRM_RATIO) {
+      // Skip if too close to previous confirmed jump
+      const lastJump = jumps[jumps.length - 1];
+      if (lastJump && jumpIdx - lastJump.entryIndex < CONFIRM_WINDOW) continue;
+
+      jumps.push({
+        entryIndex: jumpIdx,
+        fromTimestamp: entries[jumpIdx - 1].timestamp,
+        toTimestamp: entries[jumpIdx].timestamp,
+        jumpMinutes: candidate.delta,
+      });
+    }
   }
 
   const lastCorrectionIndex = jumps.length > 0
