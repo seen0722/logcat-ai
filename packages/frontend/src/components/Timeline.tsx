@@ -42,16 +42,17 @@ const SOURCE_BTN: Record<string, { active: string; label: string; dot: string }>
   kernel: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/50', label: 'Kernel', dot: 'bg-orange-400' },
   anr: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'ANR', dot: 'bg-rose-400' },
   tombstone: { active: 'bg-rose-500/20 text-rose-500 border-rose-500/50', label: 'Tombstone', dot: 'bg-rose-500' },
+  clock: { active: 'bg-purple-500/20 text-purple-400 border-purple-500/50', label: 'Clock', dot: 'bg-purple-400' },
 };
 
 const INACTIVE_BTN = 'bg-transparent text-gray-500 border-gray-700';
 
 const ALL_SEVERITIES: Severity[] = ['critical', 'warning', 'info'];
-const ALL_SOURCES = ['logcat', 'kernel', 'anr', 'tombstone'] as const;
+const ALL_SOURCES = ['logcat', 'kernel', 'anr', 'tombstone', 'clock'] as const;
 
 export default function Timeline({ events, onSearchTime }: Props) {
   const [severityFilter, setSeverityFilter] = useState<Set<Severity>>(new Set(['critical', 'warning']));
-  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(['logcat', 'anr', 'kernel', 'tombstone']));
+  const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set(['logcat', 'anr', 'kernel', 'tombstone', 'clock']));
 
   if (events.length === 0) return null;
 

@@ -31,7 +31,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;
-  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony' | 'clock';
   severity: Severity;
   label: string;
   details?: string;
@@ -474,6 +474,19 @@ export interface DataNetworkOosPeriod {
   networkId?: string;
 }
 
+export interface ClockJump {
+  entryIndex: number;
+  fromTimestamp: string;
+  toTimestamp: string;
+  jumpMinutes: number;
+}
+
+export interface ClockCorrectionResult {
+  jumps: ClockJump[];
+  lastCorrectionIndex: number;
+  preCorrectionCount: number;
+}
+
 export interface AnalysisResult {
   metadata: BugreportMetadata;
   insights: InsightCard[];
@@ -489,6 +502,15 @@ export interface AnalysisResult {
   deepAnalysisOverview?: DeepAnalysisOverview;
   powerStatus?: PowerParseResult;
   telephonyStatus?: TelephonyParseResult;
+  clockCorrection?: ClockCorrectionResult;
+  bufferTimeRanges?: BufferTimeRange[];
+}
+
+export interface BufferTimeRange {
+  buffer: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  entryCount: number;
 }
 
 // SSE progress from backend

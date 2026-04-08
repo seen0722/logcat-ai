@@ -220,7 +220,7 @@ const ANOMALY_RULES: AnomalyRule[] = [
     severity: 'critical',
     match: (e) =>
       (e.tag === 'ActivityManager' && e.message.includes('Out of memory')) ||
-      (e.tag === 'lowmemorykiller' && e.message.includes('kill')) ||
+      (e.tag === 'lowmemorykiller' && e.message.startsWith('Kill ')) ||
       (e.tag === 'ActivityManager' && /Low on memory/.test(e.message)),
     summarize: (e) => {
       const m = e.message.match(/kill.*?(\S+).*?adj\s*(\d+)/);

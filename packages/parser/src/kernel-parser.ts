@@ -207,9 +207,12 @@ const KERNEL_RULES: KernelRule[] = [
     type: 'lowmemory_killer',
     severity: 'warning',
     match: (e) =>
-      /lowmemorykiller/i.test(e.message) || /lmkd/i.test(e.message),
+      // Only match actual LMK kill events, not lmkd init/config messages
+      /lowmemorykiller.*Kill\s/i.test(e.message) ||
+      /lmkd.*kill/i.test(e.message) ||
+      /lowmemory_kill/i.test(e.message),
     summarize: (e) => {
-      const m = e.message.match(/kill.*?'(.+?)'/);
+      const m = e.message.match(/[Kk]ill.*?'(.+?)'/);
       return m ? `LMK killed: ${m[1]}` : 'Low memory killer event';
     },
     extractDetails: (e) => ({ message: e.message }),

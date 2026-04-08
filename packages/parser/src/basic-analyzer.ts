@@ -22,9 +22,11 @@ import {
   PowerParseResult,
   TelephonyParseResult,
   OomAnalysisResult,
+  ClockCorrectionResult,
 } from './types.js';
 import { generateSELinuxAllowRule } from './kernel-parser.js';
 import { analyzeOom } from './oom-analyzer.js';
+import { detectClockCorrections } from './clock-correction.js';
 
 // ============================================================
 // Main Entry Point
@@ -77,6 +79,9 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const oomResult = analyzeOom(logcatResult.entries, logcatResult.anomalies, kernelResult.events, kernelResult.entries, memInfo, userDescription);
   const oomInsights = oomResult.detected ? [generateOomInsight(oomResult)] : [];
 
+  const clockCorrection = detectClockCorrections(logcatResult.entries);
+  const clockInsights = generateClockCorrectionInsights(clockCorrection);
+
   // Deduplicate: remove logcat ANR insights when ANR trace insights exist
   const hasANRTraceInsights = anrInsights.length > 0;
   const filteredLogcat = (() => {
@@ -103,6 +108,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...powerInsights,
     ...telephonyInsights,
     ...oomInsights,
+    ...clockInsights,
   ];
 
   // Merge duplicate insights (same title pattern → single insight with count)
@@ -116,7 +122,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     card.id = `insight-${i + 1}`;
   });
 
-  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs, telephonyStatus);
+  const timeline = buildTimeline(logcatResult, kernelResult, anrAnalyses, tombstoneAnalyses, bootEpochMs, telephonyStatus, clockCorrection);
   const healthScore = calculateHealthScore(logcatResult, kernelResult, anrAnalyses, memInfo, cpuInfo, tombstoneAnalyses, powerStatus, telephonyStatus);
 
   // Link timeline events to their corresponding insights
@@ -139,6 +145,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
     ...(powerStatus ? { powerStatus } : {}),
     ...(telephonyStatus ? { telephonyStatus } : {}),
     ...(oomResult.detected ? { oomResult } : {}),
+    ...(clockCorrection.jumps.length > 0 ? { clockCorrection } : {}),
   };
 }
 
@@ -344,6 +351,29 @@ function describeLogcatAnomaly(anomaly: LogcatAnomaly): string {
 // ============================================================
 // OOM → Insight
 // ============================================================
+
+function generateClockCorrectionInsights(result: ClockCorrectionResult): InsightCard[] {
+  if (result.jumps.length === 0) return [];
+
+  const jumpDescriptions = result.jumps.map((j) => {
+    const dir = j.jumpMinutes > 0 ? 'forward' : 'backward';
+    const hrs = Math.abs(j.jumpMinutes / 60).toFixed(1);
+    return `${j.fromTimestamp} → ${j.toTimestamp} (${dir} ${hrs}h)`;
+  }).join('; ');
+
+  return [{
+    id: '',
+    severity: 'warning',
+    category: 'stability',
+    title: `System clock corrected ${result.jumps.length} time(s) after boot — ${result.preCorrectionCount.toLocaleString()} entries have unreliable timestamps`,
+    description:
+      `The system clock was adjusted ${result.jumps.length} time(s) during boot, likely due to NTP/NITZ synchronization. ` +
+      `The first ${result.preCorrectionCount.toLocaleString()} logcat entries have incorrect timestamps (before clock correction) and may appear to belong to a different date. ` +
+      `Clock jumps: ${jumpDescriptions}.`,
+    source: 'logcat',
+    timestamp: result.jumps[0].toTimestamp,
+  }];
+}
 
 function generateOomInsight(oomResult: OomAnalysisResult): InsightCard {
   const s = oomResult.summary!;
@@ -1500,28 +1530,52 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
     });
   }
 
-  // 10. USB/QMUX transport errors (ENODEV)
+  // 10. USB/QMUX transport errors
   const transportErrors = telephony.transportErrors ?? [];
-  const enodevCount = transportErrors.filter(e => e.type === 'enodev').length;
   if (transportErrors.length > 0) {
+    const enodevCount = transportErrors.filter(e => e.type === 'enodev').length;
+    const deviceGoneCount = transportErrors.filter(e => e.type === 'device_gone').length;
+    const hasHardError = enodevCount > 0 || deviceGoneCount > 0;
     const reasons = (telephony.modemRestartReasons ?? []).join(', ') || 'unknown';
-    insights.push({
-      id: '',
-      severity: 'critical',
-      category: 'telephony',
-      title: `USB transport error detected (ENODEV${enodevCount > 0 ? ` ×${enodevCount}` : ''})`,
-      description: `Transport layer errors detected in radio log: ${transportErrors.length} events. ` +
-        `Modem restart reason: "${reasons}". ` +
-        `ENODEV (errno 19) indicates the USB modem device node became unreadable — ` +
-        `check kernel USB logs for device unbind/re-enumeration and modem firmware crash artifacts.`,
-      timestamp: transportErrors[0].timestamp,
-      source: 'telephony',
-      debugCommands: [
-        'adb shell dmesg | grep -E "usb|cdc-wdm|unbind|enumeration"',
-        'adb shell logcat -b radio -d | grep -E "QMUX|TransportError|ENODEV|device.gone"',
-        ...TELEPHONY_DEBUG_COMMANDS,
-      ],
-    });
+
+    if (hasHardError) {
+      // ENODEV / device_gone = USB modem device node lost — critical
+      insights.push({
+        id: '',
+        severity: 'critical',
+        category: 'telephony',
+        title: `USB transport error detected (ENODEV${enodevCount > 0 ? ` ×${enodevCount}` : ''})`,
+        description: `Transport layer errors detected in radio log: ${transportErrors.length} events. ` +
+          `Modem restart reason: "${reasons}". ` +
+          `ENODEV (errno 19) indicates the USB modem device node became unreadable — ` +
+          `check kernel USB logs for device unbind/re-enumeration and modem firmware crash artifacts.`,
+        timestamp: transportErrors[0].timestamp,
+        source: 'telephony',
+        debugCommands: [
+          'adb shell dmesg | grep -E "usb|cdc-wdm|unbind|enumeration"',
+          'adb shell logcat -b radio -d | grep -E "QMUX|TransportError|ENODEV|device.gone"',
+          ...TELEPHONY_DEBUG_COMMANDS,
+        ],
+      });
+    } else {
+      // transport_read_error only (e.g. TransportErrorCallback during init) — warning
+      insights.push({
+        id: '',
+        severity: 'warning',
+        category: 'telephony',
+        title: `Transport layer error detected (${transportErrors.length} event${transportErrors.length > 1 ? 's' : ''})`,
+        description: `Transport error callbacks detected in radio log (${transportErrors.length} events). ` +
+          `Modem restart reason: "${reasons}". ` +
+          `These may be transient errors during modem initialization. ` +
+          `If modem connectivity is stable, these can be safely ignored.`,
+        timestamp: transportErrors[0].timestamp,
+        source: 'telephony',
+        debugCommands: [
+          'adb shell logcat -b radio -d | grep -E "QMUX|TransportError|ENODEV|device.gone"',
+          ...TELEPHONY_DEBUG_COMMANDS,
+        ],
+      });
+    }
   }
 
   return insights;
@@ -1659,6 +1713,7 @@ export function buildTimeline(
   tombstoneAnalyses?: TombstoneAnalysis[],
   bootEpochMs?: number,
   telephonyStatus?: TelephonyParseResult,
+  clockCorrection?: ClockCorrectionResult,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -1765,6 +1820,21 @@ export function buildTimeline(
           label: 'Call drop',
         });
       }
+    }
+  }
+
+  // Clock correction events
+  if (clockCorrection) {
+    for (const jump of clockCorrection.jumps) {
+      const dir = jump.jumpMinutes > 0 ? 'forward' : 'backward';
+      const hrs = Math.abs(jump.jumpMinutes / 60).toFixed(1);
+      events.push({
+        timestamp: jump.toTimestamp,
+        source: 'clock',
+        severity: 'warning',
+        label: `System clock corrected ${dir} by ${hrs}h`,
+        details: `${jump.fromTimestamp} → ${jump.toTimestamp} (${clockCorrection.preCorrectionCount} entries before this point have unreliable timestamps)`,
+      });
     }
   }
 

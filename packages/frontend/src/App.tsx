@@ -19,6 +19,7 @@ import HistoryPanel from './components/HistoryPanel';
 import ExportMenu from './components/ExportMenu';
 import ComparisonPage from './components/ComparisonPage';
 import BatchUpload from './components/BatchUpload';
+import BufferExtractor from './components/BufferExtractor';
 import BatchResults from './components/BatchResults';
 import SearchModal from './components/SearchModal';
 import SectionNav from './components/SectionNav';
@@ -55,6 +56,7 @@ export default function App() {
   }, [phase]);
 
   const [showBatchUpload, setShowBatchUpload] = useState(false);
+  const [showBufferExtractor, setShowBufferExtractor] = useState(false);
   const [batchAggregation, setBatchAggregation] = useState<BatchAggregation | null>(null);
   const [batchItems, setBatchItems] = useState<BatchFileResult[]>([]);
 
@@ -282,6 +284,13 @@ export default function App() {
           <UploadZone onStart={start} error={error} />
           <div className="text-center mt-5 flex items-center justify-center gap-4">
             <button
+              onClick={() => setShowBufferExtractor(true)}
+              className="text-sm text-accent hover:text-accent-light transition-colors"
+            >
+              Extract Buffers
+            </button>
+            <span className="text-gray-600">|</span>
+            <button
               onClick={() => setShowBatchUpload(true)}
               className="text-sm text-accent hover:text-accent-light transition-colors"
             >
@@ -326,6 +335,7 @@ export default function App() {
                 bootStatus={result.bootStatus}
                 halStatus={result.halStatus}
                 insights={result.insights}
+                bufferTimeRanges={result.bufferTimeRanges}
               />
             </div>
             {result.logTagStats && result.logTagStats.length > 0 && (
@@ -447,6 +457,11 @@ export default function App() {
           onComplete={handleBatchComplete}
           onClose={() => setShowBatchUpload(false)}
         />
+      )}
+
+      {/* Buffer Extractor Modal */}
+      {showBufferExtractor && (
+        <BufferExtractor onClose={() => setShowBufferExtractor(false)} />
       )}
 
       {/* Batch Results Modal */}

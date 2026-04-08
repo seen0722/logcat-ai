@@ -134,6 +134,27 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
       // Sort by timestamp so entries from all buffers are interleaved chronologically
       allEntries.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
+
+      // Compute per-buffer time ranges
+      const bufferStats = new Map<string, { first: string; last: string; count: number }>();
+      for (const entry of allEntries) {
+        const buf = entry.buffer ?? 'main';
+        const stat = bufferStats.get(buf);
+        if (stat) {
+          stat.last = entry.timestamp;
+          stat.count++;
+        } else {
+          bufferStats.set(buf, { first: entry.timestamp, last: entry.timestamp, count: 1 });
+        }
+      }
+      // Also add kernel entries if present
+      const bufferTimeRanges = Array.from(bufferStats.entries()).map(([buffer, stat]) => ({
+        buffer,
+        firstTimestamp: stat.first,
+        lastTimestamp: stat.last,
+        entryCount: stat.count,
+      }));
+
       const logcatResult = {
         entries: allEntries,
         anomalies: detectAnomalies(allEntries),
@@ -277,6 +298,11 @@ router.get('/:id', async (req: Request, res: Response) => {
         telephonyStatus,
         userDescription,
       });
+
+      // Attach buffer time ranges to result
+      if (bufferTimeRanges.length > 0) {
+        analysisResult.bufferTimeRanges = bufferTimeRanges;
+      }
 
       // Index kernel entries AFTER analyzeBasic so we have bootStatus for wall-clock timestamps
       // Prefer kernelUptimeSeconds (survives soft reboot) over uptimeSeconds

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { InsightCard } from '../lib/types';
-import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary } from '../lib/types';
+import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary, BufferTimeRange } from '../lib/types';
 import { IconChevronDown } from './Icons';
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   bootStatus?: BootStatusSummary;
   halStatus?: HALStatusSummary;
   insights?: InsightCard[];
+  bufferTimeRanges?: BufferTimeRange[];
 }
 
 function scoreColor(score: number): string {
@@ -128,7 +129,7 @@ function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
-export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus, insights }: Props) {
+export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo, bootStatus, halStatus, insights, bufferTimeRanges }: Props) {
   const { breakdown } = healthScore;
   const [showHwSwDetails, setShowHwSwDetails] = useState(false);
 
@@ -206,6 +207,19 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               <p className="text-xs text-gray-600 mt-2.5 font-mono truncate" title={metadata.buildFingerprint}>
                 {metadata.buildFingerprint}
               </p>
+
+              {/* Log Buffer Time Ranges */}
+              {bufferTimeRanges && bufferTimeRanges.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                  {bufferTimeRanges.map((r) => (
+                    <span key={r.buffer} className="text-xs text-gray-500 font-mono">
+                      <span className="text-gray-400">{r.buffer}</span>
+                      {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
+                      {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* HW & SW Details toggle */}
               {hwSwDetails.length > 0 && (

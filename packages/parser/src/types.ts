@@ -439,7 +439,7 @@ export interface InsightCard {
 
 export interface TimelineEvent {
   timestamp: string;                // normalized ISO timestamp or relative
-  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony';
+  source: 'logcat' | 'anr' | 'kernel' | 'tombstone' | 'telephony' | 'clock';
   severity: Severity;
   label: string;
   details?: string;
@@ -492,6 +492,15 @@ export interface AnalysisResult {
   powerStatus?: PowerParseResult;
   telephonyStatus?: TelephonyParseResult;
   oomResult?: OomAnalysisResult;
+  clockCorrection?: ClockCorrectionResult;
+  bufferTimeRanges?: BufferTimeRange[];
+}
+
+export interface BufferTimeRange {
+  buffer: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  entryCount: number;
 }
 
 // ============================================================
@@ -554,6 +563,34 @@ export interface LmkKill {
   pid: number;
   adjScore: number | null;
   source: 'logcat' | 'kernel';
+}
+
+// ============================================================
+// Clock Correction
+// ============================================================
+
+export interface ClockJump {
+  /** Index into sorted allEntries where the jump occurs (entry AFTER the jump) */
+  entryIndex: number;
+  /** Timestamp of the entry just before the jump */
+  fromTimestamp: string;
+  /** Timestamp of the entry just after the jump */
+  toTimestamp: string;
+  /** Approximate jump size in minutes (positive = forward, negative = backward) */
+  jumpMinutes: number;
+}
+
+export interface ClockCorrectionResult {
+  /** All detected jumps > 1 hour */
+  jumps: ClockJump[];
+  /**
+   * Index into sorted allEntries of the last jump's post-jump entry.
+   * Entries at indices [0, lastCorrectionIndex) have unreliable timestamps.
+   * -1 if no jumps detected.
+   */
+  lastCorrectionIndex: number;
+  /** Count of entries with unreliable timestamps */
+  preCorrectionCount: number;
 }
 
 // ============================================================
