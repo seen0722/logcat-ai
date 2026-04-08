@@ -76,6 +76,9 @@ export function initDatabase(): void {
     'ALTER TABLE analyses ADD COLUMN has_deep INTEGER DEFAULT 0',
     'ALTER TABLE analyses ADD COLUMN notes TEXT',
     'ALTER TABLE analyses ADD COLUMN tags TEXT',
+    'ALTER TABLE analyses ADD COLUMN build_type TEXT',
+    'ALTER TABLE analyses ADD COLUMN is_debuggable INTEGER',
+    'ALTER TABLE analyses ADD COLUMN is_adb_secure INTEGER',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists */ }

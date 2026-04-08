@@ -13,6 +13,8 @@ const MANUFACTURER_RE = /\[ro\.product\.manufacturer\]:\s*\[(.+?)\]/;
 const BUILD_DATE_RE = /\[ro\.build\.date\]:\s*\[(.+?)\]/;
 const KERNEL_VERSION_RE = /Linux version\s+(\S+)/;
 const BUILD_TYPE_RE = /\[ro\.build\.type\]:\s*\[(.+?)\]/;
+const DEBUGGABLE_RE = /\[ro\.debuggable\]:\s*\[(.+?)\]/;
+const ADB_SECURE_RE = /\[ro\.adb\.secure\]:\s*\[(.+?)\]/;
 const PLATFORM_RE = /\[ro\.board\.platform\]:\s*\[(.+?)\]/;
 const HARDWARE_RE = /\[ro\.hardware\]:\s*\[(.+?)\]/;
 const CPU_ABI_RE = /\[ro\.product\.cpu\.abi\]:\s*\[(.+?)\]/;
@@ -226,6 +228,8 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
   const basebandVersion = matchFirst(propsContent, BASEBAND_RE) ?? undefined;
   const bootloaderVersion = matchFirst(propsContent, BOOTLOADER_RE) ?? undefined;
   const securityPatchLevel = matchFirst(propsContent, SECURITY_PATCH_RE) ?? undefined;
+  const isDebuggable = matchFirst(propsContent, DEBUGGABLE_RE) === '1';
+  const isAdbSecure = matchFirst(propsContent, ADB_SECURE_RE) === '1';
 
   // Kernel version from KERNEL LOG or dmesg section
   const kernelSection = sections.find(
@@ -256,6 +260,8 @@ function extractMetadata(content: string, sections: BugreportSection[]): Bugrepo
     basebandVersion,
     bootloaderVersion,
     securityPatchLevel,
+    isDebuggable,
+    isAdbSecure,
   };
 }
 

@@ -69,6 +69,8 @@ export interface BugreportMetadata {
   basebandVersion?: string;
   bootloaderVersion?: string;
   securityPatchLevel?: string;
+  isDebuggable?: boolean;
+  isAdbSecure?: boolean;
 }
 
 export interface BinderTargetInfo {
@@ -548,6 +550,9 @@ export interface AnalysisSummary {
   deviceModel?: string;
   manufacturer?: string;
   androidVer?: string;
+  buildType?: string;
+  isDebuggable?: boolean;
+  isAdbSecure?: boolean;
   healthOverall?: number;
   insightCount: number;
   criticalCount: number;

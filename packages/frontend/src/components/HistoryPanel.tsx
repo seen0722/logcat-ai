@@ -160,6 +160,20 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                     {item.androidVer && (
                       <span className="text-gray-500">Android {item.androidVer}</span>
                     )}
+                    {item.buildType && item.buildType !== 'unknown' && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        item.buildType !== 'user'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'text-gray-600'
+                      }`}>
+                        {item.buildType}
+                      </span>
+                    )}
+                    {item.isDebuggable && !item.isAdbSecure && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                        root
+                      </span>
+                    )}
                     <span className={`font-semibold ${healthColor(item.healthOverall)}`}>
                       {item.healthOverall != null ? `${item.healthOverall}/100` : '\u2014'}
                     </span>

@@ -177,6 +177,16 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                     {metadata.buildType}
                   </span>
                 )}
+                {metadata.isDebuggable && !metadata.isAdbSecure && (
+                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
+                    adb root
+                  </span>
+                )}
+                {metadata.isDebuggable && metadata.isAdbSecure && (
+                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
+                    debuggable
+                  </span>
+                )}
                 {bootStatus?.bootCompleted != null && (
                   <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
                     bootStatus.bootCompleted

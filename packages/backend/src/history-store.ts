@@ -9,6 +9,9 @@ export interface AnalysisSummary {
   deviceModel?: string;
   manufacturer?: string;
   androidVer?: string;
+  buildType?: string;
+  isDebuggable?: boolean;
+  isAdbSecure?: boolean;
   healthOverall?: number;
   insightCount: number;
   criticalCount: number;
@@ -29,6 +32,9 @@ export const historyStore = {
     const deviceModel = result.metadata?.deviceModel ?? null;
     const manufacturer = result.metadata?.manufacturer ?? null;
     const androidVer = result.metadata?.androidVersion ?? null;
+    const buildType = result.metadata?.buildType ?? null;
+    const isDebuggable = result.metadata?.isDebuggable ? 1 : 0;
+    const isAdbSecure = result.metadata?.isAdbSecure ? 1 : 0;
     const healthOverall = result.healthScore?.overall ?? null;
     const insightCount = result.insights?.length ?? 0;
     const criticalCount = result.insights?.filter((i) => i.severity === 'critical').length ?? 0;
@@ -61,12 +67,14 @@ export const historyStore = {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO analyses
         (id, filename, file_size, device_model, manufacturer, android_ver,
+         build_type, is_debuggable, is_adb_secure,
          health_overall, insight_count, critical_count, anr_count, has_deep, result_json)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(id, filename, fileSize, deviceModel, manufacturer, androidVer,
+      buildType, isDebuggable, isAdbSecure,
       healthOverall, insightCount, criticalCount, anrCount, hasDeep, resultJson);
   },
 
@@ -99,7 +107,8 @@ export const historyStore = {
 
     const rows = db.prepare(`
       SELECT id, filename, file_size, created_at, device_model, manufacturer,
-             android_ver, health_overall, insight_count, critical_count, anr_count,
+             android_ver, build_type, is_debuggable, is_adb_secure,
+             health_overall, insight_count, critical_count, anr_count,
              has_deep, notes, tags
       FROM analyses
       ORDER BY created_at DESC
@@ -112,6 +121,9 @@ export const historyStore = {
       device_model: string | null;
       manufacturer: string | null;
       android_ver: string | null;
+      build_type: string | null;
+      is_debuggable: number | null;
+      is_adb_secure: number | null;
       health_overall: number | null;
       insight_count: number;
       critical_count: number;
@@ -129,6 +141,9 @@ export const historyStore = {
       deviceModel: row.device_model ?? undefined,
       manufacturer: row.manufacturer ?? undefined,
       androidVer: row.android_ver ?? undefined,
+      buildType: row.build_type ?? undefined,
+      isDebuggable: row.is_debuggable === 1,
+      isAdbSecure: row.is_adb_secure === 1,
       healthOverall: row.health_overall ?? undefined,
       insightCount: row.insight_count,
       criticalCount: row.critical_count,

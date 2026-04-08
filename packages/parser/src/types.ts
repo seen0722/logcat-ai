@@ -21,6 +21,8 @@ export interface BugreportMetadata {
   basebandVersion?: string;    // gsm.version.baseband (modem firmware)
   bootloaderVersion?: string;  // ro.bootimage.build.fingerprint (boot image)
   securityPatchLevel?: string; // ro.build.version.security_patch (e.g., "2025-04-05")
+  isDebuggable?: boolean;      // ro.debuggable == "1"
+  isAdbSecure?: boolean;       // ro.adb.secure == "1" (false = adb root available)
 }
 
 // ============================================================
