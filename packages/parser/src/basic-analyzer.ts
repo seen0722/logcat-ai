@@ -436,13 +436,36 @@ function generateOomInsight(oomResult: OomAnalysisResult): InsightCard {
       ? `Out of memory event (${s.lmkCount} LMK kills, ${s.reapedCount} reaped)`
       : 'Out of memory event',
     description: lines.join('\n'),
-    relatedLogSnippet: oomResult.lmkKills.slice(0, 3)
-      .map((k) => `${k.timestamp} [${k.source}] LMK kill: ${k.processName} (pid ${k.pid}, adj=${k.adjScore ?? '??'})`)
-      .join('\n'),
+    relatedLogSnippet: buildOomLogSnippet(oomResult),
     timestamp: s.timestamp,
     source: 'logcat',
     debugCommands: ['adb shell dumpsys meminfo', 'adb shell cat /proc/meminfo', 'adb shell dumpsys activity oom'],
   };
+}
+
+/** Build logcat-format related log snippet for OOM insight */
+function buildOomLogSnippet(oomResult: OomAnalysisResult): string {
+  const lines: string[] = [];
+
+  // LMK kills in logcat format
+  for (const k of oomResult.lmkKills.slice(0, 5)) {
+    const ts = k.timestamp;
+    if (k.source === 'kernel') {
+      lines.push(`${ts}  <4> lowmemorykiller: Kill '${k.processName}' (${k.pid}), adj=${k.adjScore ?? '??'}`);
+    } else {
+      lines.push(`${ts}  lmkd   0     0 I lowmemorykiller: Kill '${k.processName}' (${k.pid}), oom_score_adj ${k.adjScore ?? '??'}`);
+    }
+  }
+
+  // Reaped processes
+  for (const r of oomResult.reapedProcesses.slice(0, 5)) {
+    lines.push(`${r.timestamp}  root    73    73 I oom_reaper: reaped process ${r.pid} (${r.name}), now anon-rss:${r.anonRssKb}kB, file-rss:${r.fileRssKb}kB`);
+  }
+
+  // Sort by timestamp for chronological display
+  lines.sort((a, b) => a.slice(0, 18).localeCompare(b.slice(0, 18)));
+
+  return lines.join('\n');
 }
 
 // ============================================================
@@ -1458,6 +1481,7 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
   // 5. Frequent modem errors
   const modemErrCount = telephony.rilErrors.filter(e => e.errorType === 'modem_err').length;
   if (modemErrCount >= 5) {
+    const modemErrs = telephony.rilErrors.filter(e => e.errorType === 'modem_err');
     insights.push({
       id: '',
       severity: 'warning',
@@ -1465,6 +1489,10 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
       title: `Frequent RIL modem errors (${modemErrCount} times)`,
       description: `${modemErrCount} modem errors detected in radio logs. ` +
         `Frequent modem errors may indicate baseband firmware issues or hardware problems.`,
+      relatedLogSnippet: modemErrs.slice(0, 5)
+        .map((e) => `${e.timestamp}  radio     0     0 E RIL     : ${e.message}`)
+        .join('\n'),
+      timestamp: modemErrs[0]?.timestamp,
       source: 'telephony',
       debugCommands: TELEPHONY_DEBUG_COMMANDS,
     });
@@ -1537,9 +1565,11 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
     const deviceGoneCount = transportErrors.filter(e => e.type === 'device_gone').length;
     const hasHardError = enodevCount > 0 || deviceGoneCount > 0;
     const reasons = (telephony.modemRestartReasons ?? []).join(', ') || 'unknown';
+    const transportSnippet = transportErrors.slice(0, 5)
+      .map((e) => `${e.timestamp}  root     0     0 I RIL     : ${e.message}`)
+      .join('\n');
 
     if (hasHardError) {
-      // ENODEV / device_gone = USB modem device node lost — critical
       insights.push({
         id: '',
         severity: 'critical',
@@ -1549,6 +1579,7 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
           `Modem restart reason: "${reasons}". ` +
           `ENODEV (errno 19) indicates the USB modem device node became unreadable — ` +
           `check kernel USB logs for device unbind/re-enumeration and modem firmware crash artifacts.`,
+        relatedLogSnippet: transportSnippet,
         timestamp: transportErrors[0].timestamp,
         source: 'telephony',
         debugCommands: [
@@ -1558,7 +1589,6 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
         ],
       });
     } else {
-      // transport_read_error only (e.g. TransportErrorCallback during init) — warning
       insights.push({
         id: '',
         severity: 'warning',
@@ -1568,6 +1598,7 @@ function generateTelephonyInsights(telephony?: TelephonyParseResult, power?: Pow
           `Modem restart reason: "${reasons}". ` +
           `These may be transient errors during modem initialization. ` +
           `If modem connectivity is stable, these can be safely ignored.`,
+        relatedLogSnippet: transportSnippet,
         timestamp: transportErrors[0].timestamp,
         source: 'telephony',
         debugCommands: [

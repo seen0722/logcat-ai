@@ -277,8 +277,10 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
 
 // ── Log Snippet with syntax highlighting ──
 
-// Logcat: "03-26 12:43:32.378  1000  1512  1512 I Watchdog: message"
+// Logcat with numeric UID: "03-26 12:43:32.378  1000  1512  1512 I Watchdog: message"
 const LOGCAT_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(\S+?)\s*:\s*(.*)$/;
+// Logcat with text UID: "03-26 12:43:32.378  root  1512  1512 I tag: message"
+const LOGCAT_TEXT_UID_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\S+)\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+(\S+?)\s*:\s*(.*)$/;
 // Kernel dmesg: "[12345.678] message" or "<6>[12345.678] message"
 const KERNEL_RE = /^(?:<\d+>)?\[\s*([\d.]+)\]\s+(.*)$/;
 // Kernel with wall-clock time: "03-26 12:43:32.736  <6> message" (converted from boot-relative)
@@ -293,7 +295,7 @@ function LogSnippet({ content }: { content: string }) {
         <table className="w-full text-xs font-mono border-collapse">
           <tbody>
             {lines.map((line, i) => {
-              const logcat = line.match(LOGCAT_RE);
+              const logcat = line.match(LOGCAT_RE) || line.match(LOGCAT_TEXT_UID_RE);
               if (logcat) {
                 const [, ts, , pid, tid, level, tag, msg] = logcat;
                 return <LogcatRow key={i} n={i+1} ts={ts} pid={pid} tid={tid} level={level} tag={tag} msg={msg} />;
