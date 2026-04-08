@@ -428,13 +428,29 @@ function generateOomInsight(oomResult: OomAnalysisResult): InsightCard {
     lines.push(`oom_reaper reclaimed: ${names}${more}`);
   }
 
+  // Severity based on actual impact:
+  // - critical: LMK killed important processes (adj < 900) or many kills
+  // - warning: only cached apps killed/reaped (adj >= 900), or reaper-only
+  // - info: very few reaps with no LMK kills (likely bugreport capture artifact)
+  // Severity based on actual impact:
+  // - critical: important processes killed (adj < 900), many LMK kills (≥5), or massive reaper (≥50)
+  // - warning: cached apps killed/reaped (≥10), or any LMK kills
+  // - info: few reaps with no LMK kills (likely bugreport capture artifact)
+  const hasLmkKills = oomResult.lmkKills.length > 0;
+  const hasImportantKills = oomResult.lmkKills.some((k) => k.adjScore !== null && k.adjScore < 900);
+  const oomSeverity: Severity = hasImportantKills || s.lmkCount >= 5 || s.reapedCount >= 50
+    ? 'critical'
+    : hasLmkKills || s.reapedCount >= 10
+      ? 'warning'
+      : 'info';
+
   return {
     id: '',
-    severity: 'critical',
+    severity: oomSeverity,
     category: 'memory',
     title: oomResult.lmkKills.length > 0
       ? `Out of memory event (${s.lmkCount} LMK kills, ${s.reapedCount} reaped)`
-      : 'Out of memory event',
+      : `Out of memory event (${s.reapedCount} reaped)`,
     description: lines.join('\n'),
     relatedLogSnippet: buildOomLogSnippet(oomResult),
     timestamp: s.timestamp,
