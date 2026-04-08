@@ -135,26 +135,6 @@ router.get('/:id', async (req: Request, res: Response) => {
       // Sort by timestamp so entries from all buffers are interleaved chronologically
       allEntries.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
 
-      // Compute per-buffer time ranges
-      const bufferStats = new Map<string, { first: string; last: string; count: number }>();
-      for (const entry of allEntries) {
-        const buf = entry.buffer ?? 'main';
-        const stat = bufferStats.get(buf);
-        if (stat) {
-          stat.last = entry.timestamp;
-          stat.count++;
-        } else {
-          bufferStats.set(buf, { first: entry.timestamp, last: entry.timestamp, count: 1 });
-        }
-      }
-      // Also add kernel entries if present
-      const bufferTimeRanges = Array.from(bufferStats.entries()).map(([buffer, stat]) => ({
-        buffer,
-        firstTimestamp: stat.first,
-        lastTimestamp: stat.last,
-        entryCount: stat.count,
-      }));
-
       const logcatResult = {
         entries: allEntries,
         anomalies: detectAnomalies(allEntries),
@@ -299,7 +279,42 @@ router.get('/:id', async (req: Request, res: Response) => {
         userDescription,
       });
 
-      // Attach buffer time ranges to result
+      // Compute per-buffer time ranges
+      // Use bugreport timestamp to determine valid time window — entries with timestamps
+      // far from the bugreport date are pre-clock-correction artifacts
+      const brDate = unpackResult.metadata.bugreportTimestamp;
+      const brMonth = brDate.getMonth() + 1;
+      const brDay = brDate.getDate();
+      const brPrefix = `${String(brMonth).padStart(2, '0')}-${String(brDay).padStart(2, '0')}`;
+      // Valid range: bugreport date ± 7 days (covers multi-day logs)
+      const validPrefixes = new Set<string>();
+      for (let offset = -7; offset <= 0; offset++) {
+        const d = new Date(brDate.getTime() + offset * 86400000);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        validPrefixes.add(`${mm}-${dd}`);
+      }
+
+      const bufferStats = new Map<string, { first: string; last: string; count: number }>();
+      for (const entry of allEntries) {
+        // Skip entries with dates far from bugreport date (pre-clock-correction artifacts)
+        const entryDate = entry.timestamp.slice(0, 5);
+        if (validPrefixes.size > 0 && !validPrefixes.has(entryDate)) continue;
+        const buf = entry.buffer ?? 'main';
+        const stat = bufferStats.get(buf);
+        if (stat) {
+          stat.last = entry.timestamp;
+          stat.count++;
+        } else {
+          bufferStats.set(buf, { first: entry.timestamp, last: entry.timestamp, count: 1 });
+        }
+      }
+      const bufferTimeRanges = Array.from(bufferStats.entries()).map(([buffer, stat]) => ({
+        buffer,
+        firstTimestamp: stat.first,
+        lastTimestamp: stat.last,
+        entryCount: stat.count,
+      }));
       if (bufferTimeRanges.length > 0) {
         analysisResult.bufferTimeRanges = bufferTimeRanges;
       }
