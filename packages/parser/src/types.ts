@@ -283,6 +283,8 @@ export interface KernelParseResult {
   events: KernelEvent[];
   totalLines: number;
   parseErrors?: number;
+  /** Detected format: 'dmesg' (boot-relative timestamps, reliable) or 'logcat' (wall-clock, may have clock correction issues) */
+  format?: 'dmesg' | 'logcat';
 }
 
 // ============================================================

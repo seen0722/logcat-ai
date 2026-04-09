@@ -82,6 +82,7 @@ export function parseKernelLog(content: string): KernelParseResult {
     events,
     totalLines: lines.length,
     parseErrors: parsed.parseErrors,
+    format: parsed.entries.length > 0 ? format : undefined,
   };
 }
 
@@ -122,29 +123,48 @@ function parseDmesgKernel(lines: string[]): { entries: KernelLogEntry[]; parseEr
 /**
  * Parse logcat -b kernel -v threadtime format lines.
  * Timestamps are converted to seconds-since-first-entry to match dmesg convention.
+ *
+ * Clock correction handling: when the system clock jumps (NTP/NITZ sync),
+ * logcat timestamps jump too. We detect jumps > 1 hour and re-base the offset
+ * so timestamps remain monotonically increasing instead of going negative.
  */
 function parseLogcatKernel(lines: string[]): { entries: KernelLogEntry[]; parseErrors: number } {
   const entries: KernelLogEntry[] = [];
   let baseMs = -1;
+  let prevMs = -1;
+  let offsetSec = 0; // accumulated offset from clock correction jumps
   let parseErrors = 0;
+
+  const JUMP_THRESHOLD_MS = 3600_000; // 1 hour
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    // Skip logcat buffer separator lines (not a parse error)
     if (line.startsWith('--------- beginning of')) continue;
 
     const match = line.match(LOGCAT_KERNEL_RE);
     if (match) {
       const tsStr = match[1];
       const logcatLevel = match[2];
-      const rest = match[3]; // "tag  : message" or just message
-
-      // Combine tag + message: "SELinux : avc: denied..." → "SELinux : avc: denied..."
-      const message = rest;
+      const message = match[3];
 
       const ms = parseLogcatTimestampMs(tsStr);
-      if (baseMs < 0) baseMs = ms;
-      const timestamp = (ms - baseMs) / 1000;
+      if (baseMs < 0) {
+        baseMs = ms;
+        prevMs = ms;
+      }
+
+      // Detect clock correction jump: timestamp changes by > 1 hour
+      const deltaMs = ms - prevMs;
+      if (Math.abs(deltaMs) > JUMP_THRESHOLD_MS && entries.length > 0) {
+        // Clock was corrected. Set offset so the new timestamps continue
+        // from where the previous sequence left off (last entry's timestamp + small gap)
+        const lastTs = entries[entries.length - 1].timestamp;
+        offsetSec = lastTs + 0.001; // small gap to maintain ordering
+        baseMs = ms;
+      }
+
+      const timestamp = offsetSec + (ms - baseMs) / 1000;
+      prevMs = ms;
 
       entries.push({
         timestamp,

@@ -730,7 +730,11 @@ function kernelEventToInsight(event: KernelEvent, bootEpochMs?: number): Insight
   let timestamp: string;
   if (bootEpochMs != null) {
     const wallMs = bootEpochMs + event.timestamp * 1000;
-    timestamp = formatEpochToDisplay(wallMs);
+    if (Math.abs(wallMs - bootEpochMs) > 30 * 86400_000 || event.timestamp < 0) {
+      timestamp = `boot+${Math.abs(event.timestamp).toFixed(3)}s`;
+    } else {
+      timestamp = formatEpochToDisplay(wallMs);
+    }
   } else {
     timestamp = `boot+${event.timestamp.toFixed(3)}s`;
   }
@@ -880,8 +884,10 @@ export function analyzeBootStatus(
   }
 
   // 5. Kernel uptime from max dmesg timestamp (survives soft reboot)
+  // Only reliable for dmesg format — logcat format timestamps are wall-clock
+  // and may be corrupted by clock correction jumps (producing negative values)
   let kernelUptimeSeconds: number | undefined;
-  if (kernelResult.entries.length > 0) {
+  if (kernelResult.entries.length > 0 && kernelResult.format !== 'logcat') {
     kernelUptimeSeconds = kernelResult.entries[kernelResult.entries.length - 1].timestamp;
   }
 
@@ -1780,7 +1786,12 @@ export function buildTimeline(
     let timestamp: string;
     if (bootEpochMs != null) {
       const wallMs = bootEpochMs + event.timestamp * 1000;
-      timestamp = formatEpochToDisplay(wallMs);
+      // Sanity check: if wall-clock is > 30 days from boot epoch, timestamp is corrupted
+      if (Math.abs(wallMs - bootEpochMs) > 30 * 86400_000 || event.timestamp < 0) {
+        timestamp = `boot+${Math.abs(event.timestamp).toFixed(3)}s`;
+      } else {
+        timestamp = formatEpochToDisplay(wallMs);
+      }
     } else {
       timestamp = `boot+${event.timestamp.toFixed(3)}s`;
     }
