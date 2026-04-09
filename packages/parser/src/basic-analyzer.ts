@@ -1881,9 +1881,21 @@ export function buildTimeline(
     }
   }
 
-  // Clock correction events
+  // Clock correction events — only show jumps with reasonable target timestamps
+  // (some jumps in kernel logcat entries point to wrong dates like 10-28)
   if (clockCorrection) {
+    // Determine valid date range from logcat anomalies and events already in the timeline
+    const validDates = new Set<string>();
+    for (const ev of events) {
+      const d = ev.timestamp.slice(0, 5);
+      if (/^\d{2}-\d{2}$/.test(d)) validDates.add(d);
+    }
+
     for (const jump of clockCorrection.jumps) {
+      const targetDate = jump.toTimestamp.slice(0, 5);
+      // Skip if target date is not seen in any other timeline event
+      if (validDates.size > 0 && !validDates.has(targetDate)) continue;
+
       const dir = jump.jumpMinutes > 0 ? 'forward' : 'backward';
       const hrs = Math.abs(jump.jumpMinutes / 60).toFixed(1);
       events.push({
