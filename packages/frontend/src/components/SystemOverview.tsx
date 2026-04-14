@@ -170,9 +170,9 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 </span>
                 {metadata.buildType && metadata.buildType !== 'unknown' && (
                   <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
-                    metadata.buildType !== 'user'
-                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      : 'bg-surface-hover text-gray-400 border border-border'
+                    metadata.buildType === 'user' && !metadata.isDebuggable
+                      ? 'bg-surface-hover text-gray-400 border border-border'
+                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                   }`}>
                     {metadata.buildType}
                   </span>

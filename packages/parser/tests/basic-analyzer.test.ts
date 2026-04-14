@@ -7,7 +7,7 @@ function makeMetadata(overrides?: Partial<BugreportMetadata>): BugreportMetadata
     androidVersion: '14',
     sdkLevel: 34,
     buildFingerprint: 'google/raven/raven:14/UP1A.231005.007/10754064:userdebug/dev-keys',
-    buildType: 'userdebug',
+    buildType: 'user',
     deviceModel: 'Pixel 6 Pro',
     manufacturer: 'Google',
     buildDate: '2024-01-01',
@@ -382,6 +382,40 @@ describe('analyzeBasic', () => {
     // With damping (max 50 per type), responsiveness should be ~50 not 0
     expect(result.healthScore.breakdown.responsiveness).toBeGreaterThanOrEqual(45);
     expect(result.healthScore.breakdown.responsiveness).toBeLessThanOrEqual(60);
+  });
+
+  it('should warn when user build has debuggable=1 and adb.secure=0', () => {
+    const metadata = makeMetadata({ buildType: 'user', isDebuggable: true, isAdbSecure: false });
+    const result = analyzeBasic(makeInput({ metadata }));
+    const buildInsight = result.insights.find((i) => i.title.includes('adb root'));
+    expect(buildInsight).toBeDefined();
+    expect(buildInsight!.severity).toBe('warning');
+    expect(buildInsight!.description).toContain('ro.debuggable=1');
+    expect(buildInsight!.relatedLogSnippet).toContain('[ro.build.type]: [user]');
+  });
+
+  it('should generate info insight for user build with debuggable=1 but adb.secure=1', () => {
+    const metadata = makeMetadata({ buildType: 'user', isDebuggable: true, isAdbSecure: true });
+    const result = analyzeBasic(makeInput({ metadata }));
+    const buildInsight = result.insights.find((i) => i.title.includes('debuggable'));
+    expect(buildInsight).toBeDefined();
+    expect(buildInsight!.severity).toBe('info');
+  });
+
+  it('should generate info insight for userdebug build', () => {
+    const metadata = makeMetadata({ buildType: 'userdebug' });
+    const result = analyzeBasic(makeInput({ metadata }));
+    const buildInsight = result.insights.find((i) => i.title.includes('Development build'));
+    expect(buildInsight).toBeDefined();
+    expect(buildInsight!.severity).toBe('info');
+    expect(buildInsight!.description).toContain('userdebug');
+  });
+
+  it('should not generate build security insight for standard user build', () => {
+    const metadata = makeMetadata({ buildType: 'user', isDebuggable: false, isAdbSecure: true });
+    const result = analyzeBasic(makeInput({ metadata }));
+    const buildInsight = result.insights.find((i) => i.title.includes('build'));
+    expect(buildInsight).toBeUndefined();
   });
 
   it('should preserve metadata in result', () => {

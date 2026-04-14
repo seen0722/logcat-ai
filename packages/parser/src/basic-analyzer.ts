@@ -72,6 +72,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   const halInsights = generateHALInsights(halStatus);
   const tombstoneInsights = generateTombstoneInsights(tombstoneAnalyses);
 
+  const buildSecurityInsights = generateBuildSecurityInsights(metadata);
   const tagInsights = generateTagInsights(logcatResult.tagStats);
   const powerInsights = generatePowerInsights(powerStatus);
   const telephonyInsights = generateTelephonyInsights(telephonyStatus, powerStatus);
@@ -97,6 +98,7 @@ export function analyzeBasic(input: BasicAnalyzerInput): AnalysisResult {
   })();
 
   const merged = [
+    ...buildSecurityInsights,
     ...filteredLogcat,
     ...anrInsights,
     ...mergeKernelInsights(kernelInsights),
@@ -968,6 +970,58 @@ function generateBootInsights(bootStatus: BootStatusSummary): InsightCard[] {
       description: `The device booted with reason "${bootStatus.bootReason}", which may indicate a crash, watchdog reset, or power issue.`,
       source: 'cross',
       debugCommands: BOOT_DEBUG_COMMANDS,
+    });
+  }
+
+  return insights;
+}
+
+// ============================================================
+// Build Security → Insights
+// ============================================================
+
+function generateBuildSecurityInsights(metadata: BugreportMetadata): InsightCard[] {
+  const insights: InsightCard[] = [];
+
+  const { buildType, isDebuggable, isAdbSecure } = metadata;
+
+  // user build with debuggable=1 is a non-standard security configuration
+  if (buildType === 'user' && isDebuggable) {
+    const hasAdbRoot = isDebuggable && !isAdbSecure;
+    const severity: Severity = hasAdbRoot ? 'warning' : 'info';
+    const details = hasAdbRoot
+      ? 'ro.debuggable=1 and ro.adb.secure=0 on a user build — adb root is available without authentication. This is a non-standard configuration typically set by vendor overlay, and should not ship to production.'
+      : 'ro.debuggable=1 on a user build. While ro.adb.secure=1 prevents unauthenticated adb root, this is still non-standard for production devices.';
+
+    insights.push({
+      id: '',
+      severity,
+      category: 'stability',
+      title: hasAdbRoot
+        ? 'Non-standard user build: adb root enabled'
+        : 'Non-standard user build: debuggable',
+      description: details,
+      source: 'cross',
+      relatedLogSnippet: `[ro.build.type]: [${buildType}]\n[ro.debuggable]: [${isDebuggable ? '1' : '0'}]\n[ro.adb.secure]: [${isAdbSecure ? '1' : '0'}]`,
+      debugCommands: [
+        'adb shell getprop ro.build.type',
+        'adb shell getprop ro.debuggable',
+        'adb shell getprop ro.adb.secure',
+        'adb shell getenforce',
+      ],
+    });
+  }
+
+  // userdebug/eng builds — informational notice
+  if (buildType === 'userdebug' || buildType === 'eng') {
+    insights.push({
+      id: '',
+      severity: 'info',
+      category: 'stability',
+      title: `Development build type: ${buildType}`,
+      description: `This device is running a ${buildType} build. Analysis results may differ from production user builds due to additional logging, relaxed SELinux policies, and debug features.`,
+      source: 'cross',
+      relatedLogSnippet: `[ro.build.type]: [${buildType}]`,
     });
   }
 

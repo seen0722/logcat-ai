@@ -148,37 +148,42 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                       <IconDelete size={14} />
                     </button>
                   </div>
-                  <div className="flex items-center gap-3 mt-2.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5 text-xs">
                     {item.deviceModel && (
                       <span className="text-gray-400 bg-surface px-2 py-0.5 rounded-lg border border-border/50">{item.deviceModel}</span>
+                    )}
+                    {item.androidVer && (
+                      <span className="text-gray-500 bg-surface px-2 py-0.5 rounded-lg border border-border/50">Android {item.androidVer}</span>
+                    )}
+                    {item.buildType && item.buildType !== 'unknown' && (
+                      <span className={`px-2 py-0.5 rounded-lg text-[11px] font-medium ${
+                        item.buildType === 'user' && !item.isDebuggable
+                          ? 'bg-surface-hover text-gray-400 border border-border/50'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {item.buildType}
+                      </span>
+                    )}
+                    {item.isDebuggable && !item.isAdbSecure && (
+                      <span className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                        adb root
+                      </span>
+                    )}
+                    {item.isDebuggable && item.isAdbSecure && (
+                      <span className="px-2 py-0.5 rounded-lg text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        debuggable
+                      </span>
                     )}
                     {item.hasDeepAnalysis ? (
                       <span className="text-accent bg-accent/10 px-2 py-0.5 rounded-lg border border-accent/20 font-medium">AI Deep</span>
                     ) : (
                       <span className="text-gray-500 bg-surface px-2 py-0.5 rounded-lg border border-border/50">Quick</span>
                     )}
-                    {item.androidVer && (
-                      <span className="text-gray-500">Android {item.androidVer}</span>
-                    )}
-                    {item.buildType && item.buildType !== 'unknown' && (
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        item.buildType !== 'user'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          : 'text-gray-600'
-                      }`}>
-                        {item.buildType}
-                      </span>
-                    )}
-                    {item.isDebuggable && !item.isAdbSecure && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                        root
-                      </span>
-                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs">
                     <span className={`font-semibold ${healthColor(item.healthOverall)}`}>
                       {item.healthOverall != null ? `${item.healthOverall}/100` : '\u2014'}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs">
                     {item.criticalCount > 0 && (
                       <span className="text-red-400">{item.criticalCount} critical</span>
                     )}
