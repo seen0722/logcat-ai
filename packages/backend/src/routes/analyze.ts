@@ -209,9 +209,16 @@ router.get('/:id', async (req: Request, res: Response) => {
       const powerStatus = parsePowerSections(unpackResult.sections, kernelResult.entries);
 
       // Parse telephony sections (dumpsys telephony.registry + radio log entries)
+      // Filter out pre-clock-correction entries (dates far from bugreport date)
+      const brDate = unpackResult.metadata.bugreportTimestamp;
+      const validRadioPrefixes = new Set<string>();
+      for (let offset = -7; offset <= 0; offset++) {
+        const d = new Date(brDate.getTime() + offset * 86400000);
+        validRadioPrefixes.add(`${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+      }
       const radioEntries: LogEntry[] = [];
       for (const entry of logcatResult.entries) {
-        if (entry.buffer === 'radio') radioEntries.push(entry);
+        if (entry.buffer === 'radio' && validRadioPrefixes.has(entry.timestamp.slice(0, 5))) radioEntries.push(entry);
       }
       const telephonyStatus = parseTelephonySections(unpackResult.sections, radioEntries);
 
@@ -279,21 +286,8 @@ router.get('/:id', async (req: Request, res: Response) => {
         userDescription,
       });
 
-      // Compute per-buffer time ranges
-      // Use bugreport timestamp to determine valid time window — entries with timestamps
-      // far from the bugreport date are pre-clock-correction artifacts
-      const brDate = unpackResult.metadata.bugreportTimestamp;
-      const brMonth = brDate.getMonth() + 1;
-      const brDay = brDate.getDate();
-      const brPrefix = `${String(brMonth).padStart(2, '0')}-${String(brDay).padStart(2, '0')}`;
-      // Valid range: bugreport date ± 7 days (covers multi-day logs)
-      const validPrefixes = new Set<string>();
-      for (let offset = -7; offset <= 0; offset++) {
-        const d = new Date(brDate.getTime() + offset * 86400000);
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        validPrefixes.add(`${mm}-${dd}`);
-      }
+      // Compute per-buffer time ranges (reuse validRadioPrefixes computed earlier)
+      const validPrefixes = validRadioPrefixes;
 
       const bufferStats = new Map<string, { first: string; last: string; count: number }>();
       for (const entry of allEntries) {
