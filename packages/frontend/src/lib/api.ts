@@ -230,6 +230,62 @@ export async function fetchAnalysisResult(id: string): Promise<AnalysisResult> {
   return res.json();
 }
 
+/**
+ * Trigger deep analysis on an existing Quick Analysis result (SSE streaming).
+ * Returns a cleanup function to abort the stream.
+ */
+export function startDeepAnalysis(
+  id: string,
+  onProgress?: (event: SSEProgress) => void,
+  onError?: (error: string) => void,
+): () => void {
+  const url = `${API_BASE}/analyze/${id}/deep`;
+  let cancelled = false;
+
+  const cleanup = () => { cancelled = true; };
+
+  (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok || !res.body) {
+        const errBody = await res.json().catch(() => ({ error: 'Deep analysis failed' }));
+        onError?.(errBody.error ?? 'Deep analysis failed');
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (!cancelled) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(trimmed.slice(6)) as SSEProgress;
+            onProgress?.(data);
+          } catch {
+            // skip malformed
+          }
+        }
+      }
+    } catch (err) {
+      if (!cancelled) {
+        onError?.(err instanceof Error ? err.message : 'Connection failed');
+      }
+    }
+  })();
+
+  return cleanup;
+}
+
 // ---- History API ----
 
 export async function fetchHistory(

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { uploadFile, startAnalysis, fetchHistoryResult, fetchAnalysisResult } from '../lib/api';
+import { uploadFile, startAnalysis, startDeepAnalysis, fetchHistoryResult, fetchAnalysisResult } from '../lib/api';
 import {
   AnalysisResult,
   SSEProgress,
@@ -94,6 +94,41 @@ export function useAnalysis() {
     [],
   );
 
+  const runDeep = useCallback(
+    async () => {
+      if (!uploadId || !result) return;
+      setError(null);
+      setPhase('analyzing');
+      setProgress({ stage: 'deep_analysis', progress: 85, message: 'Starting AI deep analysis...' });
+
+      cleanupRef.current = startDeepAnalysis(
+        uploadId,
+        async (event) => {
+          setProgress(event);
+          if (event.stage === 'complete') {
+            try {
+              const fullResult = await fetchAnalysisResult(uploadId);
+              setResult(fullResult);
+              setPhase('result');
+            } catch {
+              setError('Failed to fetch updated result');
+              setPhase('result');
+            }
+          }
+          if (event.stage === 'error') {
+            setError(event.message);
+            setPhase('result');
+          }
+        },
+        (err) => {
+          setError(err);
+          setPhase('result');
+        },
+      );
+    },
+    [uploadId, result],
+  );
+
   const reset = useCallback(() => {
     cleanupRef.current?.();
     setPhase('upload');
@@ -103,5 +138,5 @@ export function useAnalysis() {
     setError(null);
   }, []);
 
-  return { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory };
+  return { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory, runDeep };
 }

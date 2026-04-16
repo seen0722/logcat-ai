@@ -79,6 +79,9 @@ export default function ProgressView({ progress, onCancel }: Props) {
 
       {/* Message */}
       <p className="text-center text-sm text-gray-400">{progress.message}</p>
+      {progress.stage === 'deep_analysis' && (
+        <p className="text-center text-xs text-gray-600">Typically takes 30 seconds to 2 minutes depending on bugreport complexity</p>
+      )}
       {onCancel && (
         <p className="text-center">
           <button onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">

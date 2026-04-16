@@ -5,6 +5,7 @@ import InsightCard from './InsightCard';
 interface Props {
   insights: InsightCardType[];
   halStatus?: HALStatusSummary;
+  onRunDeep?: () => void;
 }
 
 const FILTERS: { key: Severity | 'all'; label: string }[] = [
@@ -69,7 +70,7 @@ function findHalCorrelation(insight: InsightCardType, halStatus?: HALStatusSumma
   return null;
 }
 
-export default function InsightsCards({ insights, halStatus }: Props) {
+export default function InsightsCards({ insights, halStatus, onRunDeep }: Props) {
   const [filter, setFilter] = useState<Severity | 'all'>('all');
   const [showAllInfo, setShowAllInfo] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -169,6 +170,19 @@ export default function InsightsCards({ insights, halStatus }: Props) {
           })}
         </div>
       </div>
+
+      {onRunDeep && (
+        <button
+          onClick={onRunDeep}
+          className="w-full card border-accent/30 bg-accent/5 hover:bg-accent/10 px-4 py-3 flex items-center justify-between cursor-pointer transition-all duration-200 group"
+        >
+          <div>
+            <span className="text-sm text-accent font-medium">Run Deep Analysis</span>
+            <span className="text-xs text-gray-500 ml-2">Get AI-powered root cause, fix suggestions, and cross-system correlations for each insight</span>
+          </div>
+          <span className="text-accent text-xs opacity-60 group-hover:opacity-100 transition-opacity">30s ~ 2min</span>
+        </button>
+      )}
 
       <div className="space-y-3">
         {/* Critical insights - always shown */}

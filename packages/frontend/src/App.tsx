@@ -28,7 +28,7 @@ import SettingsPanel from './components/SettingsPanel';
 import LandingPage from './components/LandingPage';
 
 export default function App() {
-  const { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory } = useAnalysis();
+  const { phase, setPhase, uploadId, progress, result, error, start, reset, loadFromHistory, runDeep } = useAnalysis();
   const { theme, toggleTheme } = useTheme();
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -362,7 +362,11 @@ export default function App() {
               </div>
             )}
             <div id="section-insights">
-              <InsightsCards insights={result.insights} halStatus={result.halStatus} />
+              <InsightsCards
+                insights={result.insights}
+                halStatus={result.halStatus}
+                onRunDeep={!result.deepAnalysisOverview ? runDeep : undefined}
+              />
             </div>
             {result.anrAnalyses.length > 0 && (
               <div id="section-anr">

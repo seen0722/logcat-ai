@@ -1,5 +1,6 @@
-import { useState, useRef, DragEvent } from 'react';
+import { useState, useRef, useEffect, DragEvent } from 'react';
 import { AnalysisMode, QUICK_TAGS, QuickTag } from '../lib/types';
+import { fetchProviders } from '../lib/api';
 import { IconCheck, IconUpload } from './Icons';
 
 interface Props {
@@ -13,7 +14,14 @@ export default function UploadZone({ onStart, error }: Props) {
   const [selectedTags, setSelectedTags] = useState<Set<QuickTag>>(new Set());
   const [mode, setMode] = useState<AnalysisMode>('quick');
   const [dragging, setDragging] = useState(false);
+  const [hasLlm, setHasLlm] = useState<boolean | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchProviders()
+      .then((data) => setHasLlm(data.providers.some((p) => p.available)))
+      .catch(() => setHasLlm(false));
+  }, []);
 
   const ACCEPTED_EXTENSIONS = ['.zip', '.txt', '.log'];
 
@@ -142,15 +150,20 @@ export default function UploadZone({ onStart, error }: Props) {
           <div className="text-xs text-gray-400 mt-1">Rule-based, &lt; 5s, no LLM</div>
         </button>
         <button
-          className={`flex-1 card text-center py-3.5 cursor-pointer transition-all duration-300 ${
-            mode === 'deep'
-              ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow'
-              : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
+          className={`flex-1 card text-center py-3.5 transition-all duration-300 ${
+            hasLlm === false
+              ? 'border-border opacity-40 cursor-not-allowed'
+              : mode === 'deep'
+                ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow cursor-pointer'
+                : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100 cursor-pointer'
           }`}
-          onClick={() => setMode('deep')}
+          onClick={() => { if (hasLlm !== false) setMode('deep'); }}
+          title={hasLlm === false ? 'No LLM provider configured. Open LLM Settings to set up a provider.' : undefined}
         >
           <div className={`font-medium ${mode === 'deep' ? 'text-accent-light' : ''}`}>Deep Analysis</div>
-          <div className="text-xs text-gray-400 mt-1">AI-powered, 30s-2min</div>
+          <div className="text-xs text-gray-400 mt-1">
+            {hasLlm === false ? 'No LLM configured' : 'AI-powered, 30s-2min'}
+          </div>
         </button>
       </div>
 

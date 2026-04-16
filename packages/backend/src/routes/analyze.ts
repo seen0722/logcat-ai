@@ -214,7 +214,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       const validRadioPrefixes = new Set<string>();
       for (let offset = -7; offset <= 0; offset++) {
         const d = new Date(brDate.getTime() + offset * 86400000);
-        validRadioPrefixes.add(`${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+        validRadioPrefixes.add(`${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`);
       }
       const radioEntries: LogEntry[] = [];
       for (const entry of logcatResult.entries) {
@@ -477,6 +477,99 @@ router.get('/:id/result', (req: Request, res: Response) => {
       : undefined,
   };
   res.json(slim);
+});
+
+/**
+ * GET /api/analyze/:id/deep
+ * Run deep analysis on an existing Quick Analysis result (SSE streaming).
+ * Allows upgrading a Quick result to Deep without re-uploading.
+ */
+router.get('/:id/deep', async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const userDescription = req.query.description ? String(req.query.description) : undefined;
+
+  const analysisResult = analysisStore.get(id);
+  if (!analysisResult) {
+    return res.status(404).json({ error: 'Analysis not found. Run quick analysis first.' });
+  }
+
+  if (analysisResult.deepAnalysisOverview) {
+    return res.status(400).json({ error: 'Deep analysis already exists for this result.' });
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+
+  sendSSE(res, { stage: 'deep_analysis', progress: 85, message: 'Starting AI deep analysis...' });
+
+  let deepContent = '';
+  try {
+    for await (const chunk of analyzeDeep(analysisResult, userDescription)) {
+      if (aborted) return;
+      deepContent += chunk.content;
+      sendSSE(res, {
+        stage: 'deep_analysis',
+        progress: 85 + Math.min(10, Math.floor(deepContent.length / 500)),
+        message: chunk.done ? 'Deep analysis complete' : 'AI analyzing...',
+        data: { chunk: chunk.content, done: chunk.done },
+      });
+    }
+
+    const parsed = tryParseDeepAnalysis(deepContent);
+    if (parsed) {
+      for (const item of parsed.insights) {
+        const insight = analysisResult.insights.find((i) => i.id === item.insightId);
+        if (insight) {
+          insight.deepAnalysis = {
+            rootCause: item.rootCause,
+            fixSuggestion: item.fixSuggestion,
+            confidence: item.confidence,
+            evidence: item.evidence ?? [],
+            impactAssessment: item.impactAssessment ?? '',
+            debuggingSteps: item.debuggingSteps ?? [],
+            relatedInsights: item.relatedInsights ?? [],
+            category: item.category ?? 'root_cause',
+            affectedComponents: item.affectedComponents ?? [],
+          };
+        }
+      }
+
+      if (parsed.executiveSummary) {
+        analysisResult.deepAnalysisOverview = {
+          executiveSummary: parsed.executiveSummary,
+          systemDiagnosis: parsed.systemDiagnosis ?? '',
+          correlationFindings: parsed.correlationFindings ?? [],
+          prioritizedActions: parsed.prioritizedActions ?? [],
+        };
+      }
+
+      // Re-persist with deep analysis data
+      const meta = analysisStore.getUploadMeta(id);
+      if (meta) {
+        analysisStore.setWithMeta(id, analysisResult, meta.filename, meta.fileSize);
+      } else {
+        analysisStore.set(id, analysisResult);
+      }
+    }
+
+    sendSSE(res, { stage: 'complete', progress: 100, message: 'Deep analysis complete', data: { id } });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown LLM error';
+    sendSSE(res, {
+      stage: 'deep_analysis',
+      progress: 95,
+      message: `Deep analysis failed: ${msg}`,
+    });
+    sendSSE(res, { stage: 'complete', progress: 100, message: 'Analysis complete (deep failed)', data: { id } });
+  } finally {
+    res.end();
+  }
 });
 
 // ============================================================
