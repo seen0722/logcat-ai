@@ -395,8 +395,9 @@ function parseTimestamp(ts: string): number | null {
   // "MM-DD HH:mm:ss.SSS"
   const m = ts.match(/(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
   if (!m) return null;
-  // Use a fixed year since bugreport timestamps don't include year
-  const d = new Date(2000, parseInt(m[1], 10) - 1, parseInt(m[2], 10),
+  // Use a fixed year (2026) since bugreport timestamps don't include year.
+  // Must match the same year used in kernel-parser.ts and telephony-parser.ts.
+  const d = new Date(2026, parseInt(m[1], 10) - 1, parseInt(m[2], 10),
     parseInt(m[3], 10), parseInt(m[4], 10), parseInt(m[5], 10), parseInt(m[6], 10));
   return d.getTime();
 }

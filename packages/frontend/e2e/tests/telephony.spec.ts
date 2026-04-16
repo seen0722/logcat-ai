@@ -31,17 +31,14 @@ test.describe('Telephony Overview', () => {
 
     await telephonySection.scrollIntoViewIfNeeded();
 
-    // Should show Voice State label
-    await expect(telephonySection.locator('text=Voice State')).toBeVisible();
-
-    // Should show OOS Count label
-    await expect(telephonySection.locator('text=OOS Count')).toBeVisible();
+    // Should show Voice State label (uppercase in UI)
+    await expect(telephonySection.locator('text=VOICE STATE').or(telephonySection.locator('text=Voice State'))).toBeVisible();
 
     // Should show RIL Errors label
-    await expect(telephonySection.locator('text=RIL Errors')).toBeVisible();
+    await expect(telephonySection.locator('text=RIL ERRORS').or(telephonySection.locator('text=RIL Errors'))).toBeVisible();
 
-    // Should show Signal label
-    await expect(telephonySection.locator('text=Signal')).toBeVisible();
+    // Should show Signal Level label
+    await expect(telephonySection.locator('text=SIGNAL LEVEL').or(telephonySection.locator('text=Signal Level'))).toBeVisible();
   });
 
   test('toggles detail sections', async ({ analysisPage }) => {

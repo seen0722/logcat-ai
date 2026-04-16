@@ -62,7 +62,8 @@ export type LogLevel = 'V' | 'D' | 'I' | 'W' | 'E' | 'F';
 export type LogcatBuffer = 'main' | 'system' | 'events' | 'crash' | 'radio' | 'kernel';
 
 export interface LogEntry {
-  timestamp: string;   // "MM-DD HH:mm:ss.SSS"
+  /** Timestamp in "MM-DD HH:mm:ss.SSS" format (device-local time, no year or timezone). */
+  timestamp: string;
   pid: number;
   tid: number;
   level: LogLevel;

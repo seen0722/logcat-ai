@@ -29,7 +29,7 @@ test.describe('Upload & Analysis Result', () => {
     const page = analysisPage;
     const overview = page.locator('#section-overview');
 
-    for (const dim of ['Stability', 'Memory', 'Response', 'Kernel']) {
+    for (const dim of ['Stability', 'Memory', 'Responsiveness', 'Kernel']) {
       await expect(overview.locator(`text=${dim}`).first()).toBeVisible();
     }
   });

@@ -681,9 +681,8 @@ describe('buildTimeline kernel timestamp conversion', () => {
   });
 
   it('should sort kernel events among logcat events by wall-clock time', () => {
-    // Use local time to match formatEpochToDisplay (which uses getHours/getMinutes etc.)
-    const bootEpoch = new Date(2024, 0, 15, 8, 0, 0, 0); // Jan 15, 08:00 local
-    const bootEpochMs = bootEpoch.getTime();
+    // Use Date.UTC to match formatEpochToDisplay (which uses getUTCHours/getUTCMinutes etc.)
+    const bootEpochMs = Date.UTC(2024, 0, 15, 8, 0, 0, 0); // Jan 15, 08:00 UTC
 
     const logcatResult: LogcatParseResult = {
       entries: [],

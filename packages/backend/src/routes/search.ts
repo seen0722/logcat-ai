@@ -61,9 +61,10 @@ function handleLogcatInMemory(
   }
 
   // Full time range of the unfiltered dataset (for UI position indicator)
+  // Use full "MM-DD HH:mm:ss.SSS" (22 chars) to match bufferTimeRanges precision
   const fullTimeRange = {
-    first: entries[0].timestamp.slice(0, 18),
-    last: entries[entries.length - 1].timestamp.slice(0, 18),
+    first: entries[0].timestamp.slice(0, 22),
+    last: entries[entries.length - 1].timestamp.slice(0, 22),
     total: entries.length,
   };
 
@@ -247,15 +248,16 @@ function handleKernelFallback(
 
 /**
  * Format epoch milliseconds to MM-DD HH:mm:ss.SSS display string.
+ * Uses UTC methods to avoid server timezone offset from device timezone.
  */
 function formatEpochToDisplay(epochMs: number): string {
   const d = new Date(epochMs);
-  const MM = String(d.getMonth() + 1).padStart(2, '0');
-  const DD = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
   return `${MM}-${DD} ${hh}:${mm}:${ss}.${ms}`;
 }
 
@@ -276,7 +278,7 @@ function handleKernelSearch(
   const kernelFullTimeRange = (() => {
     const firstTs = bootEpochMs != null ? formatEpochToDisplay(bootEpochMs + entries[0].timestamp * 1000) : String(entries[0].timestamp);
     const lastTs = bootEpochMs != null ? formatEpochToDisplay(bootEpochMs + entries[entries.length - 1].timestamp * 1000) : String(entries[entries.length - 1].timestamp);
-    return { first: firstTs.slice(0, 18), last: lastTs.slice(0, 18), total: entries.length };
+    return { first: firstTs.slice(0, 22), last: lastTs.slice(0, 22), total: entries.length };
   })();
 
   // Try FTS5 first if only keyword search (no level filter)

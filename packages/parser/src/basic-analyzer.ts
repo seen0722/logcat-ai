@@ -2038,15 +2038,19 @@ function normalizeTimestamp(ts: string): string {
 /**
  * Convert epoch milliseconds to display format: "MM-DD HH:mm:ss.SSS"
  * Used to convert kernel boot-relative timestamps to wall-clock time.
+ * Uses UTC methods to avoid server timezone offset from device timezone.
+ * Bugreport timestamps are recorded in device-local time; bootEpochMs is
+ * derived from bugreportTimestamp (UTC epoch) so UTC extraction here
+ * produces the same MM-DD HH:mm:ss as the original logcat entries.
  */
 function formatEpochToDisplay(epochMs: number): string {
   const d = new Date(epochMs);
-  const MM = String(d.getMonth() + 1).padStart(2, '0');
-  const DD = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  const MM = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const DD = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
   return `${MM}-${DD} ${hh}:${mm}:${ss}.${ms}`;
 }
 

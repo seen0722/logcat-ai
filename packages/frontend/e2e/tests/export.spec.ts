@@ -8,8 +8,8 @@ test.describe('Export Menu', () => {
     await exportBtn.click();
 
     // Dropdown items
-    await expect(page.locator('button', { hasText: 'Export as JSON' })).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('button', { hasText: 'Export as HTML' })).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Raw JSON' })).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('button', { hasText: 'Analysis Report' })).toBeVisible();
 
     // Close by clicking elsewhere
     await page.locator('body').click({ position: { x: 0, y: 0 } });
@@ -23,7 +23,7 @@ test.describe('Export Menu', () => {
 
     // Listen for download
     const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
-    await page.locator('button', { hasText: 'Export as JSON' }).click();
+    await page.locator('button', { hasText: 'Raw JSON' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.json$/);

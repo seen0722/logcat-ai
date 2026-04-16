@@ -37,8 +37,8 @@ test.describe('Power Overview', () => {
       await showBtn.click();
       await page.waitForTimeout(300);
 
-      // Should now show "Show less"
-      await expect(powerSection.locator('button', { hasText: 'Show less' })).toBeVisible();
+      // Should now show "Hide details"
+      await expect(powerSection.locator('button', { hasText: 'Hide details' })).toBeVisible();
 
       // Detail content should appear (e.g., tables)
       const tables = powerSection.locator('table');
@@ -47,7 +47,7 @@ test.describe('Power Overview', () => {
       }
 
       // Toggle back
-      await powerSection.locator('button', { hasText: 'Show less' }).click();
+      await powerSection.locator('button', { hasText: 'Hide details' }).click();
       await expect(showBtn).toBeVisible();
     }
   });

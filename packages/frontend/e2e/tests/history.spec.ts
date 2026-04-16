@@ -10,13 +10,14 @@ test.describe('History Panel', () => {
     // History panel should appear
     await expect(page.locator('h2', { hasText: 'Analysis History' })).toBeVisible({ timeout: 5000 });
 
-    // At least one history item inside the panel
+    // Wait for history API and items to load
     const panel = page.locator('.fixed.inset-0.z-50');
     const items = panel.locator('div.cursor-pointer');
+    await items.first().waitFor({ timeout: 15_000 });
     expect(await items.count()).toBeGreaterThan(0);
 
-    // Close panel with X button
-    await panel.locator('button', { hasText: '\u00d7' }).click();
+    // Close panel — click the overlay backdrop (outside panel content)
+    await panel.click({ position: { x: 10, y: 450 } });
   });
 
   test('clicking history item loads analysis result', async ({ page }) => {

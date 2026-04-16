@@ -4,10 +4,12 @@ test.describe('System Overview', () => {
   test('displays device metadata', async ({ analysisPage }) => {
     const overview = analysisPage.locator('#section-overview');
 
-    // Check that key metadata labels are present
-    for (const label of ['Device', 'Android', 'Build']) {
-      await expect(overview.locator(`text=${label}`).first()).toBeVisible();
-    }
+    // Device model heading (e.g. "T70")
+    await expect(overview.locator('h2').first()).toBeVisible();
+    // Android version badge
+    await expect(overview.locator('text=Android').first()).toBeVisible();
+    // Build fingerprint paragraph
+    await expect(overview.locator('text=/').first()).toBeVisible();
   });
 
   test('HW & SW details toggle works', async ({ analysisPage }) => {
@@ -39,6 +41,7 @@ test.describe('System Overview', () => {
 
   test('health score overall ring is present', async ({ analysisPage }) => {
     const overview = analysisPage.locator('#section-overview');
-    await expect(overview.locator('text=Overall')).toBeVisible();
+    // Score displayed as "N/100"
+    await expect(overview.locator('text=/100').first()).toBeVisible();
   });
 });

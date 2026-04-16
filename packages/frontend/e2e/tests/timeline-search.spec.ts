@@ -108,8 +108,9 @@ test.describe('Timeline & Search Integration', () => {
     expect(fromValue.length).toBeGreaterThan(0);
 
     // The ▶ focus marker should be visible in the virtual scroll area
-    const focusMarker = modal.locator('span.text-indigo-400.font-bold');
-    await expect(focusMarker).toBeVisible({ timeout: 10_000 });
+    // Virtual scroll may need time to scroll to the focus row
+    const focusMarker = modal.locator('text=▶');
+    await expect(focusMarker.first()).toBeVisible({ timeout: 15_000 });
 
     // Close modal
     await page.keyboard.press('Escape');

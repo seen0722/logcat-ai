@@ -38,9 +38,15 @@ export const test = base.extend<{
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Open History panel
+    // Open History panel and wait for API response before looking for items
     const viewHistoryBtn = page.locator('button', { hasText: 'View History' });
     const historyBtn = page.locator('button', { hasText: /^History$/ });
+
+    // Click History button while waiting for the API response
+    const historyApiPromise = page.waitForResponse(
+      (resp) => resp.url().includes('/api/history') && resp.status() === 200,
+      { timeout: 30_000 },
+    );
 
     if (await viewHistoryBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await viewHistoryBtn.click();
@@ -48,16 +54,13 @@ export const test = base.extend<{
       await historyBtn.click();
     }
 
-    // Wait for history panel to load
-    const historyHeading = page.locator('h2', { hasText: 'Analysis History' });
-    await historyHeading.waitFor({ timeout: 10_000 });
+    // Wait for history API to complete
+    await historyApiPromise;
 
-    // Find and click the history item that matches our analysis ID
-    // History items are inside the panel overlay — target items by their content
-    // Each history item is a div with cursor-pointer containing the file name
+    // Now items should be rendered — find them inside the panel overlay
     const panelOverlay = page.locator('.fixed.inset-0.z-50');
     const historyItems = panelOverlay.locator('div.cursor-pointer');
-    await historyItems.first().waitFor({ timeout: 5000 });
+    await historyItems.first().waitFor({ timeout: 5_000 });
 
     // Click the first (most recent) history item
     await historyItems.first().click();
