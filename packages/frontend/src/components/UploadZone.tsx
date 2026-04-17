@@ -90,7 +90,7 @@ export default function UploadZone({ onStart, error }: Props) {
         {file ? (
           <div className="space-y-1">
             <IconCheck className="w-8 h-8 mx-auto text-green-400 mb-1" />
-            <p className="text-lg font-medium text-white">{file.name}</p>
+            <p className="text-lg font-medium text-gray-200">{file.name}</p>
             <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
           </div>
         ) : (
