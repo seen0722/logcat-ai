@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { InsightCard as InsightCardType } from '../lib/types';
 import StackTrace from './StackTrace';
 import { IconExpand, IconCollapse } from './Icons';
@@ -163,7 +163,7 @@ function DeepAnalysisBlock({ deepAnalysis }: { deepAnalysis: NonNullable<Insight
   );
 }
 
-export default function InsightCard({ insight, halCorrelation }: Props) {
+function InsightCardInner({ insight, halCorrelation }: Props) {
   const [expanded, setExpanded] = useState(false);
   const styles = SEVERITY_STYLES[insight.severity];
 
@@ -274,6 +274,13 @@ export default function InsightCard({ insight, halCorrelation }: Props) {
     </div>
   );
 }
+
+const InsightCard = React.memo(InsightCardInner, (prev, next) =>
+  prev.insight.id === next.insight.id &&
+  prev.insight.deepAnalysis === next.insight.deepAnalysis &&
+  prev.halCorrelation === next.halCorrelation
+);
+export default InsightCard;
 
 // ── Log Snippet with syntax highlighting ──
 

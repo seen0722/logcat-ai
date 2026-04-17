@@ -1,3 +1,4 @@
+import React from 'react';
 import type { RowComponentProps } from 'react-window';
 import { levelColor, levelBg, kernelLevelColor, kernelLevelBg, kernelLevelLabel } from '../../lib/color-utils';
 import type { LogcatEntry, KernelEntry, RowExtraProps } from './types';
@@ -25,7 +26,7 @@ function HighlightText({ text, pattern }: { text: string; pattern: RegExp | null
 // CRITICAL: This component must NOT use any useState — it renders inside react-window virtual scroll
 // with potentially 50K entries. Any state change would re-render the entire list.
 
-export function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
+function RowComponentInner({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
   const isCurrentMatch = index === currentMatchIndex;
   const isMatch = matchIndices.has(index);
   const isFocus = index === focusIdx;
@@ -93,3 +94,5 @@ export function RowComponent({ index, style, entries, source, currentMatchIndex,
     );
   }
 }
+
+export const RowComponent = React.memo(RowComponentInner) as unknown as typeof RowComponentInner;

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 
 interface PowerMetricCardProps {
   label: string;
@@ -8,7 +8,7 @@ interface PowerMetricCardProps {
   icon: ReactNode;
 }
 
-export default function PowerMetricCard({ label, value, sub, color, icon }: PowerMetricCardProps) {
+function PowerMetricCardInner({ label, value, sub, color, icon }: PowerMetricCardProps) {
   return (
     <div className="bg-surface rounded-xl p-4 space-y-1 border border-border/50">
       <div className="flex items-center gap-2">
@@ -20,3 +20,5 @@ export default function PowerMetricCard({ label, value, sub, color, icon }: Powe
     </div>
   );
 }
+
+export default React.memo(PowerMetricCardInner);

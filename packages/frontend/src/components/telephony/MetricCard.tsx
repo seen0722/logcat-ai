@@ -9,7 +9,7 @@ interface MetricCardProps {
   highlight?: boolean;
 }
 
-export default function MetricCard({ label, value, sub, color, icon, highlight }: MetricCardProps) {
+function MetricCardInner({ label, value, sub, color, icon, highlight }: MetricCardProps) {
   return (
     <div className={`bg-surface rounded-xl p-4 space-y-1 border ${highlight ? 'border-red-500/30' : 'border-border/50'}`}>
       <div className="flex items-center gap-2">
@@ -21,3 +21,5 @@ export default function MetricCard({ label, value, sub, color, icon, highlight }
     </div>
   );
 }
+
+export default React.memo(MetricCardInner);
