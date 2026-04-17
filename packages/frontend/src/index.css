@@ -24,6 +24,7 @@
   --shadow-elevated: 0 24px 48px rgba(12,18,34,0.5), 0 8px 16px rgba(12,18,34,0.3);
   --scrollbar-thumb: rgb(28 38 64);
   --scrollbar-thumb-hover: rgb(45 61 90);
+  --color-ring-track: #1a2540;
 }
 
 [data-theme="light"] {
@@ -46,6 +47,7 @@
   --shadow-elevated: 0 16px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08);
   --scrollbar-thumb: rgb(196 200 208);
   --scrollbar-thumb-hover: rgb(160 164 172);
+  --color-ring-track: #d4d8e0;
 }
 
 /* ── Light mode: remap Tailwind gray utilities ── */
@@ -72,6 +74,8 @@
 [data-theme="light"] .bg-\[\#0d1117\] { background-color: #f8f9fc; }
 [data-theme="light"] .bg-\[\#161b22\] { background-color: #f0f2f5; }
 [data-theme="light"] .bg-\[\#0c1222\] { background-color: #f5f6fa; }
+[data-theme="light"] .bg-\[\#080c18\] { background-color: #f5f6fa; }
+[data-theme="light"] .bg-\[\#1c2128\] { background-color: #ffffff; }
 
 /* Light mode: glass effect — handled by CSS vars now, no override needed */
 
@@ -95,6 +99,17 @@
 [data-theme="light"] .text-blue-400 { color: #2563eb; }
 [data-theme="light"] .text-amber-300 { color: #d97706; }
 [data-theme="light"] .text-amber-400 { color: #d97706; }
+
+/* Light mode: prose-invert override for DeepAnalysis markdown */
+[data-theme="light"] .prose-invert {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: #111827;
+  --tw-prose-bold: #111827;
+  --tw-prose-links: #2563eb;
+  --tw-prose-code: #1e40af;
+  --tw-prose-counters: #4b5563;
+  --tw-prose-bullets: #6b7280;
+}
 
 @layer base {
   * {

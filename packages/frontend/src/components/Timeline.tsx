@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TimelineEvent, Severity } from '../lib/types';
 import { IconSearch, IconExternalLink } from './Icons';
+import { dotColor } from '../lib/color-utils';
 
 interface Props {
   events: TimelineEvent[];
@@ -12,17 +13,6 @@ const SEVERITY_DOT: Record<Severity, string> = {
   warning: 'bg-amber-500',
   info: 'bg-green-500',
 };
-
-/** Source-aware dot: kernel warnings use a distinct teal, logcat stays amber */
-function dotColor(severity: Severity, source: string): string {
-  if (severity === 'critical') return 'bg-red-500';
-  if (severity === 'info') return 'bg-green-500';
-  // warning — differentiate by source
-  if (source === 'kernel') return 'bg-orange-400';
-  if (source === 'anr') return 'bg-rose-400';
-  if (source === 'tombstone') return 'bg-rose-500';
-  return 'bg-amber-500'; // logcat default
-}
 
 const SEVERITY_BTN: Record<Severity, { active: string; label: string }> = {
   critical: { active: 'bg-red-500/20 text-red-400 border-red-500/50', label: 'Critical' },

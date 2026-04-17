@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { InsightCard } from '../lib/types';
 import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary, BufferTimeRange } from '../lib/types';
 import { IconChevronDown } from './Icons';
+import { scoreColor, scoreStrokeColor, scoreLabel } from '../lib/color-utils';
 
 interface Props {
   metadata: BugreportMetadata;
@@ -12,26 +13,6 @@ interface Props {
   halStatus?: HALStatusSummary;
   insights?: InsightCard[];
   bufferTimeRanges?: BufferTimeRange[];
-}
-
-function scoreColor(score: number): string {
-  if (score >= 80) return 'text-green-400';
-  if (score >= 50) return 'text-amber-400';
-  return 'text-red-400';
-}
-
-function scoreStrokeColor(score: number): string {
-  if (score >= 80) return '#22c55e';
-  if (score >= 50) return '#f59e0b';
-  return '#ef4444';
-}
-
-function scoreLabel(score: number): string {
-  if (score >= 90) return 'Excellent';
-  if (score >= 80) return 'Good';
-  if (score >= 60) return 'Fair';
-  if (score >= 40) return 'Poor';
-  return 'Critical';
 }
 
 /** Build a brief deduction reason for a given health dimension */
@@ -69,7 +50,7 @@ function OverallScoreRing({ score }: { score: number }) {
         <svg width={size} height={size} className="-rotate-90">
           <circle
             cx={size / 2} cy={size / 2} r={radius}
-            fill="none" stroke="#1a2540" strokeWidth={6}
+            fill="none" stroke="var(--color-ring-track)" strokeWidth={6}
           />
           <circle
             cx={size / 2} cy={size / 2} r={radius}

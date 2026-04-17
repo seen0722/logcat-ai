@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { List, useListRef } from 'react-window';
-import type { RowComponentProps } from 'react-window';
 import { searchLogcat, searchKernel } from '../lib/api';
 import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
+import { RowComponent, SearchFilters, SearchStatusBar, MAX_ENTRIES, ROW_HEIGHT, DETAIL_HEIGHT } from './search';
+import type { SearchSource, LogcatEntry, KernelEntry, RowExtraProps } from './search';
 
 interface Props {
   uploadId: string;
@@ -13,178 +14,6 @@ interface Props {
   initialSource?: SearchSource;
   /** The exact event timestamp to scroll to after auto-search (center of time window) */
   initialFocusTime?: string;
-}
-
-type SearchSource = 'logcat' | 'kernel';
-
-interface LogcatEntry {
-  lineNumber: number;
-  timestamp: string;
-  pid?: number;
-  tid?: number;
-  level: string;
-  tag: string;
-  message: string;
-  buffer?: string;
-}
-
-interface KernelEntry {
-  entryIndex: number;
-  timestamp: string;
-  level: string;
-  facility: string;
-  message: string;
-}
-
-interface RowExtraProps {
-  entries: LogcatEntry[] | KernelEntry[];
-  source: SearchSource;
-  currentMatchIndex: number;
-  matchIndices: Set<number>;
-  focusIdx: number;
-  onExpandToggle: (idx: number) => void;
-  highlightPattern: RegExp | null;
-}
-
-const MAX_ENTRIES = 50_000;
-const ROW_HEIGHT = 22;
-const DETAIL_HEIGHT = 100;
-
-// ── Logcat helpers ──
-
-function levelColor(level: string): string {
-  switch (level.toUpperCase()) {
-    case 'E': return 'text-red-400';
-    case 'W': return 'text-yellow-400';
-    case 'I': return 'text-green-400';
-    case 'D': return 'text-blue-400';
-    default: return 'text-gray-400';
-  }
-}
-
-function levelBg(level: string): string {
-  switch (level.toUpperCase()) {
-    case 'E': return 'bg-red-950/30';
-    case 'W': return 'bg-yellow-950/20';
-    default: return '';
-  }
-}
-
-// ── Kernel helpers ──
-
-function kernelLevelColor(level: string): string {
-  const num = parseInt(level.replace(/[<>]/g, ''), 10);
-  if (num <= 3) return 'text-red-400';
-  if (num === 4) return 'text-yellow-400';
-  if (num === 5) return 'text-blue-400';
-  if (num === 6) return 'text-green-400';
-  return 'text-gray-400';
-}
-
-function kernelLevelBg(level: string): string {
-  const num = parseInt(level.replace(/[<>]/g, ''), 10);
-  if (num <= 3) return 'bg-red-950/30';
-  if (num === 4) return 'bg-yellow-950/20';
-  return '';
-}
-
-function kernelLevelLabel(level: string): string {
-  const num = parseInt(level.replace(/[<>]/g, ''), 10);
-  const labels: Record<number, string> = {
-    0: 'EMERG', 1: 'ALERT', 2: 'CRIT', 3: 'ERR',
-    4: 'WARN', 5: 'NOTICE', 6: 'INFO', 7: 'DEBUG',
-  };
-  return labels[num] ?? level;
-}
-
-// ── Inline text highlight helper ──
-
-function HighlightText({ text, pattern }: { text: string; pattern: RegExp | null }) {
-  if (!pattern) return <>{text}</>;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
-  let safety = 0;
-  while ((match = re.exec(text)) !== null && safety++ < 200) {
-    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push(<mark key={match.index} className="bg-accent/40 text-inherit rounded-sm px-[1px]">{match[0]}</mark>);
-    lastIndex = re.lastIndex;
-    if (match[0].length === 0) re.lastIndex++;
-  }
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
-}
-
-// ── Row Component (shared for logcat + kernel) ──
-
-function RowComponent({ index, style, entries, source, currentMatchIndex, matchIndices, focusIdx, onExpandToggle, highlightPattern }: RowComponentProps<RowExtraProps>) {
-  const isCurrentMatch = index === currentMatchIndex;
-  const isMatch = matchIndices.has(index);
-  const isFocus = index === focusIdx;
-
-  if (source === 'logcat') {
-    const entry = (entries as LogcatEntry[])[index];
-    if (!entry) return null;
-
-    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${levelBg(entry.level)}`;
-    if (isCurrentMatch) {
-      rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
-    } else if (isFocus) {
-      rowClass += ' border-l-[3px] border-l-accent';
-    } else if (isMatch) {
-      rowClass += ' border-l-[3px] border-l-yellow-400/60 !bg-yellow-900/15';
-    }
-
-    return (
-      <div style={style}>
-        <div className={rowClass} onClick={() => onExpandToggle(index)}>
-          <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-            {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
-            {entry.timestamp}
-          </span>
-          <span className="text-gray-600 px-1 whitespace-nowrap w-[75px] shrink-0">
-            {entry.pid ?? '?'}/{entry.tid ?? '?'}
-          </span>
-          <span className={`px-1 whitespace-nowrap w-[130px] shrink-0 font-semibold truncate ${levelColor(entry.level)}`}>
-            {entry.level}/{entry.tag}
-          </span>
-          <span className={`px-2 flex-1 truncate ${levelColor(entry.level)}`}>
-            {highlightPattern ? <HighlightText text={entry.message} pattern={highlightPattern} /> : entry.message}
-          </span>
-        </div>
-      </div>
-    );
-  } else {
-    const entry = (entries as KernelEntry[])[index];
-    if (!entry) return null;
-
-    let rowClass = `flex items-center text-[11px] leading-[22px] font-mono border-b border-gray-800/30 cursor-pointer hover:bg-gray-800/30 ${kernelLevelBg(entry.level)}`;
-    if (isCurrentMatch) {
-      rowClass += ' !bg-accent/30 border-l-[3px] border-l-accent';
-    } else if (isFocus) {
-      rowClass += ' border-l-[3px] border-l-accent';
-    } else if (isMatch) {
-      rowClass += ' border-l-[3px] border-l-yellow-400/60 !bg-yellow-900/15';
-    }
-
-    return (
-      <div style={style}>
-        <div className={rowClass} onClick={() => onExpandToggle(index)}>
-          <span className="text-gray-600 px-2 whitespace-nowrap w-[150px] shrink-0 overflow-hidden">
-            {isFocus && <span className="text-accent font-bold text-[9px]">{'\u25B6 '}</span>}
-            [{entry.timestamp}]
-          </span>
-          <span className={`px-1 whitespace-nowrap w-[70px] shrink-0 font-semibold ${kernelLevelColor(entry.level)}`}>
-            {kernelLevelLabel(entry.level)}
-          </span>
-          <span className={`px-2 flex-1 truncate ${kernelLevelColor(entry.level)}`}>
-            {highlightPattern ? <HighlightText text={entry.message} pattern={highlightPattern} /> : entry.message}
-          </span>
-        </div>
-      </div>
-    );
-  }
 }
 
 export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource, initialFocusTime }: Props) {
@@ -242,7 +71,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   // UI states
   const [visible, setVisible] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -256,7 +84,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
   const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; offsetOverride?: number; bufferOverride?: string }) => {
     const effectiveSource = opts?.src ?? source;
-    const effectiveTag = opts?.tagOverride ?? tag;
     const effectiveSt = opts?.st ?? startTime;
     const effectiveEt = opts?.et ?? endTime;
     const effectiveOffset = opts?.offsetOverride ?? 0;
@@ -527,11 +354,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         downloadBlob(entriesToLogcatText(entries), `${prefix}-${keyword}-${ts}.txt`, 'text/plain;charset=utf-8');
       }
     }
-    setShowExportMenu(false);
   };
 
   // ── Row props (passed to RowComponent via react-window rowProps) ──
-
 
   const filteredEntriesRef = useRef(filteredEntries);
   filteredEntriesRef.current = filteredEntries;
@@ -581,6 +406,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const listHeight = Math.max(containerHeight - 20, 200);
 
   const allEntries = allEntriesRef.current;
+
+  // ── Buffer change handler (reloads from server when data is truncated) ──
+  const handleBufferChange = useCallback((newBuf: string) => {
+    setBuffer(newBuf);
+    if (truncated) {
+      loadData({ bufferOverride: newBuf });
+    }
+  }, [truncated, loadData]);
 
   return (
     <div
@@ -667,149 +500,20 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </button>
         </div>
 
-        {/* Filters + Time range — single compact row */}
-        <div className="flex gap-2.5 items-center px-4 py-1.5 border-b border-gray-700/60 shrink-0 flex-wrap">
-          {source === 'logcat' && (
-            <>
-              <div className="flex items-center gap-1">
-                <label className="text-[11px] text-gray-500">Tag</label>
-                <input
-                  type="text"
-                  value={tag}
-                  onChange={(e) => setTag(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                  placeholder="e.g. RIL,RILJ"
-                  className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
-                />
-                {tag.trim() && (
-                  <button
-                    onClick={saveCurrentTag}
-                    className="text-gray-500 hover:text-accent text-xs px-1 transition-colors"
-                    title="Save tag preset"
-                  >+</button>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="text-[11px] text-gray-500">Exclude</label>
-                <input
-                  type="text"
-                  value={excludeTags}
-                  onChange={(e) => setExcludeTags(e.target.value)}
-                  placeholder="tag1,tag2"
-                  title="Comma-separated tags to hide"
-                  className="w-28 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="text-[11px] text-gray-500">Buffer</label>
-                <select
-                  value={buffer}
-                  onChange={(e) => {
-                    const newBuf = e.target.value;
-                    setBuffer(newBuf);
-                    // When data is truncated, reload from server with buffer filter
-                    // so we don't miss entries from the selected buffer
-                    if (truncated) {
-                      loadData({ bufferOverride: newBuf });
-                    }
-                  }}
-                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
-                >
-                  <option value="">All</option>
-                  <option value="main">main</option>
-                  <option value="system">system</option>
-                  <option value="events">events</option>
-                  <option value="crash">crash</option>
-                  <option value="radio">radio</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="text-[11px] text-gray-500">Min Level</label>
-                <select
-                  value={level}
-                  onChange={(e) => setLevel(e.target.value)}
-                  className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
-                >
-                  <option value="">All</option>
-                  <option value="V">V+</option>
-                  <option value="D">D+</option>
-                  <option value="I">I+</option>
-                  <option value="W">W+</option>
-                  <option value="E">E+</option>
-                  <option value="F">F</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-1">
-                <label className="text-[11px] text-gray-500">PID</label>
-                <input
-                  type="number"
-                  value={pid}
-                  onChange={(e) => setPid(e.target.value)}
-                  placeholder="—"
-                  className="w-16 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
-                />
-              </div>
-            </>
-          )}
-
-          {source === 'kernel' && (
-            <div className="flex items-center gap-1">
-              <label className="text-[11px] text-gray-500">Min Level</label>
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
-              >
-                <option value="">All</option>
-                <option value="<0>">&lt;0&gt; EMERG</option>
-                <option value="<1>">&lt;1&gt;+ ALERT</option>
-                <option value="<2>">&lt;2&gt;+ CRIT</option>
-                <option value="<3>">&lt;3&gt;+ ERR</option>
-                <option value="<4>">&lt;4&gt;+ WARN</option>
-                <option value="<5>">&lt;5&gt;+ NOTICE</option>
-                <option value="<6>">&lt;6&gt;+ INFO</option>
-              </select>
-            </div>
-          )}
-
-          <div className="w-px h-5 bg-gray-700/50" />
-
-          <div className="flex items-center gap-1">
-            <label className="text-[11px] text-gray-500">From</label>
-            <input
-              type="text"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              placeholder="MM-DD HH:mm:ss"
-              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <label className="text-[11px] text-gray-500">To</label>
-            <input
-              type="text"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              placeholder="MM-DD HH:mm:ss"
-              className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
-            />
-          </div>
-          <button
-            onClick={() => loadData({ bufferOverride: buffer })}
-            disabled={loading}
-            className="px-3 py-1 text-[11px] font-medium bg-accent hover:bg-accent disabled:opacity-50 text-white rounded-md transition-colors"
-          >
-            {loading ? 'Loading...' : 'Load Range'}
-          </button>
-          {(startTime || endTime) && (
-            <button
-              onClick={() => { setStartTime(''); setEndTime(''); }}
-              className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              Clear
-            </button>
-          )}
-        </div>
+        {/* Filters + Time range */}
+        <SearchFilters
+          source={source}
+          tag={tag} setTag={setTag}
+          excludeTags={excludeTags} setExcludeTags={setExcludeTags}
+          buffer={buffer} setBuffer={handleBufferChange}
+          pid={pid} setPid={setPid}
+          level={level} setLevel={setLevel}
+          startTime={startTime} setStartTime={setStartTime}
+          endTime={endTime} setEndTime={setEndTime}
+          loading={loading}
+          onLoadRange={() => loadData({ bufferOverride: buffer })}
+          onSaveTag={saveCurrentTag}
+        />
 
         {/* Quick bar: Saved tags + Time navigation — single compact row */}
         {(allEntries.length > 0 || (source === 'logcat' && savedTags.length > 0)) && (() => {
@@ -857,96 +561,33 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               )}
               {allEntries.length > 0 && (
                 <>
-                  {jumpBtn('← Earlier', addMin(firstTs, -5), firstTs, true)}
+                  {jumpBtn('\u2190 Earlier', addMin(firstTs, -5), firstTs, true)}
                   {jumpBtn('All', '', '')}
                   <button key="Oldest" onClick={handleOldest} disabled={loading}
                     className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Oldest</button>
                   <button key="Latest" onClick={handleLatest} disabled={loading}
                     className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Latest</button>
-                  {jumpBtn('Later →', lastTs, '', true)}
+                  {jumpBtn('Later \u2192', lastTs, '', true)}
                 </>
               )}
             </div>
           );
         })()}
 
-        {/* Status bar — always rendered to prevent layout shift */}
-        <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-[#161b22] border-b border-gray-700/40 shrink-0">
-          {loading ? (
-            <span className="text-gray-500">Loading...</span>
-          ) : allEntries.length > 0 ? (
-            <>
-              <span className="font-medium text-gray-300">{allEntries.length.toLocaleString()}</span>
-              <span>loaded</span>
-              <span className="text-gray-600">|</span>
-              <span className="font-medium text-gray-300">{filteredEntries.length.toLocaleString()}</span>
-              <span>shown</span>
-              {q.trim() && matchList.length > 0 && (
-                <>
-                  <span className="text-gray-600">|</span>
-                  <span className="font-medium text-accent">{matchList.length.toLocaleString()}</span>
-                  <span>matches</span>
-                </>
-              )}
-              {method && (
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
-                  method === 'fts5'
-                    ? 'bg-accent/20 text-accent border border-accent/30'
-                    : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
-                }`}>
-                  {method}
-                </span>
-              )}
-              {truncated && (
-                <span className="text-yellow-400 text-[11px]">
-                  Showing {allEntries.length.toLocaleString()} of {(fullTimeRange?.total ?? totalAvailable).toLocaleString()}
-                  {allEntries.length > 0 && (
-                    <span className="text-gray-500 ml-1">
-                      (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)}
-                      {fullTimeRange && (
-                        <span> · full: {fullTimeRange.first.slice(0, 14)} ~ {fullTimeRange.last.slice(0, 14)}</span>
-                      )}
-                      )
-                    </span>
-                  )}
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-gray-500">&nbsp;</span>
-          )}
-
-          {/* Export dropdown */}
-          {allEntries.length > 0 && !loading && (
-            <div className="relative ml-auto">
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="px-2 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors flex items-center gap-1"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export
-              </button>
-              {showExportMenu && (
-                <div className="absolute top-full right-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
-                  <button
-                    onClick={() => handleExport('csv')}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
-                  >
-                    Export CSV ({filteredEntries.length.toLocaleString()} rows)
-                  </button>
-                  <button
-                    onClick={() => handleExport('text')}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"
-                  >
-                    {source === 'kernel' ? 'Export dmesg Text' : 'Export Text'} ({filteredEntries.length.toLocaleString()} rows)
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Status bar */}
+        <SearchStatusBar
+          source={source}
+          loading={loading}
+          allEntries={allEntries}
+          filteredCount={filteredEntries.length}
+          matchCount={matchList.length}
+          hasKeyword={!!q.trim()}
+          method={method}
+          truncated={truncated}
+          totalAvailable={totalAvailable}
+          fullTimeRange={fullTimeRange}
+          onExport={handleExport}
+        />
 
         {/* Results area */}
         <div ref={containerRef} className="flex-1 min-h-0 flex flex-col relative">

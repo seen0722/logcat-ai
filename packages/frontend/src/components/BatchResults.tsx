@@ -1,32 +1,12 @@
 import { useState, useEffect } from 'react';
 import { BatchAggregation, BatchFileResult } from '../lib/types';
+import { severityBadge, batchScoreColor, batchScoreBg } from '../lib/color-utils';
 
 interface Props {
   aggregation: BatchAggregation;
   items: BatchFileResult[];
   onViewReport: (id: string) => void;
   onClose: () => void;
-}
-
-function severityBadge(severity: string): string {
-  switch (severity) {
-    case 'critical': return 'bg-red-900/50 text-red-300 border-red-700/50';
-    case 'warning': return 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50';
-    case 'info': return 'bg-blue-900/50 text-blue-300 border-blue-700/50';
-    default: return 'bg-gray-800 text-gray-300 border-gray-700';
-  }
-}
-
-function scoreColor(score: number): string {
-  if (score >= 70) return 'text-green-400';
-  if (score >= 40) return 'text-yellow-400';
-  return 'text-red-400';
-}
-
-function scoreBg(score: number): string {
-  if (score >= 70) return 'bg-green-500';
-  if (score >= 40) return 'bg-yellow-500';
-  return 'bg-red-500';
 }
 
 export default function BatchResults({ aggregation, items, onViewReport, onClose }: Props) {
@@ -82,7 +62,7 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
               <div className="text-xs text-gray-400 mt-1">Total Reports</div>
             </div>
             <div className="bg-surface border border-border rounded-lg p-4 text-center">
-              <div className={`text-2xl font-bold ${scoreColor(avgHealthScore)}`}>
+              <div className={`text-2xl font-bold ${batchScoreColor(avgHealthScore)}`}>
                 {avgHealthScore}
               </div>
               <div className="text-xs text-gray-400 mt-1">
@@ -126,11 +106,11 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
                           <div className="flex items-center justify-center gap-2">
                             <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${scoreBg(item.healthScore)}`}
+                                className={`h-full rounded-full ${batchScoreBg(item.healthScore)}`}
                                 style={{ width: `${item.healthScore}%` }}
                               />
                             </div>
-                            <span className={`text-xs font-medium ${scoreColor(item.healthScore)}`}>
+                            <span className={`text-xs font-medium ${batchScoreColor(item.healthScore)}`}>
                               {item.healthScore}
                             </span>
                           </div>
@@ -223,7 +203,7 @@ export default function BatchResults({ aggregation, items, onViewReport, onClose
                         <td className="py-2 px-3 text-gray-200 font-medium">{device.model}</td>
                         <td className="py-2 px-3 text-gray-400">{device.manufacturer}</td>
                         <td className="py-2 px-3 text-center text-gray-300">{device.count}</td>
-                        <td className={`py-2 px-3 text-center font-medium ${scoreColor(device.avgHealthScore)}`}>
+                        <td className={`py-2 px-3 text-center font-medium ${batchScoreColor(device.avgHealthScore)}`}>
                           {device.avgHealthScore}
                         </td>
                       </tr>
