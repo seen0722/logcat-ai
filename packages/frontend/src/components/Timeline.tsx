@@ -166,6 +166,7 @@ export default function Timeline({ events, onSearchTime }: Props) {
                       }}
                       className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-accent transition-all p-0.5 rounded hover:bg-accent/10"
                       title="Search logs around this time"
+                      aria-label="Search logs around this time"
                     >
                       <IconSearch className="w-3.5 h-3.5" />
                     </button>

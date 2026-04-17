@@ -77,6 +77,7 @@ export default function AppLayout() {
                 onClick={toggleTheme}
                 className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {theme === 'dark' ? <IconSun className="w-4 h-4" /> : <IconMoon className="w-4 h-4" />}
               </button>
@@ -84,6 +85,7 @@ export default function AppLayout() {
                 onClick={() => setShowSettings(true)}
                 className="hidden sm:inline-flex btn-ghost text-sm px-3 py-1.5"
                 title="LLM Settings"
+                aria-label="LLM Settings"
               >
                 <IconSettings className="w-4 h-4" />
               </button>
@@ -104,6 +106,7 @@ export default function AppLayout() {
                 <button
                   onClick={() => setShowHeaderMenu(!showHeaderMenu)}
                   className="btn-ghost px-2 py-1.5 text-sm"
+                  aria-label="Open menu"
                 >
                   <IconMenu className="w-5 h-5" />
                 </button>

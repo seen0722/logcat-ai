@@ -56,6 +56,7 @@ export function SearchFilters({
                 onClick={onSaveTag}
                 className="text-gray-500 hover:text-accent text-xs px-1 transition-colors"
                 title="Save tag preset"
+                aria-label="Save tag preset"
               >+</button>
             )}
           </div>

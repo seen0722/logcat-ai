@@ -24,7 +24,7 @@ export default function ProgressView({ progress, onCancel }: Props) {
   const currentIdx = stageIndex(progress.stage);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6" role="status" aria-live="polite">
       {/* Stage indicators with connectors */}
       <div className="flex items-center justify-between">
         {STAGES.map((stage, i) => {

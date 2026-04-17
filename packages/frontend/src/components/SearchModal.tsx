@@ -472,6 +472,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 useRegex ? 'bg-accent/30 text-accent font-bold' : 'text-gray-500 hover:text-gray-300'
               }`}
               title={useRegex ? 'Regex enabled' : 'Enable regex'}
+              aria-label={useRegex ? 'Regex enabled' : 'Enable regex'}
             >
               .*
             </button>
@@ -480,6 +481,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             onClick={goToPrevMatch}
             disabled={matchList.length === 0}
             title="Previous match (Shift+Enter)"
+            aria-label="Previous match"
             className="px-2 py-1.5 text-xs rounded-md border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-[#161b22]"
           >
             {'\u25B2'}
@@ -488,6 +490,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             onClick={goToNextMatch}
             disabled={matchList.length === 0}
             title="Next match (Enter)"
+            aria-label="Next match"
             className="px-2 py-1.5 text-xs rounded-md border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-[#161b22]"
           >
             {'\u25BC'}
@@ -495,6 +498,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           <button
             onClick={handleClose}
             className="text-gray-500 hover:text-white text-lg leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors shrink-0"
+            aria-label="Close search"
           >
             &times;
           </button>

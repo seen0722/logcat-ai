@@ -63,6 +63,7 @@ export default function SectionNav({ sections }: Props) {
             onClick={() => setCollapsed(!collapsed)}
             className="w-full px-2 py-1.5 text-gray-500 hover:text-gray-300 transition-colors border-b border-border flex items-center justify-center"
             title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
           >
             <svg className={`w-3.5 h-3.5 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />

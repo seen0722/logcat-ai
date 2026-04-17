@@ -1,5 +1,6 @@
 import { createBrowserRouter, Outlet } from 'react-router';
 import { AnalysisProvider } from './contexts/AnalysisContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import AppLayout from './layouts/AppLayout';
 import UploadPage from './pages/UploadPage';
 import AnalysisPage from './pages/AnalysisPage';
@@ -23,23 +24,23 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/',
-        element: <UploadPage />,
+        element: <ErrorBoundary><UploadPage /></ErrorBoundary>,
       },
       {
         element: <AppLayout />,
         children: [
-          { path: '/analysis/:id', element: <AnalysisPage /> },
-          { path: '/analysis/:id/search', element: <SearchPage /> },
-          { path: '/compare/:id1/:id2', element: <ComparePage /> },
+          { path: '/analysis/:id', element: <ErrorBoundary><AnalysisPage /></ErrorBoundary> },
+          { path: '/analysis/:id/search', element: <ErrorBoundary><SearchPage /></ErrorBoundary> },
+          { path: '/compare/:id1/:id2', element: <ErrorBoundary><ComparePage /></ErrorBoundary> },
         ],
       },
       {
         path: '/history',
-        element: <HistoryPage />,
+        element: <ErrorBoundary><HistoryPage /></ErrorBoundary>,
       },
       {
         path: '/settings',
-        element: <SettingsPage />,
+        element: <ErrorBoundary><SettingsPage /></ErrorBoundary>,
       },
     ],
   },

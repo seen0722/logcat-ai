@@ -97,6 +97,7 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
           <button
             onClick={handleClose}
             className="text-gray-500 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-hover transition-colors"
+            aria-label="Close history panel"
           >
             <IconClose size={18} />
           </button>
@@ -144,6 +145,7 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                       onClick={(e) => handleDelete(item.id, e)}
                       className="text-gray-600 hover:text-red-400 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-500/10 transition-colors shrink-0"
                       title="Delete"
+                      aria-label="Delete"
                     >
                       <IconDelete size={14} />
                     </button>
