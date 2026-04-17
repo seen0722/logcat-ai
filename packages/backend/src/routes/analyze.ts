@@ -21,7 +21,8 @@ import {
 } from '@logcat-ai/parser';
 import { analyzeBasic } from '@logcat-ai/parser';
 import { getConfig } from '../config.js';
-import { analyzeDeep } from '../llm-gateway/llm-gateway.js';
+import { analyzeDeep, analyzeDeepAgentic } from '../llm-gateway/llm-gateway.js';
+import type { AgenticDeepStreamChunk } from '../llm-gateway/llm-gateway.js';
 import { analysisStore } from '../store.js';
 import { rawDataStore } from '../raw-data-store.js';
 import { indexLogcatEntries, indexKernelEntries } from '../search/fts-indexer.js';
@@ -356,70 +357,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     // Stage 4: Deep Analysis (optional)
     if (mode === 'deep') {
-      sendSSE(res, { stage: 'deep_analysis', progress: 85, message: 'Starting AI deep analysis...' });
-
-      let deepContent = '';
-      try {
-        for await (const chunk of analyzeDeep(analysisResult, userDescription)) {
-          if (aborted) return;
-          deepContent += chunk.content;
-          sendSSE(res, {
-            stage: 'deep_analysis',
-            progress: 85 + Math.min(10, Math.floor(deepContent.length / 500)),
-            message: chunk.done ? 'Deep analysis complete' : 'AI analyzing...',
-            data: { chunk: chunk.content, done: chunk.done },
-          });
+      await runDeepAnalysis(id, analysisResult, userDescription, res, () => aborted, () => {
+        if (uploadMeta) {
+          analysisStore.setWithMeta(id, analysisResult, originalFilename, fileSize);
+        } else {
+          analysisStore.set(id, analysisResult);
         }
-
-        // Try to parse LLM output and enhance insights
-        const parsed = tryParseDeepAnalysis(deepContent);
-        if (parsed) {
-          // Merge per-insight deep analysis
-          for (const item of parsed.insights) {
-            const insight = analysisResult.insights.find((i) => i.id === item.insightId);
-            if (insight) {
-              insight.deepAnalysis = {
-                rootCause: item.rootCause,
-                fixSuggestion: item.fixSuggestion,
-                confidence: item.confidence,
-                evidence: item.evidence ?? [],
-                impactAssessment: item.impactAssessment ?? '',
-                debuggingSteps: item.debuggingSteps ?? [],
-                relatedInsights: item.relatedInsights ?? [],
-                category: item.category ?? 'root_cause',
-                affectedComponents: item.affectedComponents ?? [],
-              };
-            }
-          }
-
-          // Merge overview
-          if (parsed.executiveSummary) {
-            analysisResult.deepAnalysisOverview = {
-              executiveSummary: parsed.executiveSummary,
-              systemDiagnosis: parsed.systemDiagnosis ?? '',
-              correlationFindings: parsed.correlationFindings ?? [],
-              prioritizedActions: parsed.prioritizedActions ?? [],
-            };
-          }
-
-          // Persist updated result (with deep analysis) to both cache and SQLite
-          if (uploadMeta) {
-            analysisStore.setWithMeta(id, analysisResult, originalFilename, fileSize);
-          } else {
-            analysisStore.set(id, analysisResult);
-          }
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown LLM error';
-        if (err instanceof Error && err.stack) {
-          console.error('[Deep Analysis Error]', err.stack);
-        }
-        sendSSE(res, {
-          stage: 'deep_analysis',
-          progress: 95,
-          message: `Deep analysis failed: ${msg}. Quick Analysis results are still available.`,
-        });
-      }
+      });
     }
 
     // NOTE: Do NOT send analysisResult inline — it can be 200MB+ for large bugreports.
@@ -506,57 +450,15 @@ router.get('/:id/deep', async (req: Request, res: Response) => {
   let aborted = false;
   req.on('close', () => { aborted = true; });
 
-  sendSSE(res, { stage: 'deep_analysis', progress: 85, message: 'Starting AI deep analysis...' });
-
-  let deepContent = '';
   try {
-    for await (const chunk of analyzeDeep(analysisResult, userDescription)) {
-      if (aborted) return;
-      deepContent += chunk.content;
-      sendSSE(res, {
-        stage: 'deep_analysis',
-        progress: 85 + Math.min(10, Math.floor(deepContent.length / 500)),
-        message: chunk.done ? 'Deep analysis complete' : 'AI analyzing...',
-        data: { chunk: chunk.content, done: chunk.done },
-      });
-    }
-
-    const parsed = tryParseDeepAnalysis(deepContent);
-    if (parsed) {
-      for (const item of parsed.insights) {
-        const insight = analysisResult.insights.find((i) => i.id === item.insightId);
-        if (insight) {
-          insight.deepAnalysis = {
-            rootCause: item.rootCause,
-            fixSuggestion: item.fixSuggestion,
-            confidence: item.confidence,
-            evidence: item.evidence ?? [],
-            impactAssessment: item.impactAssessment ?? '',
-            debuggingSteps: item.debuggingSteps ?? [],
-            relatedInsights: item.relatedInsights ?? [],
-            category: item.category ?? 'root_cause',
-            affectedComponents: item.affectedComponents ?? [],
-          };
-        }
-      }
-
-      if (parsed.executiveSummary) {
-        analysisResult.deepAnalysisOverview = {
-          executiveSummary: parsed.executiveSummary,
-          systemDiagnosis: parsed.systemDiagnosis ?? '',
-          correlationFindings: parsed.correlationFindings ?? [],
-          prioritizedActions: parsed.prioritizedActions ?? [],
-        };
-      }
-
-      // Re-persist with deep analysis data
+    await runDeepAnalysis(id, analysisResult, userDescription, res, () => aborted, () => {
       const meta = analysisStore.getUploadMeta(id);
       if (meta) {
         analysisStore.setWithMeta(id, analysisResult, meta.filename, meta.fileSize);
       } else {
         analysisStore.set(id, analysisResult);
       }
-    }
+    });
 
     sendSSE(res, { stage: 'complete', progress: 100, message: 'Deep analysis complete', data: { id } });
   } catch (err) {
@@ -571,6 +473,141 @@ router.get('/:id/deep', async (req: Request, res: Response) => {
     res.end();
   }
 });
+
+// ============================================================
+// Shared Deep Analysis Runner (agentic with one-shot fallback)
+// ============================================================
+
+async function runDeepAnalysis(
+  id: string,
+  analysisResult: AnalysisResult,
+  userDescription: string | undefined,
+  res: Response,
+  isAborted: () => boolean,
+  persist: () => void,
+): Promise<void> {
+  sendSSE(res, { stage: 'deep_analysis', progress: 85, message: 'Starting AI deep analysis...' });
+
+  // Try agentic mode if rawDataStore is available (needed for tools)
+  const hasRawData = rawDataStore.get(id) != null;
+
+  let deepContent = '';
+
+  if (hasRawData) {
+    // Agentic multi-pass mode
+    try {
+      let useOneShot = false;
+
+      for await (const chunk of analyzeDeepAgentic(id, analysisResult, userDescription) as AsyncIterable<AgenticDeepStreamChunk>) {
+        if (isAborted()) return;
+
+        // Handle agentic progress events
+        if (chunk.agenticProgress) {
+          const ap = chunk.agenticProgress;
+          const progressMap: Record<string, number> = { triage: 86, investigating: 88, analyzing: 92 };
+          sendSSE(res, {
+            stage: 'deep_analysis',
+            progress: progressMap[ap.subStage] ?? 87,
+            message: ap.message,
+            data: { subStage: ap.subStage, toolCall: ap.toolCall },
+          });
+          continue;
+        }
+
+        // Handle fallback signal
+        if (chunk.fallbackToOneShot) {
+          console.log('[Agentic] Falling back to one-shot deep analysis');
+          useOneShot = true;
+          break;
+        }
+
+        // Normal streaming content (Phase 3)
+        deepContent += chunk.content;
+        sendSSE(res, {
+          stage: 'deep_analysis',
+          progress: 92 + Math.min(5, Math.floor(deepContent.length / 500)),
+          message: chunk.done ? 'Deep analysis complete' : 'AI analyzing...',
+          data: { chunk: chunk.content, done: chunk.done },
+        });
+      }
+
+      if (useOneShot) {
+        deepContent = '';
+        // Fall through to one-shot below
+      } else {
+        // Agentic succeeded — parse and merge
+        mergeDeepAnalysis(deepContent, analysisResult, persist);
+        return;
+      }
+    } catch (err) {
+      console.error('[Agentic] Failed, falling back to one-shot:', err instanceof Error ? err.message : err);
+      deepContent = '';
+      // Fall through to one-shot
+    }
+  }
+
+  // One-shot fallback (or no rawDataStore)
+  try {
+    for await (const chunk of analyzeDeep(analysisResult, userDescription)) {
+      if (isAborted()) return;
+      deepContent += chunk.content;
+      sendSSE(res, {
+        stage: 'deep_analysis',
+        progress: 85 + Math.min(10, Math.floor(deepContent.length / 500)),
+        message: chunk.done ? 'Deep analysis complete' : 'AI analyzing...',
+        data: { chunk: chunk.content, done: chunk.done },
+      });
+    }
+    mergeDeepAnalysis(deepContent, analysisResult, persist);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown LLM error';
+    if (err instanceof Error && err.stack) {
+      console.error('[Deep Analysis Error]', err.stack);
+    }
+    sendSSE(res, {
+      stage: 'deep_analysis',
+      progress: 95,
+      message: `Deep analysis failed: ${msg}. Quick Analysis results are still available.`,
+    });
+  }
+}
+
+function mergeDeepAnalysis(
+  deepContent: string,
+  analysisResult: AnalysisResult,
+  persist: () => void,
+): void {
+  const parsed = tryParseDeepAnalysis(deepContent);
+  if (!parsed) return;
+
+  for (const item of parsed.insights) {
+    const insight = analysisResult.insights.find((i) => i.id === item.insightId);
+    if (insight) {
+      insight.deepAnalysis = {
+        rootCause: item.rootCause,
+        fixSuggestion: item.fixSuggestion,
+        confidence: item.confidence,
+        evidence: item.evidence ?? [],
+        impactAssessment: item.impactAssessment ?? '',
+        debuggingSteps: item.debuggingSteps ?? [],
+        relatedInsights: item.relatedInsights ?? [],
+        category: item.category ?? 'root_cause',
+        affectedComponents: item.affectedComponents ?? [],
+      };
+    }
+  }
+
+  if (parsed.executiveSummary) {
+    analysisResult.deepAnalysisOverview = {
+      executiveSummary: parsed.executiveSummary,
+      systemDiagnosis: parsed.systemDiagnosis ?? '',
+      correlationFindings: parsed.correlationFindings ?? [],
+      prioritizedActions: parsed.prioritizedActions ?? [],
+    };
+  }
+
+  persist();
+}
 
 // ============================================================
 // Standalone File Analysis (logcat / dmesg)

@@ -16,6 +16,8 @@ import { buildChatPrompt } from './prompt-templates/chat.js';
 import type { ChatMessage } from './prompt-templates/chat.js';
 import { buildToolSystemPrompt } from './tool-definitions.js';
 import { executeTool } from './tool-executor.js';
+import { analyzeDeepAgentic as _analyzeDeepAgentic } from './agentic-analysis.js';
+export type { AgenticStreamChunk as AgenticDeepStreamChunk } from './agentic-analysis.js';
 
 // ============================================================
 // Provider Registry
@@ -47,6 +49,15 @@ export async function* analyzeDeep(
   const provider = getActiveProvider();
   const { systemPrompt, userPrompt } = buildAnalysisPrompt(result, userDescription);
   yield* provider.chatStream({ systemPrompt, userPrompt });
+}
+
+export function analyzeDeepAgentic(
+  analysisId: string,
+  result: AnalysisResult,
+  userDescription?: string,
+) {
+  const provider = getActiveProvider();
+  return _analyzeDeepAgentic(analysisId, result, provider, userDescription);
 }
 
 export async function* chat(

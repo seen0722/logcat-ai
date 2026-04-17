@@ -520,7 +520,10 @@ export interface SSEProgress {
   stage: 'unpacking' | 'parsing' | 'analyzing' | 'deep_analysis' | 'complete' | 'error';
   progress: number;
   message: string;
-  data?: AnalysisResult | { chunk: string; done: boolean };
+  data?: AnalysisResult | { chunk: string; done: boolean } | {
+    subStage?: 'triage' | 'investigating' | 'analyzing';
+    toolCall?: { name: string; insightId?: string };
+  };
 }
 
 export interface UploadResponse {

@@ -79,9 +79,31 @@ export default function ProgressView({ progress, onCancel }: Props) {
 
       {/* Message */}
       <p className="text-center text-sm text-gray-400">{progress.message}</p>
-      {progress.stage === 'deep_analysis' && (
-        <p className="text-center text-xs text-gray-600">Typically takes 30 seconds to 2 minutes depending on bugreport complexity</p>
-      )}
+      {progress.stage === 'deep_analysis' && (() => {
+        const data = progress.data as { subStage?: string; toolCall?: { name: string; insightId?: string } } | undefined;
+        const subStage = data?.subStage;
+        if (subStage) {
+          const labels: Record<string, string> = {
+            triage: 'Reviewing insights to plan investigation...',
+            investigating: 'Gathering targeted evidence with tools...',
+            analyzing: 'Generating final analysis with enriched context...',
+          };
+          return (
+            <div className="text-center space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse-dot" />
+                <span className="text-xs text-accent-light">{labels[subStage] ?? subStage}</span>
+              </div>
+              {data?.toolCall && (
+                <p className="text-xs text-gray-600">
+                  {data.toolCall.name}{data.toolCall.insightId ? ` → ${data.toolCall.insightId}` : ''}
+                </p>
+              )}
+            </div>
+          );
+        }
+        return <p className="text-center text-xs text-gray-600">Typically takes 30 seconds to 2 minutes depending on bugreport complexity</p>;
+      })()}
       {onCancel && (
         <p className="text-center">
           <button onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">

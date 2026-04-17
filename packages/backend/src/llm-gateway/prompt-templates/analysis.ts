@@ -1,9 +1,11 @@
 import { AnalysisResult } from '@logcat-ai/parser';
 import { buildInsightContexts, buildHALCrossReference, InsightContext } from './context-builder.js';
+import type { InvestigationFindings } from './agentic-types.js';
 
 export function buildAnalysisPrompt(
   result: AnalysisResult,
-  userDescription?: string
+  userDescription?: string,
+  investigationFindings?: InvestigationFindings,
 ): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = `You are an expert Android system engineer specializing in bugreport analysis.
 You will receive a structured summary from a bugreport.zip analysis (Quick Analysis results) along with detailed raw context for each insight.
@@ -195,6 +197,20 @@ When analyzing telephony insights, focus on:
 
       if (ctx.temporalContext.length > 0) {
         userPrompt += `\nTemporal context (W/E/F within ±2s):\n${ctx.temporalContext.map((l) => `  ${l}`).join('\n')}`;
+      }
+    }
+  }
+
+  // Agentic investigation findings (from triage → tool calls → synthesis)
+  if (investigationFindings && investigationFindings.findings.length > 0) {
+    userPrompt += '\n\n## Investigation Findings (from agentic pre-analysis)';
+    userPrompt += '\nThe following evidence was gathered by targeted tool calls during a triage phase. Prioritize this evidence over the static context above when they overlap.';
+    for (const finding of investigationFindings.findings) {
+      const insight = result.insights.find((i) => i.id === finding.insightId);
+      userPrompt += `\n\n### ${finding.insightId}: ${insight?.title ?? 'Unknown'}`;
+      userPrompt += `\nHypothesis: ${finding.hypothesis}`;
+      if (finding.evidence.length > 0) {
+        userPrompt += `\nEvidence:\n${finding.evidence.map((e) => `  - ${e}`).join('\n')}`;
       }
     }
   }
