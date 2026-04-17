@@ -56,7 +56,7 @@
 [data-theme="light"] .text-gray-300 { color: #4a5568; }
 [data-theme="light"] .text-gray-400 { color: #64748b; }
 [data-theme="light"] .text-gray-500 { color: #718096; }
-[data-theme="light"] .text-gray-600 { color: #94a3b8; }
+[data-theme="light"] .text-gray-600 { color: #64748b; }
 [data-theme="light"] .text-gray-700 { color: #b0b8c4; }
 [data-theme="light"] .bg-gray-700 { background-color: #e2e5ea; }
 [data-theme="light"] .bg-gray-700\/50 { background-color: rgba(226,229,234,0.5); }
@@ -68,6 +68,7 @@
 [data-theme="light"] .border-gray-800 { border-color: #e2e5ea; }
 [data-theme="light"] .border-gray-800\/60 { border-color: rgba(226,229,234,0.6); }
 [data-theme="light"] .hover\:bg-gray-700\/50:hover { background-color: rgba(226,229,234,0.5); }
+[data-theme="light"] .light-opacity-80 { opacity: 0.8 !important; }
 
 /* Light mode: surface-like backgrounds used inline */
 [data-theme="light"] .bg-\[\#0a0e17\] { background-color: #f0f2f5; }

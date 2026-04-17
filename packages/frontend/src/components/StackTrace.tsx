@@ -160,7 +160,7 @@ function FrameRow({ frame }: { frame: ParsedFrame }) {
 
   const rowClass = [
     'flex items-baseline gap-1.5 py-px',
-    fw ? 'opacity-30' : '',
+    fw ? 'opacity-40 light-opacity-80' : '',
     hal ? 'bg-amber-500/10 -mx-2 px-2 rounded' : '',
   ].join(' ');
 
