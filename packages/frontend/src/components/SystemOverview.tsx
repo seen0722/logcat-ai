@@ -242,8 +242,8 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               )}
             </div>
 
-            {/* Right: Health Score */}
-            <div className="flex items-start gap-8 lg:gap-10 shrink-0">
+            {/* Right: Health Score Ring */}
+            <div className="shrink-0">
               <div className="flex flex-col items-center">
                 <OverallScoreRing score={healthScore.overall} />
                 {healthScore.overall < 80 && (() => {
@@ -261,13 +261,15 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                   );
                 })()}
               </div>
-              <div className="w-40 space-y-3 pt-2">
-                <DimensionBar score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
-                <DimensionBar score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
-                <DimensionBar score={breakdown.responsiveness} label="Responsiveness" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
-                <DimensionBar score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
-              </div>
             </div>
+          </div>
+
+          {/* Dimension bars — full-width grid below hero row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 mt-5 pt-4 border-t border-border/30">
+            <DimensionBar score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
+            <DimensionBar score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
+            <DimensionBar score={breakdown.responsiveness} label="Responsiveness" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
+            <DimensionBar score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
           </div>
         </div>
       </div>
