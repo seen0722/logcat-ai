@@ -37,54 +37,53 @@ function deductionHint(dimension: string, score: number, insights?: InsightCard[
   return parts.slice(0, 2).join(', ');
 }
 
-function OverallScoreRing({ score }: { score: number }) {
-  const size = 120;
-  const radius = (size - 10) / 2;
+function OverallScoreRing({ score, size = 80 }: { score: number; size?: number }) {
+  const radius = (size - 8) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
   const isLow = score < 70;
 
   return (
-    <div className="flex flex-col items-center">
-      <div className={`relative ${isLow ? 'animate-pulse-subtle' : ''}`}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle
-            cx={size / 2} cy={size / 2} r={radius}
-            fill="none" stroke="var(--color-ring-track)" strokeWidth={6}
-          />
-          <circle
-            cx={size / 2} cy={size / 2} r={radius}
-            fill="none"
-            stroke={scoreStrokeColor(score)}
-            strokeWidth={isLow ? 7 : 6}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-all duration-1000 ease-out"
-            style={{ filter: `drop-shadow(0 0 6px ${scoreStrokeColor(score)}40)` }}
-          />
-        </svg>
-        <span className={`absolute inset-0 flex flex-col items-center justify-center`}>
-          <span className={`text-3xl font-bold leading-none ${scoreColor(score)}`}>{score}</span>
-          <span className="text-[10px] text-gray-500 mt-1">/100</span>
-        </span>
-      </div>
-      <span className={`text-sm font-medium mt-2 ${scoreColor(score)}`}>{scoreLabel(score)}</span>
+    <div className={`relative ${isLow ? 'animate-pulse-subtle' : ''}`}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2} cy={size / 2} r={radius}
+          fill="none" stroke="var(--color-ring-track)" strokeWidth={5}
+        />
+        <circle
+          cx={size / 2} cy={size / 2} r={radius}
+          fill="none"
+          stroke={scoreStrokeColor(score)}
+          strokeWidth={isLow ? 6 : 5}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-1000 ease-out"
+          style={{ filter: `drop-shadow(0 0 6px ${scoreStrokeColor(score)}40)` }}
+        />
+      </svg>
+      <span className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`text-xl font-bold leading-none ${scoreColor(score)}`}>{score}</span>
+      </span>
     </div>
   );
 }
 
-function DimensionBar({ score, label, hint }: { score: number; label: string; hint?: string }) {
+function DimensionCard({ score, label, hint, isWorst }: { score: number; label: string; hint?: string; isWorst?: boolean }) {
   const isCritical = score < 50;
   const isLow = score < 70;
+
   return (
-    <div className={`space-y-1.5 transition-all ${
-      isCritical ? 'bg-red-500/5 border-l-2 border-red-500 pl-2.5 py-1.5 -ml-3 rounded-r-lg' :
-      isLow ? 'bg-amber-500/5 border-l-2 border-amber-500/50 pl-2.5 py-1 -ml-3 rounded-r-lg' : ''
+    <div className={`rounded-xl p-3 transition-all border ${
+      isWorst && isCritical
+        ? 'bg-red-500/8 border-red-500/40 shadow-[0_0_12px_rgba(239,68,68,0.1)]'
+        : isWorst && isLow
+          ? 'bg-amber-500/8 border-amber-500/30'
+          : 'bg-surface border-border/40'
     }`}>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-2">
         <span className={`text-xs font-medium ${isLow ? scoreColor(score) : 'text-gray-400'}`}>{label}</span>
-        <span className={`text-xs font-bold ${scoreColor(score)}`}>{score}</span>
+        <span className={`text-lg font-bold leading-none ${scoreColor(score)}`}>{score}</span>
       </div>
       <div className="h-1.5 bg-surface rounded-full overflow-hidden">
         <div
@@ -96,7 +95,7 @@ function DimensionBar({ score, label, hint }: { score: number; label: string; hi
           }}
         />
       </div>
-      {hint && <span className={`text-[10px] leading-tight block ${isCritical ? 'text-gray-400' : 'text-gray-600'}`}>{hint}</span>}
+      {hint && <span className={`text-[10px] leading-tight block mt-1.5 ${isCritical ? 'text-gray-400' : 'text-gray-600'}`}>{hint}</span>}
     </div>
   );
 }
@@ -136,16 +135,17 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
         {/* Top gradient bar */}
         <div className="h-1" style={{ background: `linear-gradient(90deg, ${scoreStrokeColor(healthScore.overall)}, ${scoreStrokeColor(healthScore.overall)}80, transparent)` }} />
 
-        <div className="p-6 pb-5">
-          {/* Device heading row */}
-          <div className="flex flex-col lg:flex-row lg:items-start gap-6 lg:gap-10">
-            {/* Left: Device identity */}
+        <div className="p-5 pb-4">
+          {/* Device heading row — compact with inline score */}
+          <div className="flex items-center gap-4 mb-3">
+            <OverallScoreRing score={healthScore.overall} size={56} />
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-3 mb-1">
-                <h2 className="font-display text-2xl text-gray-100 tracking-tight">{metadata.deviceModel || 'Unknown Device'}</h2>
+              <div className="flex items-baseline gap-2">
+                <h2 className="font-display text-xl text-gray-100 tracking-tight">{metadata.deviceModel || 'Unknown Device'}</h2>
                 {metadata.manufacturer && (
                   <span className="text-sm text-gray-500 font-light">{metadata.manufacturer}</span>
                 )}
+                <span className={`text-sm font-medium ml-auto ${scoreColor(healthScore.overall)}`}>{scoreLabel(healthScore.overall)}</span>
               </div>
 
               {/* Inline tags */}
@@ -242,35 +242,31 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               )}
             </div>
 
-            {/* Right: Health Score Ring */}
-            <div className="shrink-0">
-              <div className="flex flex-col items-center">
-                <OverallScoreRing score={healthScore.overall} />
-                {healthScore.overall < 80 && (() => {
-                  const dims = [
-                    { label: 'Stability', score: breakdown.stability },
-                    { label: 'Memory', score: breakdown.memory },
-                    { label: 'Responsiveness', score: breakdown.responsiveness },
-                    { label: 'Kernel', score: breakdown.kernel },
-                  ];
-                  const worst = dims.reduce((a, b) => a.score < b.score ? a : b);
-                  return (
-                    <span className={`text-[10px] mt-1 ${scoreColor(worst.score)}`}>
-                      ↓ {worst.label}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
           </div>
 
-          {/* Dimension bars — full-width grid below hero row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 mt-5 pt-4 border-t border-border/30">
-            <DimensionBar score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
-            <DimensionBar score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
-            <DimensionBar score={breakdown.responsiveness} label="Responsiveness" hint={deductionHint('responsiveness', breakdown.responsiveness, insights)} />
-            <DimensionBar score={breakdown.kernel} label="Kernel" hint={deductionHint('kernel', breakdown.kernel, insights)} />
-          </div>
+          {/* Dimension score cards — worst dimension highlighted */}
+          {(() => {
+            const dims = [
+              { key: 'stability', label: 'Stability', score: breakdown.stability },
+              { key: 'memory', label: 'Memory', score: breakdown.memory },
+              { key: 'responsiveness', label: 'Responsiveness', score: breakdown.responsiveness },
+              { key: 'kernel', label: 'Kernel', score: breakdown.kernel },
+            ];
+            const worstKey = dims.reduce((a, b) => a.score < b.score ? a : b).key;
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                {dims.map(d => (
+                  <DimensionCard
+                    key={d.key}
+                    score={d.score}
+                    label={d.label}
+                    hint={deductionHint(d.key, d.score, insights)}
+                    isWorst={d.key === worstKey && d.score < 80}
+                  />
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
