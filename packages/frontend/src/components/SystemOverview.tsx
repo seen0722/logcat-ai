@@ -201,42 +201,15 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 {metadata.buildFingerprint}
               </p>
 
-              {/* HW/SW Details + Buffer Time Ranges toggle */}
+              {/* Details toggle button only — content renders below the header row */}
               {(hwSwDetails.length > 0 || (bufferTimeRanges && bufferTimeRanges.length > 0)) && (
-                <div className="mt-3">
-                  <button
-                    onClick={() => setShowHwSwDetails(!showHwSwDetails)}
-                    className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
-                  >
-                    <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${showHwSwDetails ? 'rotate-180' : ''}`} />
-                    {showHwSwDetails ? 'Hide' : 'Show'} details
-                  </button>
-                  {showHwSwDetails && (
-                    <div className="mt-3 space-y-3">
-                      {hwSwDetails.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pl-0.5">
-                          {hwSwDetails.map((d) => (
-                            <div key={d.label} className="flex flex-col">
-                              <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
-                              <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {bufferTimeRanges && bufferTimeRanges.length > 0 && (
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-border/30">
-                          {bufferTimeRanges.map((r) => (
-                            <span key={r.buffer} className="text-xs text-gray-500 font-mono">
-                              <span className="text-gray-400">{r.buffer}</span>
-                              {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
-                              {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={() => setShowHwSwDetails(!showHwSwDetails)}
+                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors mt-2"
+                >
+                  <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${showHwSwDetails ? 'rotate-180' : ''}`} />
+                  {showHwSwDetails ? 'Hide' : 'Show'} details
+                </button>
               )}
             </div>
 
@@ -246,6 +219,33 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               <span className={`text-sm font-medium ${scoreColor(healthScore.overall)}`}>{scoreLabel(healthScore.overall)}</span>
             </div>
           </div>
+
+          {/* Expanded details — full width, outside the header flex row */}
+          {showHwSwDetails && (
+            <div className="mt-3 pt-3 space-y-3 border-t border-border/30">
+              {hwSwDetails.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2">
+                  {hwSwDetails.map((d) => (
+                    <div key={d.label} className="flex flex-col">
+                      <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
+                      <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {bufferTimeRanges && bufferTimeRanges.length > 0 && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {bufferTimeRanges.map((r) => (
+                    <span key={r.buffer} className="text-xs text-gray-500 font-mono">
+                      <span className="text-gray-400">{r.buffer}</span>
+                      {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
+                      {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Dimension score cards — worst dimension highlighted */}
           {(() => {
