@@ -18,7 +18,8 @@
   --color-warm-dark: 184 134 78;
   --color-text: 228 228 231;
   --color-text-secondary: 156 163 175;
-  --color-text-muted: 107 114 128;
+  --color-text-muted: 136 146 164;
+  --color-text-label: 122 136 153;
   --shadow-card: 0 4px 12px rgba(12,18,34,0.3), 0 1px 3px rgba(12,18,34,0.2);
   --shadow-card-hover: 0 12px 28px rgba(12,18,34,0.4), 0 4px 10px rgba(12,18,34,0.2);
   --shadow-elevated: 0 24px 48px rgba(12,18,34,0.5), 0 8px 16px rgba(12,18,34,0.3);
@@ -41,7 +42,8 @@
   --color-warm-dark: 154 110 58;
   --color-text: 26 26 46;
   --color-text-secondary: 74 85 104;
-  --color-text-muted: 113 128 150;
+  --color-text-muted: 100 110 130;
+  --color-text-label: 130 140 158;
   --shadow-card: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-card-hover: 0 8px 24px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
   --shadow-elevated: 0 16px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08);
@@ -50,13 +52,19 @@
   --color-ring-track: #d4d8e0;
 }
 
+/* ── Dark mode: boost gray text contrast on deep navy backgrounds ── */
+/* Default Tailwind gray-500 (#6b7280) = 3.9:1 contrast on #0c1222 — FAILS WCAG AA */
+/* Default Tailwind gray-600 (#4b5563) = 2.6:1 contrast — nearly illegible */
+.text-gray-500 { color: #8892a4; }  /* boosted → 6.1:1 on page bg, 5.5:1 on card bg */
+.text-gray-600 { color: #7a8899; }  /* boosted → 5.2:1 on page bg, 4.7:1 on card bg */
+
 /* ── Light mode: remap Tailwind gray utilities ── */
 [data-theme="light"] .text-gray-100 { color: #1a1a2e; }
 [data-theme="light"] .text-gray-200 { color: #2d2d42; }
 [data-theme="light"] .text-gray-300 { color: #4a5568; }
 [data-theme="light"] .text-gray-400 { color: #64748b; }
 [data-theme="light"] .text-gray-500 { color: #718096; }
-[data-theme="light"] .text-gray-600 { color: #64748b; }
+[data-theme="light"] .text-gray-600 { color: #94a3b8; }
 [data-theme="light"] .text-gray-700 { color: #b0b8c4; }
 [data-theme="light"] .bg-gray-700 { background-color: #e2e5ea; }
 [data-theme="light"] .bg-gray-700\/50 { background-color: rgba(226,229,234,0.5); }

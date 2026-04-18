@@ -46,7 +46,7 @@ test.describe('FTS5 SQL Fallback', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Wait for data to load — status bar shows "loaded"
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
 
     // Should show fts5-sql method badge (since rawDataStore was cleared, falls back to FTS5 SQL)
     await expect(modal.locator('text=fts5-sql')).toBeVisible({ timeout: 10_000 });

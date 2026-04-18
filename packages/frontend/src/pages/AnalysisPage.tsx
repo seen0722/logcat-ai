@@ -7,9 +7,7 @@ import Timeline from '../components/Timeline';
 import ANRDetail from '../components/ANRDetail';
 import ChatPanel from '../components/ChatPanel';
 import DeepAnalysisOverview from '../components/DeepAnalysisOverview';
-import TagStats from '../components/TagStats';
-import PowerOverview from '../components/PowerOverview';
-import TelephonyOverview from '../components/TelephonyOverview';
+import SystemDetailsTabs from '../components/SystemDetailsTabs';
 import SectionNav from '../components/SectionNav';
 import SearchModal from '../components/SearchModal';
 import ProgressView from '../components/ProgressView';
@@ -69,17 +67,11 @@ export default function AnalysisPage() {
     const sections = [
       { id: 'section-overview', label: 'Overview', icon: 'overview' },
     ];
-    if (result.logTagStats && result.logTagStats.length > 0) {
-      sections.push({ id: 'section-tags', label: 'Tags', icon: 'tags' });
-    }
-    if (result.powerStatus) {
-      sections.push({ id: 'section-power', label: 'Power', icon: 'power' });
-    }
-    if (result.telephonyStatus) {
-      sections.push({ id: 'section-telephony', label: 'Telephony', icon: 'telephony' });
-    }
     if (result.deepAnalysisOverview) {
       sections.push({ id: 'section-deep', label: 'AI Analysis', icon: 'brain' });
+    }
+    if (result.powerStatus || result.telephonyStatus || (result.logTagStats && result.logTagStats.length > 0)) {
+      sections.push({ id: 'section-power', label: 'Details', icon: 'power' });
     }
     sections.push({ id: 'section-insights', label: 'Insights', icon: 'insights' });
     if (result.anrAnalyses.length > 0) {
@@ -125,28 +117,18 @@ export default function AnalysisPage() {
             bufferTimeRanges={result.bufferTimeRanges}
           />
         </div>
-        {result.logTagStats && result.logTagStats.length > 0 && (
-          <div id="section-tags">
-            <TagStats
-              tagStats={result.logTagStats}
-              onTagClick={(tag) => { setSearchTag(tag); setShowTagSearch(true); }}
-            />
-          </div>
-        )}
-        {result.powerStatus && (
-          <div id="section-power">
-            <PowerOverview powerStatus={result.powerStatus} />
-          </div>
-        )}
-        {result.telephonyStatus && (
-          <div id="section-telephony">
-            <TelephonyOverview telephonyStatus={result.telephonyStatus} powerStatus={result.powerStatus} />
-          </div>
-        )}
         {result.deepAnalysisOverview && (
           <div id="section-deep">
             <DeepAnalysisOverview overview={result.deepAnalysisOverview} />
           </div>
+        )}
+        {(result.powerStatus || result.telephonyStatus || (result.logTagStats && result.logTagStats.length > 0)) && (
+          <SystemDetailsTabs
+            powerStatus={result.powerStatus}
+            telephonyStatus={result.telephonyStatus}
+            tagStats={result.logTagStats}
+            onTagClick={(tag) => { setSearchTag(tag); setShowTagSearch(true); }}
+          />
         )}
         <div id="section-insights">
           <InsightsCards

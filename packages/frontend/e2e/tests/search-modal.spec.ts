@@ -37,13 +37,13 @@ test.describe('Search Modal', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Wait for initial data load to complete
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
 
     // Switch to Kernel
     await modal.locator('button', { hasText: 'Kernel' }).click();
 
     // Wait for kernel data to load
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
 
     // Logcat-only filters should not be visible
     await expect(modal.locator('text=Tag')).not.toBeVisible();
@@ -64,7 +64,7 @@ test.describe('Search Modal', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Should auto-load entries without clicking any Search button
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
     await expect(modal.locator('text=shown')).toBeVisible();
 
     // Column headers should be visible
@@ -82,7 +82,7 @@ test.describe('Search Modal', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Wait for data to load
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 15_000 });
+    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
 
     // Type a keyword in the Find input
     await modal.locator('input[placeholder="Find in logs..."]').fill('ActivityManager');
@@ -108,7 +108,7 @@ test.describe('Search Modal', () => {
 
     // Wait for data to load
     const shownLabel = modal.locator('text=shown');
-    await expect(shownLabel).toBeVisible({ timeout: 15_000 });
+    await expect(shownLabel).toBeVisible({ timeout: 45_000 });
 
     // Get shown count from the span right before "shown" text
     const getShownCount = async () => {

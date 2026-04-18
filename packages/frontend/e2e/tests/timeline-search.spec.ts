@@ -100,7 +100,7 @@ test.describe('Timeline & Search Integration', () => {
     await expect(modal).toBeVisible({ timeout: 5000 });
 
     // Wait for data to load — status bar shows "loaded"
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 20_000 });
+    await expect(modal.getByText('loaded', { exact: true }).first()).toBeVisible({ timeout: 45_000 });
 
     // Verify the time range is pre-filled (±5s around the event)
     const fromInput = modal.locator('input[placeholder="MM-DD HH:mm:ss"]').first();

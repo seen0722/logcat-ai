@@ -28,6 +28,12 @@ export default {
           light: 'rgb(var(--color-warm-light) / <alpha-value>)',
           dark: 'rgb(var(--color-warm-dark) / <alpha-value>)',
         },
+        txt: {
+          DEFAULT: 'rgb(var(--color-text) / <alpha-value>)',
+          secondary: 'rgb(var(--color-text-secondary) / <alpha-value>)',
+          muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
+          label: 'rgb(var(--color-text-label) / <alpha-value>)',
+        },
         severity: {
           critical: '#ef4444',
           warning: '#f59e0b',
