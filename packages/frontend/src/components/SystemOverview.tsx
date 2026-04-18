@@ -75,9 +75,13 @@ function OverallScoreRing({ score }: { score: number }) {
 }
 
 function DimensionBar({ score, label, hint }: { score: number; label: string; hint?: string }) {
+  const isCritical = score < 50;
   const isLow = score < 70;
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 transition-all ${
+      isCritical ? 'bg-red-500/5 border-l-2 border-red-500 pl-2.5 py-1.5 -ml-3 rounded-r-lg' :
+      isLow ? 'bg-amber-500/5 border-l-2 border-amber-500/50 pl-2.5 py-1 -ml-3 rounded-r-lg' : ''
+    }`}>
       <div className="flex items-center justify-between">
         <span className={`text-xs font-medium ${isLow ? scoreColor(score) : 'text-gray-400'}`}>{label}</span>
         <span className={`text-xs font-bold ${scoreColor(score)}`}>{score}</span>
@@ -92,7 +96,7 @@ function DimensionBar({ score, label, hint }: { score: number; label: string; hi
           }}
         />
       </div>
-      {hint && <span className="text-[10px] text-gray-600 leading-tight block">{hint}</span>}
+      {hint && <span className={`text-[10px] leading-tight block ${isCritical ? 'text-gray-400' : 'text-gray-600'}`}>{hint}</span>}
     </div>
   );
 }
@@ -199,37 +203,39 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 {metadata.buildFingerprint}
               </p>
 
-              {/* Log Buffer Time Ranges */}
-              {bufferTimeRanges && bufferTimeRanges.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-                  {bufferTimeRanges.map((r) => (
-                    <span key={r.buffer} className="text-xs text-gray-500 font-mono">
-                      <span className="text-gray-400">{r.buffer}</span>
-                      {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
-                      {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* HW & SW Details toggle */}
-              {hwSwDetails.length > 0 && (
+              {/* HW/SW Details + Buffer Time Ranges toggle */}
+              {(hwSwDetails.length > 0 || (bufferTimeRanges && bufferTimeRanges.length > 0)) && (
                 <div className="mt-3">
                   <button
                     onClick={() => setShowHwSwDetails(!showHwSwDetails)}
                     className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
                   >
                     <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${showHwSwDetails ? 'rotate-180' : ''}`} />
-                    {showHwSwDetails ? 'Hide' : 'Show'} details ({hwSwDetails.length})
+                    {showHwSwDetails ? 'Hide' : 'Show'} details
                   </button>
                   {showHwSwDetails && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 mt-3 pl-0.5">
-                      {hwSwDetails.map((d) => (
-                        <div key={d.label} className="flex flex-col">
-                          <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
-                          <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
+                    <div className="mt-3 space-y-3">
+                      {hwSwDetails.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 pl-0.5">
+                          {hwSwDetails.map((d) => (
+                            <div key={d.label} className="flex flex-col">
+                              <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
+                              <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      {bufferTimeRanges && bufferTimeRanges.length > 0 && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-border/30">
+                          {bufferTimeRanges.map((r) => (
+                            <span key={r.buffer} className="text-xs text-gray-500 font-mono">
+                              <span className="text-gray-400">{r.buffer}</span>
+                              {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
+                              {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -238,7 +244,23 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
 
             {/* Right: Health Score */}
             <div className="flex items-start gap-8 lg:gap-10 shrink-0">
-              <OverallScoreRing score={healthScore.overall} />
+              <div className="flex flex-col items-center">
+                <OverallScoreRing score={healthScore.overall} />
+                {healthScore.overall < 80 && (() => {
+                  const dims = [
+                    { label: 'Stability', score: breakdown.stability },
+                    { label: 'Memory', score: breakdown.memory },
+                    { label: 'Responsiveness', score: breakdown.responsiveness },
+                    { label: 'Kernel', score: breakdown.kernel },
+                  ];
+                  const worst = dims.reduce((a, b) => a.score < b.score ? a : b);
+                  return (
+                    <span className={`text-[10px] mt-1 ${scoreColor(worst.score)}`}>
+                      ↓ {worst.label}
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="w-40 space-y-3 pt-2">
                 <DimensionBar score={breakdown.stability} label="Stability" hint={deductionHint('stability', breakdown.stability, insights)} />
                 <DimensionBar score={breakdown.memory} label="Memory" hint={deductionHint('memory', breakdown.memory, insights)} />
