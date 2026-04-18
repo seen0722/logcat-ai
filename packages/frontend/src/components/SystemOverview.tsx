@@ -222,26 +222,45 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
 
           {/* Expanded details — full width, outside the header flex row */}
           {showHwSwDetails && (
-            <div className="mt-3 pt-3 space-y-3 border-t border-border/30">
+            <div className="mt-3 pt-3 space-y-4 border-t border-border/30">
               {hwSwDetails.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2">
-                  {hwSwDetails.map((d) => (
-                    <div key={d.label} className="flex flex-col">
-                      <span className="text-[10px] text-gray-600 uppercase tracking-wider">{d.label}</span>
-                      <p className="text-xs text-gray-300 truncate" title={d.value}>{d.value}</p>
-                    </div>
-                  ))}
-                </div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    {(() => {
+                      const rows: Array<typeof hwSwDetails> = [];
+                      for (let i = 0; i < hwSwDetails.length; i += 4) {
+                        rows.push(hwSwDetails.slice(i, i + 4));
+                      }
+                      return rows.map((row, ri) => (
+                        <tr key={ri}>
+                          {row.map((d) => (
+                            <td key={d.label} className="py-1 pr-4 align-top" style={{ width: '25%' }}>
+                              <span className="text-[10px] text-gray-600 uppercase tracking-wider block">{d.label}</span>
+                              <span className="text-gray-300 break-all leading-tight">{d.value}</span>
+                            </td>
+                          ))}
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
               )}
               {bufferTimeRanges && bufferTimeRanges.length > 0 && (
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {bufferTimeRanges.map((r) => (
-                    <span key={r.buffer} className="text-xs text-gray-500 font-mono">
-                      <span className="text-gray-400">{r.buffer}</span>
-                      {' '}{r.firstTimestamp.slice(0, 14)} ~ {r.lastTimestamp.slice(0, 14)}
-                      {' '}<span className="text-gray-600">({r.entryCount.toLocaleString()})</span>
-                    </span>
-                  ))}
+                <div>
+                  <span className="text-[10px] text-gray-600 uppercase tracking-wider block mb-1.5">Log Buffers</span>
+                  <table className="text-xs font-mono">
+                    <tbody>
+                      {bufferTimeRanges.map((r) => (
+                        <tr key={r.buffer} className="text-gray-500">
+                          <td className="pr-3 py-0.5 text-gray-400 font-medium">{r.buffer}</td>
+                          <td className="pr-2 py-0.5">{r.firstTimestamp.slice(0, 14)}</td>
+                          <td className="pr-2 py-0.5 text-gray-600">~</td>
+                          <td className="pr-3 py-0.5">{r.lastTimestamp.slice(0, 14)}</td>
+                          <td className="py-0.5 text-gray-600">{r.entryCount.toLocaleString()} entries</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
