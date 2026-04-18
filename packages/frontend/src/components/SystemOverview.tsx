@@ -266,6 +266,9 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
             </div>
           )}
 
+          {/* Separator between details/header and dimension cards */}
+          <div className="border-t border-border/30 mt-4 pt-4" />
+
           {/* Dimension score cards — worst dimension highlighted */}
           {(() => {
             const dims = [
