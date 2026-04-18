@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { IconOverview, IconTag, IconBattery, IconSignal, IconBrain, IconLightbulb, IconANR, IconStopwatch, IconChat } from './Icons';
+import { IconOverview, IconTag, IconBattery, IconSignal, IconBrain, IconLightbulb, IconANR, IconStopwatch, IconChat, IconDashboard } from './Icons';
 
 interface Section {
   id: string;
@@ -13,6 +13,7 @@ const SECTION_ICONS: Record<string, React.ComponentType<{ className?: string; si
   power: IconBattery,
   telephony: IconSignal,
   brain: IconBrain,
+  dashboard: IconDashboard,
   insights: IconLightbulb,
   anr: IconANR,
   timeline: IconStopwatch,

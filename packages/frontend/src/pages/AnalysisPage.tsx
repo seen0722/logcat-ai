@@ -71,7 +71,7 @@ export default function AnalysisPage() {
       sections.push({ id: 'section-deep', label: 'AI Analysis', icon: 'brain' });
     }
     if (result.powerStatus || result.telephonyStatus || (result.logTagStats && result.logTagStats.length > 0)) {
-      sections.push({ id: 'section-power', label: 'Details', icon: 'power' });
+      sections.push({ id: 'section-power', label: 'System', icon: 'dashboard' });
     }
     sections.push({ id: 'section-insights', label: 'Insights', icon: 'insights' });
     if (result.anrAnalyses.length > 0) {
