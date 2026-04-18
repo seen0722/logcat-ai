@@ -136,16 +136,14 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
         <div className="h-1" style={{ background: `linear-gradient(90deg, ${scoreStrokeColor(healthScore.overall)}, ${scoreStrokeColor(healthScore.overall)}80, transparent)` }} />
 
         <div className="p-5 pb-4">
-          {/* Device heading row — compact with inline score */}
-          <div className="flex items-center gap-4 mb-3">
-            <OverallScoreRing score={healthScore.overall} size={56} />
+          {/* Device heading row — device left, score right */}
+          <div className="flex items-start gap-4 mb-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 mb-1">
                 <h2 className="font-display text-xl text-gray-100 tracking-tight">{metadata.deviceModel || 'Unknown Device'}</h2>
                 {metadata.manufacturer && (
                   <span className="text-sm text-gray-500 font-light">{metadata.manufacturer}</span>
                 )}
-                <span className={`text-sm font-medium ml-auto ${scoreColor(healthScore.overall)}`}>{scoreLabel(healthScore.overall)}</span>
               </div>
 
               {/* Inline tags */}
@@ -242,6 +240,11 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               )}
             </div>
 
+            {/* Score badge — right side */}
+            <div className="flex items-center gap-3 shrink-0">
+              <OverallScoreRing score={healthScore.overall} size={56} />
+              <span className={`text-sm font-medium ${scoreColor(healthScore.overall)}`}>{scoreLabel(healthScore.overall)}</span>
+            </div>
           </div>
 
           {/* Dimension score cards — worst dimension highlighted */}
