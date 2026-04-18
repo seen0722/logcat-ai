@@ -326,3 +326,11 @@ export function IconDashboard({ className, size = defaults.size }: IconProps) {
     </svg>
   );
 }
+
+export function IconClassification({ className, size = 24 }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h16M4 12h10M4 17h6" />
+    </svg>
+  );
+}

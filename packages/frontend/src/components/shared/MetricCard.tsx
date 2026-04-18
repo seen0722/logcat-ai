@@ -1,16 +1,17 @@
 import React, { type ReactNode } from 'react';
 
-interface PowerMetricCardProps {
+interface MetricCardProps {
   label: string;
-  value: string;
+  value: ReactNode;
   sub?: string;
   color?: string;
   icon: ReactNode;
+  highlight?: boolean;
 }
 
-function PowerMetricCardInner({ label, value, sub, color, icon }: PowerMetricCardProps) {
+function MetricCardInner({ label, value, sub, color, icon, highlight }: MetricCardProps) {
   return (
-    <div className="bg-surface rounded-xl p-4 space-y-1 border border-border/50">
+    <div className={`bg-surface rounded-xl p-4 space-y-1 border ${highlight ? 'border-red-500/30' : 'border-border/50'}`}>
       <div className="flex items-center gap-2">
         {icon}
         <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
@@ -21,4 +22,4 @@ function PowerMetricCardInner({ label, value, sub, color, icon }: PowerMetricCar
   );
 }
 
-export default React.memo(PowerMetricCardInner);
+export default React.memo(MetricCardInner);

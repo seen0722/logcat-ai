@@ -1,6 +1,6 @@
 import { TelephonyParseResult, PowerParseResult } from '../../lib/types';
 import { IconSignal, IconNoService, IconWarningTriangle, IconAntenna } from '../Icons';
-import MetricCard from './MetricCard';
+import MetricCard from '../shared/MetricCard';
 import { voiceStateBadge, signalLevelColor, formatDuration } from './telephony-utils';
 
 interface TelephonySummaryCardsProps {
