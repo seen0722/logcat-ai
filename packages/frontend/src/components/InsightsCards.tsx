@@ -155,6 +155,7 @@ export default function InsightsCards({ insights, halStatus, onRunDeep }: Props)
               <button
                 key={f.key}
                 onClick={() => { setFilter(f.key); setShowAllInfo(f.key === 'info'); }}
+                aria-pressed={active}
                 className={`px-2.5 py-1 text-xs rounded-lg transition-all duration-200 ${
                   active
                     ? f.key === 'critical' ? 'bg-red-500/20 text-red-400'

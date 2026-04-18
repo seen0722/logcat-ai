@@ -23,6 +23,7 @@ export default function DetailsToggle({
     <div className="flex justify-center">
       <button
         onClick={onToggle}
+        aria-expanded={expanded}
         className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
       >
         <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />

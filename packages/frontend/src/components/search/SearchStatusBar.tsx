@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SearchSource, LogcatEntry, KernelEntry } from './types';
+import type { SearchSource, BaseEntry, LogcatEntry, KernelEntry } from './types';
 
 interface SearchStatusBarProps {
   source: SearchSource;
@@ -31,7 +31,7 @@ export function SearchStatusBar({
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
-    <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-[#161b22] border-b border-gray-700/40 shrink-0">
+    <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-surface-card border-b border-border/40 shrink-0">
       {loading ? (
         <span className="text-gray-500">Loading...</span>
       ) : allEntries.length > 0 ? (
@@ -62,7 +62,7 @@ export function SearchStatusBar({
               Showing {allEntries.length.toLocaleString()} of {(fullTimeRange?.total ?? totalAvailable).toLocaleString()}
               {allEntries.length > 0 && (
                 <span className="text-gray-500 ml-1">
-                  (loaded: {(allEntries[0] as any).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as any).timestamp?.slice(0, 14)}
+                  (loaded: {(allEntries[0] as BaseEntry).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as BaseEntry).timestamp?.slice(0, 14)}
                   {fullTimeRange && (
                     <span> · full: {fullTimeRange.first.slice(0, 14)} ~ {fullTimeRange.last.slice(0, 14)}</span>
                   )}
@@ -89,7 +89,7 @@ export function SearchStatusBar({
             Export
           </button>
           {showExportMenu && (
-            <div className="absolute top-full right-0 mt-1 bg-[#1c2128] border border-gray-700/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
+            <div className="absolute top-full right-0 mt-1 bg-surface-card border border-border/60 rounded-lg shadow-xl z-20 py-1 min-w-[180px]">
               <button
                 onClick={() => { onExport('csv'); setShowExportMenu(false); }}
                 className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700/50 hover:text-white transition-colors"

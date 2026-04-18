@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { InsightCard } from '../lib/types';
 import { BugreportMetadata, SystemHealthScore, MemInfoSummary, CpuInfoSummary, BootStatusSummary, HALStatusSummary, BufferTimeRange } from '../lib/types';
 import { IconChevronDown } from './Icons';
+import StatusBadge from './shared/StatusBadge';
 import { scoreColor, scoreStrokeColor, scoreLabel } from '../lib/color-utils';
 
 interface Props {
@@ -148,51 +149,31 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
 
               {/* Inline tags */}
               <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-accent/10 text-accent border border-accent/20 rounded-lg">
-                  Android {metadata.androidVersion}
-                </span>
+                <StatusBadge variant="accent">Android {metadata.androidVersion}</StatusBadge>
                 {metadata.buildType && metadata.buildType !== 'unknown' && (
-                  <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
-                    metadata.buildType === 'user' && !metadata.isDebuggable
-                      ? 'bg-surface-hover text-gray-400 border border-border'
-                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                  }`}>
+                  <StatusBadge variant={metadata.buildType === 'user' && !metadata.isDebuggable ? 'gray' : 'amber'}>
                     {metadata.buildType}
-                  </span>
+                  </StatusBadge>
                 )}
                 {metadata.isDebuggable && !metadata.isAdbSecure && (
-                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
-                    adb root
-                  </span>
+                  <StatusBadge variant="red">adb root</StatusBadge>
                 )}
                 {metadata.isDebuggable && metadata.isAdbSecure && (
-                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
-                    debuggable
-                  </span>
+                  <StatusBadge variant="amber">debuggable</StatusBadge>
                 )}
                 {bootStatus?.bootCompleted != null && (
-                  <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg ${
-                    bootStatus.bootCompleted
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  }`}>
+                  <StatusBadge variant={bootStatus.bootCompleted ? 'green' : 'red'}>
                     Boot {bootStatus.bootCompleted ? 'OK' : 'Incomplete'}
-                  </span>
+                  </StatusBadge>
                 )}
                 {bootStatus?.uptimeSeconds != null && (
-                  <span className="inline-flex items-center px-2.5 py-1 text-xs text-gray-400 bg-surface-hover border border-border rounded-lg">
-                    Uptime {formatUptime(bootStatus.uptimeSeconds)}
-                  </span>
+                  <StatusBadge variant="gray">Uptime {formatUptime(bootStatus.uptimeSeconds)}</StatusBadge>
                 )}
                 {bootStatus?.bootReason && !/reboot|normal/i.test(bootStatus.bootReason) && (
-                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg">
-                    {bootStatus.bootReason}
-                  </span>
+                  <StatusBadge variant="amber">{bootStatus.bootReason}</StatusBadge>
                 )}
                 {bootStatus && bootStatus.systemServerRestarts > 0 && (
-                  <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
-                    SS Restart ×{bootStatus.systemServerRestarts}
-                  </span>
+                  <StatusBadge variant="red">SS Restart ×{bootStatus.systemServerRestarts}</StatusBadge>
                 )}
               </div>
 
@@ -205,6 +186,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
               {(hwSwDetails.length > 0 || (bufferTimeRanges && bufferTimeRanges.length > 0)) && (
                 <button
                   onClick={() => setShowHwSwDetails(!showHwSwDetails)}
+                  aria-expanded={showHwSwDetails}
                   className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors mt-2"
                 >
                   <IconChevronDown className={`w-3 h-3 transition-transform duration-200 ${showHwSwDetails ? 'rotate-180' : ''}`} />
@@ -320,7 +302,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 {formatKbToGb(memInfo.totalRamKb)} GB
               </p>
               {memInfo.topProcesses.length > 0 && (
-                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                <div className="space-y-1.5 pt-2 border-t border-border/50">
                   <span className="text-[10px] text-gray-600 uppercase tracking-wider">Top Processes (PSS)</span>
                   {memInfo.topProcesses.slice(0, 3).map((p, i) => (
                     <div key={i} className="flex justify-between text-xs">
@@ -369,7 +351,7 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                 )}
               </div>
               {cpuInfo.topProcesses.length > 0 && (
-                <div className="space-y-1.5 pt-1 border-t border-border/50">
+                <div className="space-y-1.5 pt-2 border-t border-border/50">
                   <span className="text-[10px] text-gray-600 uppercase tracking-wider">Top Processes</span>
                   {cpuInfo.topProcesses.slice(0, 3).map((p, i) => (
                     <div key={i} className="flex justify-between text-xs">
@@ -396,11 +378,6 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                     {aliveFamilies}/{totalFamilies} alive
                   </span>
                 </div>
-                {isTruncated && (
-                  <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
-                    lshal truncated — BSP HAL status unreliable
-                  </p>
-                )}
                 {/* Usage bar */}
                 <div className="h-2 bg-surface rounded-full overflow-hidden">
                   <div
@@ -411,8 +388,13 @@ export default function SystemOverview({ metadata, healthScore, memInfo, cpuInfo
                     }}
                   />
                 </div>
+                {isTruncated && (
+                  <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
+                    lshal truncated — BSP HAL status unreliable
+                  </p>
+                )}
                 {oemIssues.length > 0 && (
-                  <div className="space-y-1.5 pt-1 border-t border-border/50">
+                  <div className="space-y-1.5 pt-2 border-t border-border/50">
                     <span className="text-[10px] text-red-400 uppercase tracking-wider">OEM Issues ({oemIssues.length})</span>
                     {oemIssues.map((f, i) => (
                       <div key={i} className="text-xs text-red-400/80 truncate" title={f.familyName}>

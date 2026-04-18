@@ -297,7 +297,7 @@ function LogSnippet({ content }: { content: string }) {
   const lines = content.split('\n').filter(Boolean);
 
   return (
-    <div className="mt-1 rounded-lg overflow-hidden border border-border/50 bg-[#0a0e17]">
+    <div className="mt-1 rounded-lg overflow-hidden border border-border/50 bg-surface">
       <div className="overflow-x-auto">
         <table className="w-full text-xs font-mono border-collapse">
           <tbody>
@@ -305,19 +305,19 @@ function LogSnippet({ content }: { content: string }) {
               const logcat = line.match(LOGCAT_RE) || line.match(LOGCAT_TEXT_UID_RE);
               if (logcat) {
                 const [, ts, , pid, tid, level, tag, msg] = logcat;
-                return <LogcatRow key={i} n={i+1} ts={ts} pid={pid} tid={tid} level={level} tag={tag} msg={msg} />;
+                return <LogcatRow key={i} ts={ts} pid={pid} tid={tid} level={level} tag={tag} msg={msg} />;
               }
               const kernelWall = line.match(KERNEL_WALL_RE);
               if (kernelWall) {
                 const [, ts, lvl, msg] = kernelWall;
-                return <KernelRow key={i} n={i+1} ts={ts} level={lvl} msg={msg} />;
+                return <KernelRow key={i} ts={ts} level={lvl} msg={msg} />;
               }
               const kernel = line.match(KERNEL_RE);
               if (kernel) {
                 const [, ts, msg] = kernel;
-                return <KernelRow key={i} n={i+1} ts={`[${ts}]`} msg={msg} />;
+                return <KernelRow key={i} ts={`[${ts}]`} msg={msg} />;
               }
-              return <PlainRow key={i} n={i+1} text={line} />;
+              return <PlainRow key={i} text={line} />;
             })}
           </tbody>
         </table>
@@ -336,8 +336,8 @@ const LEVEL_STYLE: Record<string, { text: string; bg: string }> = {
   V: { text: 'text-gray-400',            bg: '' },
 };
 
-function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
-  n: number; ts: string; pid: string; tid: string; level: string; tag: string; msg: string;
+function LogcatRow({ ts, pid, tid, level, tag, msg }: {
+  ts: string; pid: string; tid: string; level: string; tag: string; msg: string;
 }) {
   const style = LEVEL_STYLE[level] ?? LEVEL_STYLE.D;
   return (
@@ -350,7 +350,7 @@ function LogcatRow({ n, ts, pid, tid, level, tag, msg }: {
   );
 }
 
-function KernelRow({ n, ts, level, msg }: { n: number; ts: string; level?: string; msg: string }) {
+function KernelRow({ ts, level, msg }: { ts: string; level?: string; msg: string }) {
   const isErr = /error|fail|panic|oops|bug/i.test(msg) || level === '<3>' || level === '<0>';
   return (
     <tr className={`${isErr ? 'bg-red-950/25' : ''} hover:bg-white/[0.03] transition-colors`}>
@@ -361,7 +361,7 @@ function KernelRow({ n, ts, level, msg }: { n: number; ts: string; level?: strin
   );
 }
 
-function PlainRow({ n, text }: { n: number; text: string }) {
+function PlainRow({ text }: { text: string }) {
   return (
     <tr className="hover:bg-white/[0.03] transition-colors">
       <td colSpan={4} className="py-[2px] px-1.5 text-gray-400 whitespace-pre-wrap break-all">{text}</td>

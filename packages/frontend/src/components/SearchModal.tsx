@@ -3,7 +3,7 @@ import { List, useListRef } from 'react-window';
 import { searchLogcat, searchKernel } from '../lib/api';
 import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
 import { RowComponent, SearchFilters, SearchStatusBar, MAX_ENTRIES, ROW_HEIGHT, DETAIL_HEIGHT } from './search';
-import type { SearchSource, LogcatEntry, KernelEntry, RowExtraProps } from './search';
+import type { SearchSource, BaseEntry, LogcatEntry, KernelEntry, RowExtraProps } from './search';
 
 interface Props {
   uploadId: string;
@@ -192,9 +192,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     if (!searchPattern) return new Set<number>();
     const indices = new Set<number>();
     for (let i = 0; i < filteredEntries.length; i++) {
-      const e = filteredEntries[i] as any;
+      const e = filteredEntries[i] as BaseEntry;
       const msg = e.message ?? '';
-      const tagStr = e.tag ?? '';
+      const tagStr = 'tag' in e ? (e as LogcatEntry).tag : '';
       searchPattern.lastIndex = 0;
       if (searchPattern.test(msg)) { indices.add(i); continue; }
       searchPattern.lastIndex = 0;
@@ -239,7 +239,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     if (!initialFocusTime || entries.length === 0) return;
     let best = 0;
     for (let i = 0; i < entries.length; i++) {
-      const ts = (entries[i] as any).timestamp ?? '';
+      const ts = (entries[i] as BaseEntry).timestamp ?? '';
       if (ts <= initialFocusTime) best = i;
     }
     setFocusIndex(best);
@@ -362,7 +362,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   filteredEntriesRef.current = filteredEntries;
   // Pure DOM manipulation — zero React re-renders
   const handleExpandToggleStable = useCallback((_idx: number) => {
-    const entry = filteredEntriesRef.current[_idx] as any;
+    const entry = filteredEntriesRef.current[_idx];
     if (!entry || !detailPanelRef.current || !detailContentRef.current || !detailMetaRef.current) return;
     const listEl = listWrapRef.current?.querySelector('[style*="height"]') as HTMLElement | null;
     if (detailEntryRef.current === entry) {
@@ -377,11 +377,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       originalListHeight.current = listEl.getBoundingClientRect().height;
     }
     detailEntryRef.current = entry;
-    // Update meta
+    // Update meta — access logcat-specific fields via narrowing
     const ts = entry.timestamp ?? '';
-    const pid = entry.pid != null ? `PID ${entry.pid}/${entry.tid}` : '';
-    const tag = entry.tag ? `${entry.level}/${entry.tag}` : (entry.level ?? '');
-    const buf = entry.buffer ? `buffer:${entry.buffer}` : '';
+    const logcat = 'tag' in entry ? (entry as LogcatEntry) : null;
+    const pid = logcat?.pid != null ? `PID ${logcat.pid}/${logcat.tid}` : '';
+    const tag = logcat?.tag ? `${entry.level}/${logcat.tag}` : (entry.level ?? '');
+    const buf = logcat?.buffer ? `buffer:${logcat.buffer}` : '';
     detailMetaRef.current.textContent = [ts, pid, tag, buf].filter(Boolean).join('  ');
     // Update content
     detailContentRef.current.textContent = entry.message;
@@ -421,12 +422,12 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       onClick={handleClose}
     >
       <div
-        className={`w-full max-w-6xl 2xl:max-w-7xl bg-[#0d1117] border border-gray-700/60 rounded-xl shadow-2xl flex flex-col max-h-[95vh] transition-opacity duration-150 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full max-w-6xl 2xl:max-w-7xl bg-surface border border-border/60 rounded-xl shadow-2xl flex flex-col max-h-[95vh] transition-opacity duration-150 ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header: tab switcher + find input + nav — all in one row */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-700/60 shrink-0">
-          <div className="flex bg-[#161b22] rounded-md p-0.5 border border-gray-700/60 shrink-0">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/60 shrink-0">
+          <div className="flex bg-surface-card rounded-md p-0.5 border border-border/60 shrink-0">
             <button
               onClick={() => switchSource('logcat')}
               className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
@@ -459,7 +460,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); goToPrevMatch(); }
               }}
               placeholder={source === 'kernel' ? 'Find in kernel logs...' : 'Find in logs...'}
-              className="w-full bg-[#161b22] border border-gray-700/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+              className="w-full bg-surface-card border border-border/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
             />
             {q.trim() && (
               <span className="absolute right-12 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
@@ -482,7 +483,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             disabled={matchList.length === 0}
             title="Previous match (Shift+Enter)"
             aria-label="Previous match"
-            className="px-2 py-1.5 text-xs rounded-md border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-[#161b22]"
+            className="px-2 py-1.5 text-xs rounded-md border border-border/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-surface-card"
           >
             {'\u25B2'}
           </button>
@@ -491,7 +492,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             disabled={matchList.length === 0}
             title="Next match (Enter)"
             aria-label="Next match"
-            className="px-2 py-1.5 text-xs rounded-md border border-gray-700/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-[#161b22]"
+            className="px-2 py-1.5 text-xs rounded-md border border-border/60 text-gray-400 hover:text-white hover:bg-gray-700/50 disabled:opacity-30 transition-colors bg-surface-card"
           >
             {'\u25BC'}
           </button>
@@ -522,14 +523,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         {/* Quick bar: Saved tags + Time navigation — single compact row */}
         {(allEntries.length > 0 || (source === 'logcat' && savedTags.length > 0)) && (() => {
           // Current loaded range timestamps (for Earlier/Later navigation)
-          const firstReal = allEntries.find((e: any) => e.timestamp && !e.timestamp.startsWith('01-01')) as any;
-          const lastEntry = allEntries[allEntries.length - 1] as any;
-          const firstTs = (firstReal?.timestamp ?? (allEntries[0] as any)?.timestamp ?? '').slice(0, 18);
+          const firstReal = allEntries.find((e) => e.timestamp && !e.timestamp.startsWith('01-01'));
+          const lastEntry = allEntries[allEntries.length - 1];
+          const firstTs = (firstReal?.timestamp ?? allEntries[0]?.timestamp ?? '').slice(0, 18);
           const lastTs = (lastEntry?.timestamp ?? '').slice(0, 18);
           const addMin = (ts: string, delta: number) => {
             const m = ts.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
             if (!m) return ts;
-            const d = new Date(2026, parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]), parseInt(m[5]));
+            const d = new Date(new Date().getFullYear(), parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]), parseInt(m[5]));
             d.setMinutes(d.getMinutes() + delta);
             const pad = (n: number) => String(n).padStart(2, '0');
             return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -551,7 +552,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             loadData({ st: '', et: '', offsetOverride: 0, bufferOverride: buffer });
           };
           return (
-            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-gray-700/40 shrink-0 flex-wrap">
+            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-border/40 shrink-0 flex-wrap">
               {source === 'logcat' && savedTags.length > 0 && (
                 <>
                   {savedTags.map(t => (
@@ -609,14 +610,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
           {/* Column headers + List always rendered to prevent layout shift */}
           {source === 'logcat' ? (
-            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-gray-700/60 bg-[#0d1117] shrink-0 px-4 leading-5">
+            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-border/60 bg-surface shrink-0 px-4 leading-5">
               <span className="px-2 w-[150px] shrink-0">Timestamp</span>
               <span className="px-1 w-[75px] shrink-0">PID/TID</span>
               <span className="px-1 w-[130px] shrink-0">Level/Tag</span>
               <span className="px-2 flex-1">Message</span>
             </div>
           ) : (
-            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-gray-700/60 bg-[#0d1117] shrink-0 px-4 leading-5">
+            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-border/60 bg-surface shrink-0 px-4 leading-5">
               <span className="px-2 w-[150px] shrink-0">Timestamp</span>
               <span className="px-1 w-[70px] shrink-0">Level</span>
               <span className="px-2 flex-1">Message</span>
@@ -638,7 +639,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </div>
 
           {/* Detail panel — always in DOM, toggled via hidden class (no React re-render) */}
-          <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/40 bg-[#080c18] flex flex-col shrink-0">
+          <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/40 bg-surface flex flex-col shrink-0">
             <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60 shrink-0">
               <span className="text-[10px] text-accent font-semibold uppercase tracking-wider">Detail</span>
               <div ref={detailMetaRef} className="text-[10px] text-gray-500 font-mono" />

@@ -1,22 +1,22 @@
 export type SearchSource = 'logcat' | 'kernel';
 
-export interface LogcatEntry {
-  lineNumber: number;
+export interface BaseEntry {
   timestamp: string;
+  level: string;
+  message: string;
+}
+
+export interface LogcatEntry extends BaseEntry {
+  lineNumber: number;
   pid?: number;
   tid?: number;
-  level: string;
   tag: string;
-  message: string;
   buffer?: string;
 }
 
-export interface KernelEntry {
+export interface KernelEntry extends BaseEntry {
   entryIndex: number;
-  timestamp: string;
-  level: string;
   facility: string;
-  message: string;
 }
 
 export interface RowExtraProps {

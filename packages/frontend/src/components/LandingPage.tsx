@@ -109,7 +109,7 @@ export default function LandingPage({ onStart, onViewHistory }: Props) {
 
       {/* Terminal Preview — the visual hook */}
       <div className={`w-full max-w-2xl mb-10 relative transition-all duration-700 delay-200 ease-out ${mounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-8 scale-95'}`}>
-        <div className="rounded-2xl overflow-hidden border border-border/60 shadow-elevated bg-[#0a0e18]">
+        <div className="rounded-2xl overflow-hidden border border-border/60 shadow-elevated bg-surface">
           {/* Title bar */}
           <div className="flex items-center gap-2 px-4 py-2.5 bg-surface-card/80 border-b border-border/40">
             <div className="flex gap-1.5">

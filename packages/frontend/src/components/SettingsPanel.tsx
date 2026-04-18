@@ -121,11 +121,13 @@ export default function SettingsPanel({ onClose }: Props) {
   return (
     <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
-        className={`w-full max-w-lg bg-[#0d1117] border-l border-gray-700/60 h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
+        role="dialog"
+        aria-label="LLM Settings"
+        className={`w-full max-w-lg bg-surface border-l border-border/60 h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/60 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">
           <h2 className="text-lg font-semibold text-gray-100">LLM Settings</h2>
           <div className="flex items-center gap-2">
             <button
@@ -162,7 +164,7 @@ export default function SettingsPanel({ onClose }: Props) {
                     className={`rounded-lg border p-4 cursor-pointer transition-colors ${
                       prov.type === active
                         ? 'border-accent/60 bg-accent/5'
-                        : 'border-gray-700/60 bg-[#161b22] hover:border-gray-600'
+                        : 'border-border/60 bg-surface-card hover:border-gray-600'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -198,7 +200,7 @@ export default function SettingsPanel({ onClose }: Props) {
               </div>
 
               {/* Active Provider Configuration */}
-              <div className="border border-gray-700/60 rounded-lg p-4 bg-[#161b22]">
+              <div className="border border-border/60 rounded-lg p-4 bg-surface-card">
                 <h3 className="text-sm font-medium text-gray-300 mb-3">
                   Configure {PROVIDER_LABELS[active] || active}
                 </h3>
@@ -210,7 +212,7 @@ export default function SettingsPanel({ onClose }: Props) {
                       value={editModel}
                       onChange={(e) => setEditModel(e.target.value)}
                       placeholder="e.g. gpt-4o, gemini-pro, llama3"
-                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
+                      className="w-full bg-surface border border-border/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                     />
                   </div>
                   {needsApiKey && (
@@ -221,7 +223,7 @@ export default function SettingsPanel({ onClose }: Props) {
                         value={editApiKey}
                         onChange={(e) => setEditApiKey(e.target.value)}
                         placeholder="Leave empty to keep current key"
-                        className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
+                        className="w-full bg-surface border border-border/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                       />
                     </div>
                   )}
@@ -232,7 +234,7 @@ export default function SettingsPanel({ onClose }: Props) {
                       value={editBaseUrl}
                       onChange={(e) => setEditBaseUrl(e.target.value)}
                       placeholder={active === 'ollama' ? 'http://localhost:11434' : 'Leave empty for default'}
-                      className="w-full bg-[#0d1117] border border-gray-700/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
+                      className="w-full bg-surface border border-border/60 rounded-md px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-accent/60"
                     />
                   </div>
                   <div className="flex items-center gap-3 pt-1">

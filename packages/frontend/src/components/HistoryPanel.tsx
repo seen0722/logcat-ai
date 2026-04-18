@@ -88,6 +88,8 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
   return (
     <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
+        role="dialog"
+        aria-label="Analysis History"
         className={`w-full max-w-lg bg-surface border-l border-border h-full overflow-y-auto flex flex-col transition-transform duration-200 ease-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}
         onClick={(e) => e.stopPropagation()}
       >

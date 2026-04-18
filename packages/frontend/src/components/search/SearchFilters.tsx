@@ -38,7 +38,7 @@ export function SearchFilters({
   onLoadRange, onSaveTag,
 }: SearchFiltersProps) {
   return (
-    <div className="flex gap-2.5 items-center px-4 py-1.5 border-b border-gray-700/60 shrink-0 flex-wrap">
+    <div className="flex gap-2.5 items-center px-4 py-1.5 border-b border-border/60 shrink-0 flex-wrap">
       {source === 'logcat' && (
         <>
           <div className="flex items-center gap-1">
@@ -49,7 +49,7 @@ export function SearchFilters({
               onChange={(e) => setTag(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
               placeholder="e.g. RIL,RILJ"
-              className="w-36 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
+              className="w-36 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
             />
             {tag.trim() && (
               <button
@@ -68,7 +68,7 @@ export function SearchFilters({
               onChange={(e) => setExcludeTags(e.target.value)}
               placeholder="tag1,tag2"
               title="Comma-separated tags to hide"
-              className="w-28 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
+              className="w-28 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
             />
           </div>
           <div className="flex items-center gap-1">
@@ -76,7 +76,7 @@ export function SearchFilters({
             <select
               value={buffer}
               onChange={(e) => setBuffer(e.target.value)}
-              className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
+              className="bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
             >
               <option value="">All</option>
               <option value="main">main</option>
@@ -91,7 +91,7 @@ export function SearchFilters({
             <select
               value={level}
               onChange={(e) => setLevel(e.target.value)}
-              className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
+              className="bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
             >
               <option value="">All</option>
               <option value="V">V+</option>
@@ -109,7 +109,7 @@ export function SearchFilters({
               value={pid}
               onChange={(e) => setPid(e.target.value)}
               placeholder="—"
-              className="w-16 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
+              className="w-16 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent"
             />
           </div>
         </>
@@ -121,7 +121,7 @@ export function SearchFilters({
           <select
             value={level}
             onChange={(e) => setLevel(e.target.value)}
-            className="bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
+            className="bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:border-accent"
           >
             <option value="">All</option>
             <option value="<0>">&lt;0&gt; EMERG</option>
@@ -144,7 +144,7 @@ export function SearchFilters({
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
           placeholder="MM-DD HH:mm:ss"
-          className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
+          className="w-32 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
         />
       </div>
       <div className="flex items-center gap-1">
@@ -154,7 +154,7 @@ export function SearchFilters({
           value={endTime}
           onChange={(e) => setEndTime(e.target.value)}
           placeholder="MM-DD HH:mm:ss"
-          className="w-32 bg-[#161b22] border border-gray-700/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
+          className="w-32 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
         />
       </div>
       <button
