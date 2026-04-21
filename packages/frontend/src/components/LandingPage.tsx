@@ -23,8 +23,8 @@ const FEATURES = [
   },
   {
     icon: <IconSearch className="w-5 h-5" />,
-    title: 'FTS5 Log Search',
-    desc: 'Instant full-text search across all entries',
+    title: 'Log Viewer',
+    desc: 'Virtual-scroll viewer with multi-filter, regex find & export',
     color: 'text-accent-light',
     accent: '#4f8ff7',
   },
