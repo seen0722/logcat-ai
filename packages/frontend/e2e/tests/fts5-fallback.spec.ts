@@ -11,15 +11,16 @@ test.describe('FTS5 SQL Fallback', () => {
     expect(['keyword', 'fts5']).toContain(result.method);
   });
 
-  test('search falls back to fts5-sql after rawDataStore cleared', async ({ analysisId }) => {
+  test('search rebuilds rawDataStore after cleared (lazy cache)', async ({ analysisId }) => {
     // Clear raw data store
     await clearRawDataStore(analysisId);
 
-    // Search should now use fts5-sql fallback
+    // Search should rebuild rawDataStore from FTS5 lazily, then use in-memory path
     const result = await searchLogcatAPI(analysisId, { q: 'ActivityManager' });
     expect(result.totalMatches).toBeGreaterThan(0);
     expect(result.entries.length).toBeGreaterThan(0);
-    expect(result.method).toBe('fts5-sql');
+    // After lazy rebuild, keyword-only search routes through in-memory handler (fts5 or keyword)
+    expect(['keyword', 'fts5']).toContain(result.method);
   });
 
   test('kernel search also falls back to fts5-sql', async ({ analysisId }) => {
@@ -34,13 +35,13 @@ test.describe('FTS5 SQL Fallback', () => {
     }
   });
 
-  test('UI shows fts5-sql badge after rawDataStore cleared', async ({ analysisPage, analysisId }) => {
+  test('UI shows keyword badge after rawDataStore cleared (lazy rebuild)', async ({ analysisPage, analysisId }) => {
     const page = analysisPage;
 
     // Ensure raw store is cleared
     await clearRawDataStore(analysisId);
 
-    // Open SearchModal — auto-loads entries (no Search button needed)
+    // Open SearchModal — auto-loads entries (lazy rebuild restores rawDataStore)
     await page.locator('button', { hasText: 'Search' }).click();
     const modal = page.locator('.fixed.inset-0.z-50');
     await expect(modal).toBeVisible({ timeout: 5000 });
@@ -48,8 +49,8 @@ test.describe('FTS5 SQL Fallback', () => {
     // Wait for data to load — status bar shows "loaded"
     await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
 
-    // Should show fts5-sql method badge (since rawDataStore was cleared, falls back to FTS5 SQL)
-    await expect(modal.locator('text=fts5-sql')).toBeVisible({ timeout: 10_000 });
+    // After lazy rebuild, method is 'keyword' (in-memory) not 'fts5-sql'
+    await expect(modal.locator('text=keyword')).toBeVisible({ timeout: 10_000 });
 
     await page.keyboard.press('Escape');
   });

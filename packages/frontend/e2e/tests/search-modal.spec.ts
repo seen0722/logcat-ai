@@ -42,8 +42,8 @@ test.describe('Search Modal', () => {
     // Switch to Kernel
     await modal.locator('button', { hasText: 'Kernel' }).click();
 
-    // Wait for kernel data to load
-    await expect(modal.locator('text=loaded')).toBeVisible({ timeout: 45_000 });
+    // Wait for kernel data to load (may have 0 entries — wait for Loading to disappear)
+    await expect(modal.locator('text=Loading...')).not.toBeVisible({ timeout: 45_000 });
 
     // Logcat-only filters should not be visible
     await expect(modal.locator('text=Tag')).not.toBeVisible();

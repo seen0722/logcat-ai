@@ -1,11 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { rawDataStore } from '../raw-data-store.js';
-import { searchLogcatFTS, searchKernelFTS, hasLogcatIndex, hasKernelIndex, searchLogcatSQL, searchKernelSQL } from '../search/fts-indexer.js';
+import { searchLogcatFTS, searchKernelFTS, hasLogcatIndex, hasKernelIndex, searchLogcatSQL, searchKernelSQL, loadAllLogcatFromFTS, loadAllKernelFromFTS } from '../search/fts-indexer.js';
 import type { LogEntry, LogLevel, KernelLogEntry } from '@logcat-ai/parser';
 
 const router = Router();
 
 const LOG_LEVELS: LogLevel[] = ['V', 'D', 'I', 'W', 'E', 'F'];
+
+function truncate(msg: string, maxLen: number): string {
+  if (maxLen <= 0 || msg.length <= maxLen) return msg;
+  return msg.slice(0, maxLen) + '\u2026';
+}
 
 // Kernel severity levels: lower number = more severe
 const KERNEL_LEVELS = ['<0>', '<1>', '<2>', '<3>', '<4>', '<5>', '<6>', '<7>'];
@@ -22,27 +27,45 @@ router.get('/:id', (req: Request, res: Response) => {
   const endTime = req.query.endTime ? String(req.query.endTime) : undefined;
   const isExport = req.query.export === 'true';
   const compact = req.query.compact === 'true';
+  const truncateMsg = req.query.truncateMsg ? parseInt(String(req.query.truncateMsg), 10) : 0;
   const maxLimit = isExport ? 1_000_000 : 500;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10) || 50, 1), maxLimit);
   const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10) || 0, 0);
 
-  const rawData = rawDataStore.get(id);
+  let rawData = rawDataStore.get(id);
+
+  // Lazy-rebuild rawDataStore from FTS5 if expired (avoids slow per-query FTS5 scans)
+  if (!rawData && (hasLogcatIndex(id) || hasKernelIndex(id))) {
+    const t0 = Date.now();
+    const logcatEntries = hasLogcatIndex(id) ? loadAllLogcatFromFTS(id) : [];
+    const kernelEntries = hasKernelIndex(id) ? loadAllKernelFromFTS(id) : [];
+    if (logcatEntries.length > 0 || kernelEntries.length > 0) {
+      rawDataStore.set(id, {
+        logcatEntries,
+        kernelResult: { entries: kernelEntries, events: [], totalLines: kernelEntries.length, parseErrors: 0 },
+        anrAnalyses: [],
+        sections: [],
+      });
+      rawData = rawDataStore.get(id);
+      console.log(`[search] Rebuilt rawDataStore from FTS5: ${logcatEntries.length} logcat + ${kernelEntries.length} kernel entries in ${Date.now() - t0}ms`);
+    }
+  }
 
   if (source === 'kernel') {
-    if (rawData) {
-      return handleKernelSearch(id, rawData.kernelResult.entries, rawData.bootEpochMs, { q, level, startTime, endTime, limit, offset }, res);
+    if (rawData && rawData.kernelResult.entries.length > 0) {
+      return handleKernelSearch(id, rawData.kernelResult.entries, rawData.bootEpochMs, { q, level, startTime, endTime, limit, offset, truncateMsg }, res);
     }
     // FTS5 SQL fallback for kernel
-    return handleKernelFallback(id, { q, level, startTime, endTime, limit, offset }, res);
+    return handleKernelFallback(id, { q, level, startTime, endTime, limit, offset, truncateMsg }, res);
   }
 
   // ── Logcat search (default) ──
   if (rawData) {
-    return handleLogcatInMemory(id, rawData.logcatEntries, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact }, res);
+    return handleLogcatInMemory(id, rawData.logcatEntries, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact, truncateMsg }, res);
   }
 
   // FTS5 SQL fallback for logcat
-  return handleLogcatFallback(id, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact }, res);
+  return handleLogcatFallback(id, { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact, truncateMsg }, res);
 });
 
 /**
@@ -51,10 +74,10 @@ router.get('/:id', (req: Request, res: Response) => {
 function handleLogcatInMemory(
   id: string,
   entries: LogEntry[],
-  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean; truncateMsg?: number },
   res: Response,
 ) {
-  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact } = params;
+  const { q, tag, level, pid, buffer, startTime, endTime, limit, offset, compact, truncateMsg: tLen = 0 } = params;
 
   if (entries.length === 0) {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
@@ -79,7 +102,7 @@ function handleLogcatInMemory(
           method: 'fts5',
           fullTimeRange,
           columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
-          rows: ftsResult.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+          rows: ftsResult.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, truncate(e.message, tLen), e.buffer ?? '']),
         });
       }
       return res.json({
@@ -94,7 +117,7 @@ function handleLogcatInMemory(
           tid: e.tid,
           level: e.level,
           tag: e.tag,
-          message: e.message,
+          message: truncate(e.message, tLen),
           buffer: e.buffer,
         })),
       });
@@ -147,7 +170,7 @@ function handleLogcatInMemory(
       method: 'keyword',
       fullTimeRange,
       columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
-      rows: results.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+      rows: results.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, truncate(e.message, tLen), e.buffer ?? '']),
     });
   }
   return res.json({
@@ -162,7 +185,7 @@ function handleLogcatInMemory(
       tid: e.tid,
       level: e.level,
       tag: e.tag,
-      message: e.message,
+      message: truncate(e.message, tLen),
       buffer: e.buffer,
     })),
   });
@@ -173,9 +196,10 @@ function handleLogcatInMemory(
  */
 function handleLogcatFallback(
   id: string,
-  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean },
+  params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit: number; offset: number; compact?: boolean; truncateMsg?: number },
   res: Response,
 ) {
+  const tLen = params.truncateMsg ?? 0;
   if (!hasLogcatIndex(id)) {
     return res.status(404).json({ error: 'Analysis not found or data expired' });
   }
@@ -191,7 +215,7 @@ function handleLogcatFallback(
       showing: result.entries.length,
       method: 'fts5-sql',
       columns: ['timestamp', 'pid', 'tid', 'level', 'tag', 'message', 'buffer'],
-      rows: result.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, e.message, e.buffer ?? '']),
+      rows: result.entries.map(e => [e.timestamp, e.pid, e.tid, e.level, e.tag, truncate(e.message, tLen), e.buffer ?? '']),
     });
   }
   return res.json({
@@ -205,7 +229,7 @@ function handleLogcatFallback(
       tid: e.tid,
       level: e.level,
       tag: e.tag,
-      message: e.message,
+      message: truncate(e.message, tLen),
       buffer: e.buffer,
     })),
   });
@@ -216,9 +240,10 @@ function handleLogcatFallback(
  */
 function handleKernelFallback(
   id: string,
-  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number; truncateMsg?: number },
   res: Response,
 ) {
+  const tLen = params.truncateMsg ?? 0;
   if (!hasKernelIndex(id)) {
     return res.status(404).json({ error: 'Analysis not found or data expired' });
   }
@@ -237,7 +262,7 @@ function handleKernelFallback(
       timestamp: e.timestamp,
       level: e.level,
       facility: e.facility,
-      message: e.message,
+      message: truncate(e.message, tLen),
     })),
   });
 }
@@ -265,10 +290,10 @@ function handleKernelSearch(
   id: string,
   entries: KernelLogEntry[],
   bootEpochMs: number | undefined,
-  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number },
+  params: { q?: string; level?: string; startTime?: string; endTime?: string; limit: number; offset: number; truncateMsg?: number },
   res: Response,
 ) {
-  const { q, level, startTime, endTime, limit, offset } = params;
+  const { q, level, startTime, endTime, limit, offset, truncateMsg: tLen = 0 } = params;
 
   if (entries.length === 0) {
     return res.json({ totalMatches: 0, showing: 0, method: 'keyword', entries: [] });
@@ -295,7 +320,7 @@ function handleKernelSearch(
           timestamp: e.timestamp,
           level: e.level,
           facility: e.facility,
-          message: e.message,
+          message: truncate(e.message, tLen),
         })),
       });
     }
@@ -346,7 +371,7 @@ function handleKernelSearch(
       timestamp: e.displayTs,
       level: e.level,
       facility: e.facility,
-      message: e.message,
+      message: truncate(e.message, tLen),
     })),
   });
 }

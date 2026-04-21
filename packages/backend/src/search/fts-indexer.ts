@@ -344,6 +344,66 @@ export function hasKernelIndex(analysisId: string): boolean {
  * Search logcat entries using SQL WHERE (not FTS5 MATCH).
  * Used as fallback when rawDataStore is expired but FTS5 index still exists.
  */
+/**
+ * Load all logcat entries from FTS5 for rebuilding rawDataStore.
+ * Returns entries in insertion order (chronological).
+ */
+export function loadAllLogcatFromFTS(analysisId: string): LogEntry[] {
+  const db = getDatabase();
+  try {
+    const rows = db
+      .prepare('SELECT line_number, timestamp, pid, tid, level, tag, message, buffer FROM logcat_fts WHERE analysis_id = ?')
+      .all(analysisId) as Array<{
+        line_number: number; timestamp: string; pid: string; tid: string;
+        level: string; tag: string; message: string; buffer: string;
+      }>;
+    const entries: LogEntry[] = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      entries[i] = {
+        lineNumber: r.line_number,
+        timestamp: r.timestamp,
+        pid: parseInt(r.pid, 10),
+        tid: parseInt(r.tid, 10),
+        level: r.level as LogEntry['level'],
+        tag: r.tag,
+        message: r.message,
+        buffer: r.buffer || undefined,
+      } as LogEntry;
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Load all kernel entries from FTS5 for rebuilding rawDataStore.
+ */
+export function loadAllKernelFromFTS(analysisId: string): KernelLogEntry[] {
+  const db = getDatabase();
+  try {
+    const rows = db
+      .prepare('SELECT entry_index, timestamp_sec, level, facility, message FROM kernel_fts WHERE analysis_id = ?')
+      .all(analysisId) as Array<{
+        entry_index: number; timestamp_sec: string; level: string; facility: string; message: string;
+      }>;
+    const entries: KernelLogEntry[] = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      entries[i] = {
+        timestamp: parseFloat(r.timestamp_sec),
+        level: r.level,
+        facility: r.facility,
+        message: r.message,
+      } as KernelLogEntry;
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
 export function searchLogcatSQL(
   analysisId: string,
   params: {
@@ -407,24 +467,15 @@ export function searchLogcatSQL(
   const where = conditions.join(' AND ');
 
   try {
-    const countRow = db
-      .prepare(`SELECT COUNT(*) as cnt FROM logcat_fts WHERE ${where}`)
-      .get(...bindParams) as { cnt: number } | undefined;
-
-    const totalMatches = countRow?.cnt ?? 0;
-    if (totalMatches === 0) {
-      return { totalMatches: 0, entries: [] };
-    }
-
+    // Skip expensive COUNT(*) on FTS5 virtual table — fetch limit+1 to detect more rows
     const rows = db
       .prepare(
         `SELECT line_number, timestamp, pid, tid, level, tag, message, buffer
          FROM logcat_fts
          WHERE ${where}
-         ORDER BY timestamp
          LIMIT ? OFFSET ?`,
       )
-      .all(...bindParams, limit, offset) as Array<{
+      .all(...bindParams, limit + 1, offset) as Array<{
       line_number: number;
       timestamp: string;
       pid: string;
@@ -435,9 +486,14 @@ export function searchLogcatSQL(
       buffer: string;
     }>;
 
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+    // totalMatches: exact when all fit, otherwise estimate as offset + fetched
+    const totalMatches = hasMore ? offset + limit + 1 : offset + resultRows.length;
+
     return {
       totalMatches,
-      entries: rows.map((row) => ({
+      entries: resultRows.map((row) => ({
         lineNumber: row.line_number,
         timestamp: row.timestamp,
         pid: parseInt(row.pid, 10),
@@ -503,24 +559,16 @@ export function searchKernelSQL(
   const where = conditions.join(' AND ');
 
   try {
-    const countRow = db
-      .prepare(`SELECT COUNT(*) as cnt FROM kernel_fts WHERE ${where}`)
-      .get(...bindParams) as { cnt: number } | undefined;
-
-    const totalMatches = countRow?.cnt ?? 0;
-    if (totalMatches === 0) {
-      return { totalMatches: 0, entries: [] };
-    }
-
+    // Skip expensive COUNT(*) on FTS5 virtual table — fetch limit+1 to detect more rows
     const rows = db
       .prepare(
         `SELECT entry_index, timestamp_sec, level, facility, message
          FROM kernel_fts
          WHERE ${where}
-         ORDER BY timestamp_sec
+         ORDER BY rowid_sec
          LIMIT ? OFFSET ?`,
       )
-      .all(...bindParams, limit, offset) as Array<{
+      .all(...bindParams, limit + 1, offset) as Array<{
       entry_index: number;
       timestamp_sec: string;
       level: string;
@@ -528,9 +576,13 @@ export function searchKernelSQL(
       message: string;
     }>;
 
+    const hasMore = rows.length > limit;
+    const resultRows = hasMore ? rows.slice(0, limit) : rows;
+    const totalMatches = hasMore ? offset + limit + 1 : offset + resultRows.length;
+
     return {
       totalMatches,
-      entries: rows.map((row) => ({
+      entries: resultRows.map((row) => ({
         entryIndex: row.entry_index,
         timestamp: row.timestamp_sec,
         level: row.level,
