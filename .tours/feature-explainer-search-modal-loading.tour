@@ -1,0 +1,102 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "SearchModal Loading Pipeline — Where Time Goes",
+  "description": "Traces the full data loading path of SearchModal, from the initial useEffect trigger through backend response to client-side filtering and virtual scroll rendering. Focuses on identifying the heaviest time sinks when loading 50K logcat/kernel entries.",
+  "ref": "main",
+  "steps": [
+    {
+      "file": "packages/frontend/src/components/SearchModal.tsx",
+      "selection": {
+        "start": { "line": 83, "character": 0 },
+        "end": { "line": 129, "character": 0 }
+      },
+      "title": "1. loadData — the single entry point for all data fetches",
+      "description": "**Situation**: Every data load (initial open, tab switch, Load Range, Oldest/Latest) funnels through this one `useCallback`.\n\n**Mechanism**: Calls `searchLogcat()` or `searchKernel()` with `export: true` and `limit: 50_000`. The `compact: true` flag on logcat requests the columnar wire format (arrays instead of objects) to reduce JSON size.\n\n**Time sink**: The `await` on line 109/96 is the biggest single wait — it includes network RTT + backend query + JSON parse. For 50K entries this response can be 15-30MB of JSON."
+    },
+    {
+      "file": "packages/frontend/src/components/SearchModal.tsx",
+      "selection": {
+        "start": { "line": 251, "character": 0 },
+        "end": { "line": 267, "character": 0 }
+      },
+      "title": "2. Initial Load — fires once on mount",
+      "description": "**Situation**: When SearchModal opens, this `useEffect` fires exactly once (guarded by `initialLoadDone` ref).\n\n**Mechanism**: Passes `initialTag`, `initialStartTime`, `initialEndTime` from Timeline's magnifying glass icon into `loadData()`. If none provided, loads the first 50K entries with no filter.\n\n**Implication**: The user sees a loading spinner from the moment the modal opens until `loadData()` resolves. This is the perceived \"opening delay\"."
+    },
+    {
+      "file": "packages/frontend/src/lib/api.ts",
+      "selection": {
+        "start": { "line": 342, "character": 0 },
+        "end": { "line": 379, "character": 0 }
+      },
+      "title": "3. searchLogcat API client — compact decode is a hidden cost",
+      "description": "**Situation**: The frontend API client sends the fetch and decodes the response.\n\n**Mechanism**: When `compact: true`, backend sends `{ columns, rows }` instead of `{ entries }`. Lines 366-377 decode this: iterating 50K rows, creating an object per row with `cols.length` property assignments.\n\n**Time sink #2**: `res.json()` on line 364 is the JSON parse of a 15-30MB payload — browser main thread blocks here for 200-800ms depending on device. Then the compact decode loop adds another 50-150ms for 50K rows. Combined, this is the **second largest bottleneck** after network transfer."
+    },
+    {
+      "file": "packages/backend/src/routes/search.ts",
+      "selection": {
+        "start": { "line": 35, "character": 0 },
+        "end": { "line": 69, "character": 0 }
+      },
+      "title": "4. Backend router — fast path vs FTS5 rebuild",
+      "description": "**Situation**: Backend receives the search request.\n\n**Mechanism**: Two paths:\n1. **Fast path** (line 63): `rawDataStore` has entries in memory — direct array filtering, near-instant.\n2. **Slow path** (lines 38-52): rawDataStore expired (1h TTL) — rebuilds from FTS5 SQLite by calling `loadAllLogcatFromFTS()`. This reads ALL entries from FTS5 into memory first, then serves the query.\n\n**Gotcha**: The FTS5 rebuild on line 40 can take 2-5 seconds for 400K+ entries. After rebuild, subsequent requests hit the fast path. This is why the *first* search after ~1 hour is noticeably slower."
+    },
+    {
+      "file": "packages/backend/src/routes/search.ts",
+      "selection": {
+        "start": { "line": 80, "character": 0 },
+        "end": { "line": 192, "character": 0 }
+      },
+      "title": "5. handleLogcatInMemory — server-side filtering + serialization",
+      "description": "**Situation**: The fast path serves 50K entries from the in-memory array.\n\n**Mechanism**: When `export: true` with no keyword, the backend skips FTS5 and does pure array slicing (line 164: `filtered.slice(offset, offset + limit)`). With `compact: true`, it serializes as column+rows format.\n\n**Time sink #3**: `JSON.stringify()` of 50K entries is the backend's main cost — 100-300ms for the serialization alone, plus Express sends it over the wire. The compact format reduces payload ~40% (no repeated key names), which helps network transfer but the stringify cost is similar."
+    },
+    {
+      "file": "packages/backend/src/search/fts-indexer.ts",
+      "selection": {
+        "start": { "line": 351, "character": 0 },
+        "end": { "line": 378, "character": 0 }
+      },
+      "title": "6. loadAllLogcatFromFTS — the cold-start penalty",
+      "description": "**Situation**: When rawDataStore is empty (TTL expired or server restart), the search route triggers a full FTS5 table scan.\n\n**Mechanism**: `SELECT ... FROM logcat_fts WHERE analysis_id = ?` reads every row, then a `for` loop creates `LogEntry` objects with `parseInt()` for pid/tid.\n\n**Gotcha**: FTS5 virtual tables are optimized for text search, not bulk SELECT. Reading 400K rows from FTS5 is significantly slower than a regular B-tree table. This is the **worst-case bottleneck** — can take 3-8 seconds on VPS with limited RAM. After this, the data stays in rawDataStore for 1 hour."
+    },
+    {
+      "file": "packages/frontend/src/components/SearchModal.tsx",
+      "selection": {
+        "start": { "line": 138, "character": 0 },
+        "end": { "line": 177, "character": 0 }
+      },
+      "title": "7. Client-side filtering — fast but runs on every filter change",
+      "description": "**Situation**: After data arrives, all filtering (level/pid/buffer/tag/excludeTags) happens client-side via `useMemo`.\n\n**Mechanism**: A single `for` loop over `allEntriesRef.current` (up to 50K) with early `continue` for each filter condition. No server round-trip needed.\n\n**Time**: ~5-15ms for 50K entries — negligible. The smart design choice here is storing entries in a `ref` (`allEntriesRef`) instead of state, so React doesn't diff 50K objects. Only `dataVersion` (a counter) triggers the useMemo recalculation."
+    },
+    {
+      "file": "packages/frontend/src/components/SearchModal.tsx",
+      "selection": {
+        "start": { "line": 191, "character": 0 },
+        "end": { "line": 206, "character": 0 }
+      },
+      "title": "8. matchIndices scan — Find keyword highlight cost",
+      "description": "**Situation**: When the user types in the Find box, `matchIndices` scans all filtered entries.\n\n**Mechanism**: RegExp test on `message` and `tag` of every entry. Returns a `Set<number>` of matching row indices.\n\n**Gotcha**: For 50K entries with a common keyword, this runs in ~20-40ms — acceptable. But because it's in the `useMemo` chain, any change to `filteredEntries` (from filter toggles) also re-runs this scan. The dependency chain is: `dataVersion` -> `filteredEntries` -> `matchIndices` -> `matchList` — all four useMemos cascade."
+    },
+    {
+      "file": "packages/frontend/src/components/SearchModal.tsx",
+      "selection": {
+        "start": { "line": 396, "character": 0 },
+        "end": { "line": 404, "character": 0 }
+      },
+      "title": "9. rowProps — the critical useMemo that gates re-renders",
+      "description": "**Situation**: `rowProps` is passed to react-window's `List` as `rowProps`.\n\n**Mechanism**: This `useMemo` creates the props object that every virtual row receives. When any dependency changes (`filteredEntries`, `matchIndices`, `focusIndex`, etc.), react-window re-renders all visible rows (~40 rows at ROW_HEIGHT=22).\n\n**Gotcha per CLAUDE.md**: `focusIndex` MUST be state (not ref) to trigger this useMemo. And the detail panel MUST use pure DOM manipulation (line 364-394) — if it used `useState`, it would invalidate rowProps on every click, re-running all the upstream useMemos on 50K entries."
+    },
+    {
+      "file": "packages/frontend/src/components/search/SearchRow.tsx",
+      "selection": {
+        "start": { "line": 29, "character": 0 },
+        "end": { "line": 60, "character": 0 }
+      },
+      "title": "10. RowComponent — virtual scroll render (fast)",
+      "description": "**Situation**: react-window only renders ~40 visible rows out of 50K.\n\n**Mechanism**: Each row reads its entry by index from the passed `entries` array. The `HighlightText` component does inline RegExp matching for keyword highlights.\n\n**Implication**: Rendering is NOT a bottleneck — react-window handles this well at ROW_HEIGHT=22px. The real time sinks are upstream: (1) network + JSON parse ~500-1500ms, (2) compact decode ~100ms, (3) FTS5 cold rebuild ~3-8s when applicable."
+    },
+    {
+      "title": "Summary: Time Budget Breakdown",
+      "description": "## Where loading time goes (50K logcat entries, warm path)\n\n| Phase | Location | Time |\n|-------|----------|------|\n| **Backend query** | `search.ts` in-memory filter + `JSON.stringify` | 100-300ms |\n| **Network transfer** | 15-30MB compact JSON over wire | 200-500ms |\n| **JSON parse** | `res.json()` in `api.ts` | 200-800ms |\n| **Compact decode** | `data.rows.map()` in `api.ts:368` | 50-150ms |\n| **Client filter** | `useMemo` in `SearchModal.tsx:138` | 5-15ms |\n| **Virtual render** | react-window `List` | 5-10ms |\n\n**Total warm path**: ~600-1800ms\n\n## Cold path (FTS5 rebuild)\nAdd 3-8s for `loadAllLogcatFromFTS()` on first request after TTL expiry.\n\n## Biggest optimization opportunities\n1. **JSON parse** — streaming JSON or binary format (MessagePack) could eliminate main-thread blocking\n2. **Compact decode** — could be avoided if backend sends object format (trade bandwidth for CPU)\n3. **FTS5 cold rebuild** — could pre-warm on analysis completion or use a regular SQLite table for bulk reads"
+    }
+  ]
+}

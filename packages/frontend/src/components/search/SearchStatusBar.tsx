@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SearchSource, BaseEntry, LogcatEntry, KernelEntry } from './types';
+import type { SearchSource, LogcatEntry, KernelEntry } from './types';
 
 interface SearchStatusBarProps {
   source: SearchSource;
@@ -9,9 +9,6 @@ interface SearchStatusBarProps {
   matchCount: number;
   hasKeyword: boolean;
   method: string;
-  truncated: boolean;
-  totalAvailable: number;
-  fullTimeRange: { first: string; last: string; total: number } | null;
   onExport: (format: 'csv' | 'text') => void;
 }
 
@@ -23,9 +20,6 @@ export function SearchStatusBar({
   matchCount,
   hasKeyword,
   method,
-  truncated,
-  totalAvailable,
-  fullTimeRange,
   onExport,
 }: SearchStatusBarProps) {
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -55,20 +49,6 @@ export function SearchStatusBar({
                 : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
             }`}>
               {method}
-            </span>
-          )}
-          {truncated && (
-            <span className="text-yellow-400 text-[11px]">
-              Showing {allEntries.length.toLocaleString()} of {(fullTimeRange?.total ?? totalAvailable).toLocaleString()}
-              {allEntries.length > 0 && (
-                <span className="text-gray-500 ml-1">
-                  (loaded: {(allEntries[0] as BaseEntry).timestamp?.slice(0, 14)} ~ {(allEntries[allEntries.length - 1] as BaseEntry).timestamp?.slice(0, 14)}
-                  {fullTimeRange && (
-                    <span> · full: {fullTimeRange.first.slice(0, 14)} ~ {fullTimeRange.last.slice(0, 14)}</span>
-                  )}
-                  )
-                </span>
-              )}
             </span>
           )}
         </>

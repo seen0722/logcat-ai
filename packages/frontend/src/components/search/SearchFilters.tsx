@@ -14,14 +14,12 @@ interface SearchFiltersProps {
   // Shared filters
   level: string;
   setLevel: (v: string) => void;
-  // Time range
+  // Time range (client-side filter — no server round-trip)
   startTime: string;
   setStartTime: (v: string) => void;
   endTime: string;
   setEndTime: (v: string) => void;
   // Actions
-  loading: boolean;
-  onLoadRange: () => void;
   onSaveTag: () => void;
 }
 
@@ -34,8 +32,7 @@ export function SearchFilters({
   level, setLevel,
   startTime, setStartTime,
   endTime, setEndTime,
-  loading,
-  onLoadRange, onSaveTag,
+  onSaveTag,
 }: SearchFiltersProps) {
   return (
     <div className="flex gap-2.5 items-center px-4 py-1.5 border-b border-border/60 shrink-0 flex-wrap">
@@ -157,13 +154,6 @@ export function SearchFilters({
           className="w-32 bg-surface-card border border-border/60 rounded-md px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent font-mono"
         />
       </div>
-      <button
-        onClick={onLoadRange}
-        disabled={loading}
-        className="px-3 py-1 text-[11px] font-medium bg-accent hover:bg-accent disabled:opacity-50 text-white rounded-md transition-colors"
-      >
-        {loading ? 'Loading...' : 'Load Range'}
-      </button>
       {(startTime || endTime) && (
         <button
           onClick={() => { setStartTime(''); setEndTime(''); }}

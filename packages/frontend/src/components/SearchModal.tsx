@@ -2,8 +2,11 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { List, useListRef } from 'react-window';
 import { searchLogcat, searchKernel } from '../lib/api';
 import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
-import { RowComponent, SearchFilters, SearchStatusBar, MAX_ENTRIES, ROW_HEIGHT, DETAIL_HEIGHT } from './search';
+import { RowComponent, SearchFilters, SearchStatusBar, ROW_HEIGHT, DETAIL_HEIGHT } from './search';
 import type { SearchSource, BaseEntry, LogcatEntry, KernelEntry, RowExtraProps } from './search';
+
+/** Backend export limit — request all entries at once */
+const LOAD_ALL_LIMIT = 1_000_000;
 
 interface Props {
   uploadId: string;
@@ -20,7 +23,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
   const [useRegex, setUseRegex] = useState(false);
-  // Detail panel: use refs + direct DOM manipulation to avoid re-rendering 50K rows
+  // Detail panel: use refs + direct DOM manipulation to avoid re-rendering rows
   const detailPanelRef = useRef<HTMLDivElement>(null);
   const detailContentRef = useRef<HTMLPreElement>(null);
   const detailMetaRef = useRef<HTMLDivElement>(null);
@@ -50,19 +53,15 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const [buffer, setBuffer] = useState('');
   // Shared filters
   const [level, setLevel] = useState(initialTag ? 'E' : '');
-  // Time range filters
+  // Time range filters (client-side only — no server round-trip)
   const [startTime, setStartTime] = useState(initialStartTime ?? '');
   const [endTime, setEndTime] = useState(initialEndTime ?? '');
 
-  // Data states — allEntries in ref to avoid React managing 411K objects
+  // Data states — allEntries in ref to avoid React managing large arrays
   const allEntriesRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
   const filteredRef = useRef<LogcatEntry[] | KernelEntry[]>([]);
-  // Full time range of the entire unfiltered dataset — from backend response
-  const [fullTimeRange, setFullTimeRange] = useState<{ first: string; last: string; total: number } | null>(null);
-  const [dataVersion, setDataVersion] = useState(0); // increments on every loadData to invalidate useMemo
-  const [totalAvailable, setTotalAvailable] = useState(0);
+  const [dataVersion, setDataVersion] = useState(0);
   const [method, setMethod] = useState<string>('');
-  const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -80,61 +79,43 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const initialLoadDone = useRef(false);
   const [focusIndex, setFocusIndex] = useState(-1);
 
-  // ── Data Loading ──
+  // ── Data Loading (one-time full load) ──
 
-  const loadData = useCallback(async (opts?: { src?: SearchSource; tagOverride?: string; st?: string; et?: string; offsetOverride?: number; bufferOverride?: string }) => {
+  const loadData = useCallback(async (opts?: { src?: SearchSource }) => {
     const effectiveSource = opts?.src ?? source;
-    const effectiveSt = opts?.st ?? startTime;
-    const effectiveEt = opts?.et ?? endTime;
-    const effectiveOffset = opts?.offsetOverride ?? 0;
-    const effectiveBuffer = opts?.bufferOverride ?? '';
 
     setLoading(true);
     setError('');
     try {
       if (effectiveSource === 'kernel') {
         const res = await searchKernel(uploadId, {
-          startTime: effectiveSt.trim() || undefined,
-          endTime: effectiveEt.trim() || undefined,
-          limit: MAX_ENTRIES,
-          offset: effectiveOffset,
+          limit: LOAD_ALL_LIMIT,
           export: true,
         });
-        allEntriesRef.current = res.entries as KernelEntry[]; setDataVersion(v => v + 1);
-        setTotalAvailable(res.totalMatches);
+        allEntriesRef.current = res.entries as KernelEntry[];
+        setDataVersion(v => v + 1);
         setMethod(res.method);
-        setTruncated(res.totalMatches > MAX_ENTRIES);
-        if (res.fullTimeRange) setFullTimeRange(res.fullTimeRange);
       } else {
         const res = await searchLogcat(uploadId, {
-          startTime: effectiveSt.trim() || undefined,
-          endTime: effectiveEt.trim() || undefined,
-          buffer: effectiveBuffer || undefined,
-          limit: MAX_ENTRIES,
-          offset: effectiveOffset,
+          limit: LOAD_ALL_LIMIT,
           export: true,
           compact: true,
         });
-        allEntriesRef.current = res.entries as LogcatEntry[]; setDataVersion(v => v + 1);
-        setTotalAvailable(res.totalMatches);
+        allEntriesRef.current = res.entries as LogcatEntry[];
+        setDataVersion(v => v + 1);
         setMethod(res.method);
-        setTruncated(res.totalMatches > MAX_ENTRIES);
-        if (res.fullTimeRange) setFullTimeRange(res.fullTimeRange);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Load failed');
     } finally {
       setLoading(false);
     }
-  }, [uploadId, source, startTime, endTime]); // tag/buffer/level intentionally omitted — filtering is always client-side
+  }, [uploadId, source]);
 
   // ── Client-side Filtering ──
+  // ALL filtering (level/pid/buffer/tag/excludeTags/startTime/endTime) is client-side
   // keyword (q) is NOT used for filtering — only for Find Next/Prev highlighting
-  // level/pid/buffer filter immediately via useMemo
 
-  // Refilter: runs filter logic, writes to filteredRef, updates rowCount state
-  // Synchronous filter — runs during render, writes to ref, no useEffect needed
-  // useMemo ensures it only re-runs when deps change (not on every render)
   const filteredEntries = useMemo(() => {
     const all = allEntriesRef.current;
     if (source === 'logcat') {
@@ -148,7 +129,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       const excludeSet = excludeTags.trim()
         ? new Set(excludeTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean))
         : null;
-      const hasAnyFilter = minLevelIdx >= 0 || !isNaN(pidNum) || !!buffer || includeSet || excludeSet;
+      const st = startTime.trim();
+      const et = endTime.trim();
+      const hasAnyFilter = minLevelIdx >= 0 || !isNaN(pidNum) || !!buffer || includeSet || excludeSet || !!st || !!et;
       if (!hasAnyFilter) { filteredRef.current = entries; return entries; }
       const result: LogcatEntry[] = [];
       for (let i = 0; i < entries.length; i++) {
@@ -158,27 +141,37 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         if (buffer && e.buffer !== buffer) continue;
         if (includeSet) { const t = (e.tag ?? '').toLowerCase(); if (!includeSet.has(t)) continue; }
         if (excludeSet) { const t = (e.tag ?? '').toLowerCase(); if (excludeSet.has(t)) continue; }
+        if (st && e.timestamp < st) continue;
+        if (et && e.timestamp > et) continue;
         result.push(e);
       }
       filteredRef.current = result;
       return result;
     } else {
-      let kernel = all as KernelEntry[];
-      if (level) {
-        const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
-        kernel = kernel.filter(e => {
+      const entries = all as KernelEntry[];
+      const st = startTime.trim();
+      const et = endTime.trim();
+      const hasAnyFilter = !!level || !!st || !!et;
+      if (!hasAnyFilter) { filteredRef.current = entries; return entries; }
+      const result: KernelEntry[] = [];
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        if (level) {
+          const levelNum = parseInt(level.replace(/[<>]/g, ''), 10);
           const n = parseInt(e.level.replace(/[<>]/g, ''), 10);
-          return n <= levelNum;
-        });
+          if (n > levelNum) continue;
+        }
+        if (st && e.timestamp < st) continue;
+        if (et && e.timestamp > et) continue;
+        result.push(e);
       }
-      filteredRef.current = kernel;
-      return kernel;
+      filteredRef.current = result;
+      return result;
     }
-  }, [dataVersion, source, level, pid, buffer, tag, excludeTags]); // dataVersion increments on every loadData
+  }, [dataVersion, source, level, pid, buffer, tag, excludeTags, startTime, endTime]);
 
   // ── Find Next/Prev ──
 
-  // Build search pattern (regex or plain includes)
   const searchPattern = useMemo((): RegExp | null => {
     const kw = q.trim();
     if (!kw) return null;
@@ -235,7 +228,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // ── FocusTime ──
 
   useEffect(() => {
-    const entries = allEntriesRef.current;
+    // Search through filteredEntries (not allEntries) since the virtual list renders filteredEntries
+    const entries = filteredRef.current;
     if (!initialFocusTime || entries.length === 0) return;
     let best = 0;
     for (let i = 0; i < entries.length; i++) {
@@ -246,28 +240,17 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     requestAnimationFrame(() => {
       listRef.current?.scrollToRow({ index: best, align: 'center' });
     });
-  }, [dataVersion, initialFocusTime, listRef]);
+  }, [dataVersion, initialFocusTime, listRef, startTime, endTime]);
 
   // ── Initial Load ──
 
   useEffect(() => {
     if (initialLoadDone.current) return;
     initialLoadDone.current = true;
-
-    if (initialTag || initialStartTime) {
-      loadData({
-        src: initialSource ?? 'logcat',
-        tagOverride: initialTag,
-        st: initialStartTime,
-        et: initialEndTime,
-      });
-    } else {
-      loadData();
-    }
+    loadData({ src: initialSource ?? 'logcat' });
   }, []);
 
   // ── Container height measurement ──
-  // Sync measure before first paint, then ResizeObserver for window resize
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -292,7 +275,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setTimeout(onClose, 200);
   }, [onClose]);
 
-  // Keyboard shortcuts: Escape to close, Ctrl+F to focus search
+  // Keyboard shortcuts: Escape, Ctrl+F, Arrow Left/Right for page scroll
+  const listHeight = useMemo(() => Math.max(containerHeight - 20, 200), [containerHeight]);
+  const pageSize = useMemo(() => Math.floor(listHeight / ROW_HEIGHT), [listHeight]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') handleClose();
@@ -301,10 +287,30 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         inputRef.current?.focus();
         inputRef.current?.select();
       }
+      // Arrow Left/Right for page navigation (only when not in an input)
+      const active = document.activeElement;
+      const isInput = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
+      if (!isInput && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        const list = listRef.current;
+        if (!list) return;
+        // Get current scroll position as row index
+        const scrollEl = listWrapRef.current?.querySelector('[style*="overflow"]') as HTMLElement | null;
+        const scrollTop = scrollEl?.scrollTop ?? 0;
+        const currentRow = Math.floor(scrollTop / ROW_HEIGHT);
+        const maxRow = filteredRef.current.length - 1;
+        if (e.key === 'ArrowLeft') {
+          const target = Math.max(0, currentRow - pageSize);
+          list.scrollToRow({ index: target, align: 'start' });
+        } else {
+          const target = Math.min(maxRow, currentRow + pageSize);
+          list.scrollToRow({ index: target, align: 'start' });
+        }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleClose]);
+  }, [handleClose, listRef, pageSize]);
 
   // ── Tab switching ──
 
@@ -319,16 +325,13 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     setStartTime('');
     setEndTime('');
     allEntriesRef.current = []; filteredRef.current = []; setDataVersion(v => v + 1);
-    setFullTimeRange(null);
-    setTotalAvailable(0);
     setMethod('');
-    setTruncated(false);
     setError('');
     setCurrentMatchPos(0);
     setFocusIndex(-1);
     setTimeout(() => {
       inputRef.current?.focus();
-      loadData({ src: newSource, tagOverride: '', st: '', et: '' });
+      loadData({ src: newSource });
     }, 0);
   };
 
@@ -403,18 +406,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     highlightPattern: searchPattern,
   }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex, handleExpandToggleStable]);
 
-  // Effective list height: subtract column header height (~20px)
-  const listHeight = Math.max(containerHeight - 20, 200);
-
   const allEntries = allEntriesRef.current;
-
-  // ── Buffer change handler (reloads from server when data is truncated) ──
-  const handleBufferChange = useCallback((newBuf: string) => {
-    setBuffer(newBuf);
-    if (truncated) {
-      loadData({ bufferOverride: newBuf });
-    }
-  }, [truncated, loadData]);
 
   return (
     <div
@@ -505,79 +497,30 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           </button>
         </div>
 
-        {/* Filters + Time range */}
+        {/* Filters + Time range (all client-side) */}
         <SearchFilters
           source={source}
           tag={tag} setTag={setTag}
           excludeTags={excludeTags} setExcludeTags={setExcludeTags}
-          buffer={buffer} setBuffer={handleBufferChange}
+          buffer={buffer} setBuffer={setBuffer}
           pid={pid} setPid={setPid}
           level={level} setLevel={setLevel}
           startTime={startTime} setStartTime={setStartTime}
           endTime={endTime} setEndTime={setEndTime}
-          loading={loading}
-          onLoadRange={() => loadData({ bufferOverride: buffer })}
           onSaveTag={saveCurrentTag}
         />
 
-        {/* Quick bar: Saved tags + Time navigation — single compact row */}
-        {(allEntries.length > 0 || (source === 'logcat' && savedTags.length > 0)) && (() => {
-          // Current loaded range timestamps (for Earlier/Later navigation)
-          const firstReal = allEntries.find((e) => e.timestamp && !e.timestamp.startsWith('01-01'));
-          const lastEntry = allEntries[allEntries.length - 1];
-          const firstTs = (firstReal?.timestamp ?? allEntries[0]?.timestamp ?? '').slice(0, 18);
-          const lastTs = (lastEntry?.timestamp ?? '').slice(0, 18);
-          const addMin = (ts: string, delta: number) => {
-            const m = ts.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
-            if (!m) return ts;
-            const d = new Date(new Date().getFullYear(), parseInt(m[1]) - 1, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]), parseInt(m[5]));
-            d.setMinutes(d.getMinutes() + delta);
-            const pad = (n: number) => String(n).padStart(2, '0');
-            return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-          };
-          const jumpBtn = (label: string, st: string, et: string, isNav?: boolean) => (
-            <button key={label} onClick={() => { setStartTime(st); setEndTime(et); loadData({ st, et, bufferOverride: buffer }); }} disabled={loading}
-              className={`text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors ${
-                isNav ? 'text-accent border-accent/30 hover:bg-accent/10' : 'bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40'
-              }`}>{label}</button>
-          );
-          // "Latest" loads the last MAX_ENTRIES from the full log (no time filter, offset from end)
-          const latestOffset = Math.max(0, (fullTimeRange?.total ?? 0) - MAX_ENTRIES);
-          const handleLatest = () => {
-            setStartTime(''); setEndTime('');
-            loadData({ st: '', et: '', offsetOverride: latestOffset, bufferOverride: buffer });
-          };
-          const handleOldest = () => {
-            setStartTime(''); setEndTime('');
-            loadData({ st: '', et: '', offsetOverride: 0, bufferOverride: buffer });
-          };
-          return (
-            <div className="flex items-center gap-1.5 px-4 py-1 border-b border-border/40 shrink-0 flex-wrap">
-              {source === 'logcat' && savedTags.length > 0 && (
-                <>
-                  {savedTags.map(t => (
-                    <button key={t} onClick={() => setTag(t)}
-                      className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-warm/10 border border-warm/20 text-warm hover:bg-warm/20 transition-colors">
-                      {t}<span onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }} className="text-warm/40 hover:text-red-400 ml-0.5 transition-colors">×</span>
-                    </button>
-                  ))}
-                  <span className="text-gray-700 mx-0.5">|</span>
-                </>
-              )}
-              {allEntries.length > 0 && (
-                <>
-                  {jumpBtn('\u2190 Earlier', addMin(firstTs, -5), firstTs, true)}
-                  {jumpBtn('All', '', '')}
-                  <button key="Oldest" onClick={handleOldest} disabled={loading}
-                    className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Oldest</button>
-                  <button key="Latest" onClick={handleLatest} disabled={loading}
-                    className="text-[10px] px-2 py-0.5 rounded border disabled:opacity-50 transition-colors bg-surface-hover border-border/50 text-gray-400 hover:text-accent hover:border-accent/40">Latest</button>
-                  {jumpBtn('Later \u2192', lastTs, '', true)}
-                </>
-              )}
-            </div>
-          );
-        })()}
+        {/* Quick bar: Saved tags only (no pagination buttons) */}
+        {source === 'logcat' && savedTags.length > 0 && (
+          <div className="flex items-center gap-1.5 px-4 py-1 border-b border-border/40 shrink-0 flex-wrap">
+            {savedTags.map(t => (
+              <button key={t} onClick={() => setTag(t)}
+                className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-warm/10 border border-warm/20 text-warm hover:bg-warm/20 transition-colors">
+                {t}<span onClick={(e) => { e.stopPropagation(); removeSavedTag(t); }} className="text-warm/40 hover:text-red-400 ml-0.5 transition-colors">&times;</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Status bar */}
         <SearchStatusBar
@@ -588,9 +531,6 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           matchCount={matchList.length}
           hasKeyword={!!q.trim()}
           method={method}
-          truncated={truncated}
-          totalAvailable={totalAvailable}
-          fullTimeRange={fullTimeRange}
           onExport={handleExport}
         />
 
@@ -598,6 +538,15 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
         <div ref={containerRef} className="flex-1 min-h-0 flex flex-col relative">
           {error && (
             <p className="text-red-400 text-sm px-4 pt-2">{error}</p>
+          )}
+
+          {/* Loading overlay with animation */}
+          {loading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-surface/80">
+              <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin mb-3" />
+              <p className="text-gray-400 text-sm">Loading all entries...</p>
+              <p className="text-gray-600 text-xs mt-1">Large datasets may take a few seconds</p>
+            </div>
           )}
 
           {!loading && allEntries.length > 0 && filteredEntries.length === 0 && (
@@ -637,6 +586,13 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
               style={{ height: listHeight }}
             />
           </div>
+
+          {/* Keyboard hint */}
+          {!loading && allEntries.length > 0 && (
+            <div className="absolute bottom-2 right-4 text-[10px] text-gray-600 pointer-events-none">
+              &larr; &rarr; page scroll
+            </div>
+          )}
 
           {/* Detail panel — always in DOM, toggled via hidden class (no React re-render) */}
           <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/40 bg-surface flex flex-col shrink-0">
