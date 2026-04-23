@@ -25,28 +25,31 @@ export function SearchStatusBar({
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   return (
-    <div className="flex items-center gap-2 px-4 py-1 text-[11px] text-gray-400 bg-surface-card border-b border-border/40 shrink-0">
+    <div className="flex items-center gap-2 px-4 py-1 text-[11px] bg-surface-card border-b border-border/40 shrink-0">
       {loading ? (
         <span className="text-gray-500">Loading...</span>
       ) : allEntries.length > 0 ? (
         <>
-          <span className="font-medium text-gray-300">{allEntries.length.toLocaleString()}</span>
-          <span>loaded</span>
-          <span className="text-gray-600">|</span>
-          <span className="font-medium text-gray-300">{filteredCount.toLocaleString()}</span>
-          <span>shown</span>
+          {/* Counts — prominent */}
+          <span className="font-semibold text-gray-200">{allEntries.length.toLocaleString()}</span>
+          <span className="text-gray-500">loaded</span>
+          <span className="text-gray-700">·</span>
+          <span className="font-semibold text-gray-200">{filteredCount.toLocaleString()}</span>
+          <span className="text-gray-500">shown</span>
           {hasKeyword && matchCount > 0 && (
             <>
-              <span className="text-gray-600">|</span>
-              <span className="font-medium text-accent">{matchCount.toLocaleString()}</span>
-              <span>matches</span>
+              <span className="text-gray-700">·</span>
+              <span className="font-semibold text-accent">{matchCount.toLocaleString()}</span>
+              <span className="text-gray-500">matches</span>
             </>
           )}
+
+          {/* Method badge — secondary */}
           {method && (
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
+            <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider ${
               method === 'fts5'
-                ? 'bg-accent/20 text-accent border border-accent/30'
-                : 'bg-gray-700/50 text-gray-400 border border-gray-600/50'
+                ? 'bg-accent/15 text-accent/80 border border-accent/20'
+                : 'bg-gray-700/40 text-gray-500 border border-gray-700/50'
             }`}>
               {method}
             </span>

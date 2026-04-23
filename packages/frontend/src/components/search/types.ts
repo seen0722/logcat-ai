@@ -27,6 +27,9 @@ export interface RowExtraProps {
   focusIdx: number;
   onExpandToggle: (idx: number) => void;
   highlightPattern: RegExp | null;
+  bookmarkedKeys: Set<number>;
+  currentBookmarkKey: number;
+  onBookmarkToggle: (idx: number) => void;
 }
 
 export const ROW_HEIGHT = 22;

@@ -68,6 +68,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   // Find navigation
   const [currentMatchPos, setCurrentMatchPos] = useState(0);
 
+  // Bookmarks — stored by stable key (lineNumber for logcat, entryIndex for kernel)
+  const [bookmarkedKeys, setBookmarkedKeys] = useState<Set<number>>(() => new Set());
+  const [currentBookmarkPos, setCurrentBookmarkPos] = useState(0);
+
   // UI states
   const [visible, setVisible] = useState(false);
 
@@ -224,6 +228,49 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
       scrollToIndex(matchList[0]);
     }
   }, [matchList.length]);
+
+  // ── Bookmarks ──
+
+  const handleBookmarkToggle = useCallback((filteredIdx: number) => {
+    const entry = filteredRef.current[filteredIdx];
+    if (!entry) return;
+    const key = 'lineNumber' in entry ? (entry as LogcatEntry).lineNumber : (entry as KernelEntry).entryIndex;
+    setBookmarkedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) { next.delete(key); } else { next.add(key); }
+      return next;
+    });
+  }, []);
+
+  const bookmarkListInFiltered = useMemo(() => {
+    const entries = filteredEntries;
+    const result: number[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const key = 'lineNumber' in e ? (e as LogcatEntry).lineNumber : (e as KernelEntry).entryIndex;
+      if (bookmarkedKeys.has(key)) result.push(i);
+    }
+    return result;
+  }, [filteredEntries, bookmarkedKeys]);
+
+  const goToNextBookmark = useCallback(() => {
+    if (bookmarkListInFiltered.length === 0) return;
+    const next = (currentBookmarkPos + 1) % bookmarkListInFiltered.length;
+    setCurrentBookmarkPos(next);
+    scrollToIndex(bookmarkListInFiltered[next]);
+  }, [bookmarkListInFiltered, currentBookmarkPos, scrollToIndex]);
+
+  const goToPrevBookmark = useCallback(() => {
+    if (bookmarkListInFiltered.length === 0) return;
+    const prev = (currentBookmarkPos - 1 + bookmarkListInFiltered.length) % bookmarkListInFiltered.length;
+    setCurrentBookmarkPos(prev);
+    scrollToIndex(bookmarkListInFiltered[prev]);
+  }, [bookmarkListInFiltered, currentBookmarkPos, scrollToIndex]);
+
+  const clearBookmarks = useCallback(() => {
+    setBookmarkedKeys(new Set());
+    setCurrentBookmarkPos(0);
+  }, []);
 
   // ── FocusTime ──
 
@@ -396,6 +443,16 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     }
   }, []);
 
+  // Compute the stable key of the current bookmark being navigated to
+  const currentBookmarkKey = useMemo(() => {
+    if (bookmarkListInFiltered.length === 0) return -1;
+    const filteredIdx = bookmarkListInFiltered[currentBookmarkPos];
+    if (filteredIdx == null) return -1;
+    const entry = filteredEntries[filteredIdx];
+    if (!entry) return -1;
+    return 'lineNumber' in entry ? (entry as LogcatEntry).lineNumber : (entry as KernelEntry).entryIndex;
+  }, [bookmarkListInFiltered, currentBookmarkPos, filteredEntries]);
+
   const rowProps = useMemo<RowExtraProps>(() => ({
     entries: filteredEntries,
     source,
@@ -404,7 +461,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     focusIdx: focusIndex,
     onExpandToggle: handleExpandToggleStable,
     highlightPattern: searchPattern,
-  }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex, handleExpandToggleStable]);
+    bookmarkedKeys,
+    currentBookmarkKey,
+    onBookmarkToggle: handleBookmarkToggle,
+  }), [filteredEntries, source, currentMatchIndex, matchIndices, focusIndex, handleExpandToggleStable, bookmarkedKeys, currentBookmarkKey, handleBookmarkToggle]);
 
   const allEntries = allEntriesRef.current;
 
@@ -442,6 +502,10 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </button>
           </div>
           <div className="flex-1 relative">
+            {/* Search icon */}
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             <input
               ref={inputRef}
               type="text"
@@ -452,11 +516,15 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
                 if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); goToPrevMatch(); }
               }}
               placeholder={source === 'kernel' ? 'Find in kernel logs...' : 'Find in logs...'}
-              className="w-full bg-surface-card border border-border/60 rounded-md px-3 py-1.5 pr-20 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
+              className="w-full bg-surface-card border border-border/60 rounded-md pl-8 pr-24 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30"
             />
-            {q.trim() && (
-              <span className="absolute right-12 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
-                {matchList.length > 0 ? `${currentMatchPos + 1} / ${matchList.length}` : '0 / 0'}
+            {q.trim() ? (
+              <span className="absolute right-12 top-1/2 -translate-y-1/2 text-[10px] font-mono text-gray-400 pointer-events-none tabular-nums">
+                {matchList.length > 0 ? `${currentMatchPos + 1}/${matchList.length}` : '0/0'}
+              </span>
+            ) : (
+              <span className="absolute right-12 top-1/2 -translate-y-1/2 text-[10px] text-gray-600 pointer-events-none hidden sm:inline">
+                {navigator.platform?.includes('Mac') ? '⌘F' : 'Ctrl+F'}
               </span>
             )}
             <button
@@ -488,6 +556,49 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           >
             {'\u25BC'}
           </button>
+          {/* Bookmark navigation */}
+          {bookmarkedKeys.size > 0 && (
+            <>
+              <div className="w-px h-5 bg-gray-700/40" />
+              <div className="flex items-center gap-1">
+                <svg width="12" height="14" viewBox="0 0 10 12" fill="none" className="text-warm shrink-0">
+                  <path d="M1 1.5C1 1.22 1.22 1 1.5 1H8.5C8.78 1 9 1.22 9 1.5V11L5 8.5L1 11V1.5Z" fill="#d4a06a" stroke="#d4a06a" strokeWidth="1" />
+                </svg>
+                <span className="text-[10px] text-warm font-mono tabular-nums">
+                  {bookmarkListInFiltered.length > 0
+                    ? `${currentBookmarkPos + 1}/${bookmarkListInFiltered.length}`
+                    : `${bookmarkedKeys.size}`
+                  }
+                </span>
+              </div>
+              <button
+                onClick={goToPrevBookmark}
+                disabled={bookmarkListInFiltered.length === 0}
+                title="Previous bookmark"
+                aria-label="Previous bookmark"
+                className="px-1.5 py-1 text-xs rounded-md border border-warm/30 text-warm hover:text-white hover:bg-warm/20 disabled:opacity-30 transition-colors"
+              >
+                {'\u25B2'}
+              </button>
+              <button
+                onClick={goToNextBookmark}
+                disabled={bookmarkListInFiltered.length === 0}
+                title="Next bookmark"
+                aria-label="Next bookmark"
+                className="px-1.5 py-1 text-xs rounded-md border border-warm/30 text-warm hover:text-white hover:bg-warm/20 disabled:opacity-30 transition-colors"
+              >
+                {'\u25BC'}
+              </button>
+              <button
+                onClick={clearBookmarks}
+                title="Clear all bookmarks"
+                aria-label="Clear all bookmarks"
+                className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                Clear
+              </button>
+            </>
+          )}
           <button
             onClick={handleClose}
             className="text-gray-500 hover:text-white text-lg leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-gray-700/50 transition-colors shrink-0"
@@ -559,14 +670,14 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
 
           {/* Column headers + List always rendered to prevent layout shift */}
           {source === 'logcat' ? (
-            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-border/60 bg-surface shrink-0 px-4 leading-5">
+            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b-2 border-border/80 bg-surface-card/40 shrink-0 px-4 py-0.5 leading-5">
               <span className="px-2 w-[150px] shrink-0">Timestamp</span>
               <span className="px-1 w-[75px] shrink-0">PID/TID</span>
-              <span className="px-1 w-[130px] shrink-0">Level/Tag</span>
+              <span className="px-1 w-[200px] shrink-0">Level/Tag</span>
               <span className="px-2 flex-1">Message</span>
             </div>
           ) : (
-            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b border-border/60 bg-surface shrink-0 px-4 leading-5">
+            <div className="flex text-gray-500 text-[10px] uppercase tracking-wider font-medium border-b-2 border-border/80 bg-surface-card/40 shrink-0 px-4 py-0.5 leading-5">
               <span className="px-2 w-[150px] shrink-0">Timestamp</span>
               <span className="px-1 w-[70px] shrink-0">Level</span>
               <span className="px-2 flex-1">Message</span>
@@ -595,8 +706,8 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           )}
 
           {/* Detail panel — always in DOM, toggled via hidden class (no React re-render) */}
-          <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/40 bg-surface flex flex-col shrink-0">
-            <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800/60 shrink-0">
+          <div ref={detailPanelRef} style={{ display: 'none', height: DETAIL_HEIGHT }} className="border-t-2 border-accent/50 bg-surface-card/60 flex flex-col shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-border/40 shrink-0">
               <span className="text-[10px] text-accent font-semibold uppercase tracking-wider">Detail</span>
               <div ref={detailMetaRef} className="text-[10px] text-gray-500 font-mono" />
               <div className="ml-auto flex items-center gap-2">

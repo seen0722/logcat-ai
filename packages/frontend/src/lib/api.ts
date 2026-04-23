@@ -365,10 +365,10 @@ export async function searchLogcat(
   // Decode compact array format → object entries
   if (data.rows && data.columns) {
     const cols = data.columns as string[];
-    data.entries = data.rows.map((row: any[]) => {
+    data.entries = data.rows.map((row: any[], idx: number) => {
       const obj: any = {};
       for (let i = 0; i < cols.length; i++) obj[cols[i]] = row[i];
-      obj.lineNumber = 0;
+      obj.lineNumber = idx;
       return obj;
     });
     data.showing = data.entries.length;
