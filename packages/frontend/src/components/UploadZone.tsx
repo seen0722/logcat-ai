@@ -60,20 +60,21 @@ export default function UploadZone({ onStart, error }: Props) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 upload-atmosphere">
       <div className="text-center space-y-3">
         <h1 className="font-display text-3xl">
           Logcat <span className="text-warm">AI</span>
         </h1>
+        <div className="mx-auto h-[2px] w-12 bg-gradient-to-r from-transparent via-warm to-transparent opacity-70" />
         <p className="text-gray-400 font-light">AI-powered bugreport.zip analyzer for Android</p>
       </div>
 
       {/* Drop Zone */}
       <div
-        className={`card border-2 border-dashed cursor-pointer text-center py-12 transition-all duration-300 ${
+        className={`card border-2 border-dashed cursor-pointer text-center py-14 transition-all duration-300 ${
           dragging ? 'border-accent bg-accent/5 scale-[1.01] shadow-glow'
           : file ? 'border-accent/50 bg-accent/5'
-          : 'border-border hover:border-gray-500 hover:bg-surface-hover/30'
+          : 'border-border drop-zone-empty hover:border-accent/50'
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -89,14 +90,16 @@ export default function UploadZone({ onStart, error }: Props) {
         />
         {file ? (
           <div className="space-y-1">
-            <IconCheck className="w-8 h-8 mx-auto text-green-400 mb-1" />
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-green-500/10 border border-green-500/25 mb-2">
+              <IconCheck className="w-7 h-7 text-green-400" />
+            </div>
             <p className="text-lg font-medium text-gray-200">{file.name}</p>
             <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="text-4xl text-gray-500">
-              <IconUpload className="w-12 h-12 mx-auto" />
+          <div className="space-y-3">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 shadow-card">
+              <IconUpload className="w-8 h-8 text-accent" />
             </div>
             <p className="text-gray-300">Drop bugreport.zip, logcat.txt, or dmesg.log here</p>
             <p className="text-xs text-gray-500">Max 200 MB</p>
@@ -141,8 +144,8 @@ export default function UploadZone({ onStart, error }: Props) {
         <button
           className={`flex-1 card text-center py-3.5 cursor-pointer transition-all duration-300 ${
             mode === 'quick'
-              ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow'
-              : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100'
+              ? 'border-accent bg-accent/10 ring-2 ring-accent/30 shadow-glow'
+              : 'border-border/60 hover:border-border hover:bg-surface-hover opacity-70 hover:opacity-100'
           }`}
           onClick={() => setMode('quick')}
         >
@@ -154,8 +157,8 @@ export default function UploadZone({ onStart, error }: Props) {
             hasLlm === false
               ? 'border-border opacity-40 cursor-not-allowed'
               : mode === 'deep'
-                ? 'border-accent bg-accent/10 ring-1 ring-accent/30 shadow-glow cursor-pointer'
-                : 'border-border hover:bg-surface-hover opacity-60 hover:opacity-100 cursor-pointer'
+                ? 'border-accent bg-accent/10 ring-2 ring-accent/30 shadow-glow cursor-pointer'
+                : 'border-border/60 hover:border-border hover:bg-surface-hover opacity-70 hover:opacity-100 cursor-pointer'
           }`}
           onClick={() => { if (hasLlm !== false) setMode('deep'); }}
           title={hasLlm === false ? 'No LLM provider configured. Open LLM Settings to set up a provider.' : undefined}
@@ -181,7 +184,11 @@ export default function UploadZone({ onStart, error }: Props) {
       <button
         onClick={handleSubmit}
         disabled={!file}
-        className="w-full py-3.5 rounded-xl font-semibold transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed bg-warm hover:bg-warm-dark text-surface hover:shadow-warm-glow active:scale-[0.99]"
+        className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-300 active:scale-[0.99] ${
+          file
+            ? 'bg-warm hover:bg-warm-dark text-surface shadow-warm-glow'
+            : 'bg-surface-card border border-border text-gray-500 cursor-not-allowed'
+        }`}
       >
         {file ? `Analyze ${file.name}` : 'Select a file to analyze'}
       </button>
