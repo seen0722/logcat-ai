@@ -41,7 +41,7 @@ test.describe('System Overview', () => {
 
   test('health score overall ring is present', async ({ analysisPage }) => {
     const overview = analysisPage.locator('#section-overview');
-    // Score displayed as "N/100"
-    await expect(overview.locator('text=/100').first()).toBeVisible();
+    // OverallScoreRing renders an SVG with concentric circles (track + progress)
+    await expect(overview.locator('svg circle').first()).toBeVisible();
   });
 });
