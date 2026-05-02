@@ -31,15 +31,15 @@ export function SearchStatusBar({
       ) : allEntries.length > 0 ? (
         <>
           {/* Counts — prominent */}
-          <span className="font-semibold text-gray-200">{allEntries.length.toLocaleString()}</span>
+          <span className="font-mono font-semibold text-gray-200 tabular-nums">{allEntries.length.toLocaleString()}</span>
           <span className="text-gray-500">loaded</span>
           <span className="text-gray-700">·</span>
-          <span className="font-semibold text-gray-200">{filteredCount.toLocaleString()}</span>
+          <span className="font-mono font-semibold text-gray-200 tabular-nums">{filteredCount.toLocaleString()}</span>
           <span className="text-gray-500">shown</span>
           {hasKeyword && matchCount > 0 && (
             <>
               <span className="text-gray-700">·</span>
-              <span className="font-semibold text-accent">{matchCount.toLocaleString()}</span>
+              <span className="font-mono font-semibold text-accent tabular-nums">{matchCount.toLocaleString()}</span>
               <span className="text-gray-500">matches</span>
             </>
           )}

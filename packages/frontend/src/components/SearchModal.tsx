@@ -482,9 +482,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
           <div className="flex bg-surface-card rounded-md p-0.5 border border-border/60 shrink-0">
             <button
               onClick={() => switchSource('logcat')}
-              className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 py-0.5 text-xs font-medium rounded transition-all ${
                 source === 'logcat'
-                  ? 'bg-accent text-white'
+                  ? 'bg-accent text-white shadow-sm'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
             >
@@ -492,9 +492,9 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
             </button>
             <button
               onClick={() => switchSource('kernel')}
-              className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
+              className={`px-2.5 py-0.5 text-xs font-medium rounded transition-all ${
                 source === 'kernel'
-                  ? 'bg-accent text-white'
+                  ? 'bg-accent text-white shadow-sm'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
             >
