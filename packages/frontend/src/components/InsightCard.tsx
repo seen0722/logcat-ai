@@ -170,17 +170,17 @@ function InsightCardInner({ insight, halCorrelation }: Props) {
   return (
     <div
       id={insight.id}
-      className={`border-l-4 ${styles.border} card p-0 overflow-hidden transition-colors`}
+      className={`border-l-4 ${styles.border} card p-0 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover`}
     >
       {/* Header — clickable to expand/collapse */}
       <div
         className="flex items-start gap-3 cursor-pointer hover:bg-surface-hover p-4 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className={`w-6 h-6 shrink-0 rounded flex items-center justify-center text-xs font-bold ${
-          insight.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-          insight.severity === 'warning' ? 'bg-amber-500/20 text-amber-400' :
-          'bg-blue-500/20 text-blue-400'
+        <span className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-sm font-bold border ${
+          insight.severity === 'critical' ? 'bg-red-500/15 text-red-400 border-red-500/30' :
+          insight.severity === 'warning' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+          'bg-blue-500/15 text-blue-400 border-blue-500/30'
         }`}>{SEVERITY_ICONS[insight.severity] ?? 'i'}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -196,7 +196,7 @@ function InsightCardInner({ insight, halCorrelation }: Props) {
               <span className="text-xs text-gray-500">{insight.timestamp}</span>
             )}
           </div>
-          <h3 className="font-medium mt-1">{insight.title}</h3>
+          <h3 className="font-semibold text-base leading-snug mt-1.5 text-gray-100">{insight.title}</h3>
         </div>
         {expanded ? <IconCollapse className="w-4 h-4 text-gray-500" /> : <IconExpand className="w-4 h-4 text-gray-500" />}
       </div>
