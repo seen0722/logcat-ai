@@ -64,11 +64,11 @@ export default function PowerOverview({ powerStatus }: Props) {
   );
 
   const heroRight = bs && bs.deepDozeTimeMs > 0 ? (
-    <div>
-      <div className={`text-3xl font-bold ${rateColor(dozeRate)}`}>
+    <div className="text-right">
+      <div className={`font-display text-4xl tracking-tight leading-none ${rateColor(dozeRate)}`}>
         {dozeRate.toFixed(1)}
       </div>
-      <div className="text-xs text-gray-500">mAh/h Deep Doze</div>
+      <div className="text-[10px] text-gray-500 uppercase tracking-wider mt-1.5">mAh/h Deep Doze</div>
       {dozeRate > 20 && (
         <div className="text-[10px] text-amber-400 mt-0.5">ideal &lt;20</div>
       )}

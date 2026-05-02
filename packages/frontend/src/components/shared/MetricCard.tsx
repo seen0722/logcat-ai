@@ -16,7 +16,7 @@ function MetricCardInner({ label, value, sub, color, icon, highlight }: MetricCa
         {icon}
         <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
       </div>
-      <div className={`text-xl font-bold ${color || 'text-gray-200'}`}>{value}</div>
+      <div className={`text-2xl font-display tracking-tight leading-none ${color || 'text-gray-200'}`}>{value}</div>
       {sub && <div className="text-[10px] text-gray-600">{sub}</div>}
     </div>
   );
