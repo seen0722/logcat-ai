@@ -11,10 +11,11 @@ import SystemDetailsTabs from '../components/SystemDetailsTabs';
 import SectionNav from '../components/SectionNav';
 import SearchModal from '../components/SearchModal';
 import ProgressView from '../components/ProgressView';
+import { scheduleIdle, cancelIdle } from '../lib/idle-scheduler';
 
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>();
-  const { uploadId, result, loadFromHistory, runDeep, analyzing, progress, reset } = useAnalysisContext();
+  const { uploadId, result, loadFromHistory, runDeep, analyzing, progress, reset, prefetchSearchData } = useAnalysisContext();
 
   // Timeline search state (opens SearchModal in modal mode)
   const [showTimelineSearch, setShowTimelineSearch] = useState(false);
@@ -32,6 +33,20 @@ export default function AnalysisPage() {
       loadFromHistory(id);
     }
   }, [id, uploadId, loadFromHistory]);
+
+  // Phase 1 background prefetch: warm SearchModal entries while the user
+  // reads insights / power / timeline. AnalysisContext aborts on reset()
+  // (full unmount); switching to a new analysis triggers a new prefetch
+  // that is idempotent + best-effort.
+  useEffect(() => {
+    if (!uploadId) return;
+    const handle = scheduleIdle(() => {
+      prefetchSearchData(uploadId);
+    });
+    return () => {
+      cancelIdle(handle);
+    };
+  }, [uploadId, prefetchSearchData]);
 
   const computeTimeRange = (timestamp: string, deltaSeconds: number): { startTime: string; endTime: string } => {
     const match = timestamp.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
