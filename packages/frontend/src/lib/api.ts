@@ -342,6 +342,7 @@ export interface LogcatSearchResult {
 export async function searchLogcat(
   id: string,
   params: { q?: string; tag?: string; level?: string; pid?: number; buffer?: string; startTime?: string; endTime?: string; limit?: number; offset?: number; export?: boolean; compact?: boolean },
+  signal?: AbortSignal,
 ): Promise<LogcatSearchResult> {
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
@@ -356,7 +357,7 @@ export async function searchLogcat(
   if (params.export) qs.set('export', 'true');
   if (params.compact) qs.set('compact', 'true');
 
-  const res = await fetch(`${API_BASE}/search/${id}?${qs}`);
+  const res = await fetch(`${API_BASE}/search/${id}?${qs}`, { signal });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? 'Search failed');
@@ -365,8 +366,8 @@ export async function searchLogcat(
   // Decode compact array format → object entries
   if (data.rows && data.columns) {
     const cols = data.columns as string[];
-    data.entries = data.rows.map((row: any[], idx: number) => {
-      const obj: any = {};
+    data.entries = data.rows.map((row: unknown[], idx: number) => {
+      const obj: Record<string, unknown> = {};
       for (let i = 0; i < cols.length; i++) obj[cols[i]] = row[i];
       obj.lineNumber = idx;
       return obj;
