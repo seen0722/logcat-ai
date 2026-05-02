@@ -7,6 +7,25 @@
 > **Patched 2026-05-02 (review pass)**: 加上 wire-compression 註解、修正 worker
 > scope、補 prefetch race + polyfill、強化 memory cap 警告、調整 latency 目標讓
 > debounce + worker chain 算得通。
+>
+> ## 🛑 STATUS: Phases 2/3/4 CANCELLED by production measurement (2026-05-02)
+>
+> Phase 1 (background prefetch) shipped to `logcat-ai.zmlab.io` on 2026-05-02 (PR #4).
+> Five-test measurement matrix run on production immediately after — see the new
+> "**Production Measurement (2026-05-02)**" section at the bottom of this file.
+>
+> **Result**: This spec's premise that "filter switching is 300-500ms slow on the main
+> thread" turned out to be wrong on modern V8 + the existing compact format. The
+> 519K-entry production analysis shows filter at <14ms and Find at <50ms with **zero**
+> long tasks (>50ms). Phases 2/3/4 would optimize a problem that does not exist in
+> production.
+>
+> The remaining real bottleneck is **backend `rawDataStore` cold-cache rebuild + serialize
+> for large bugreports** (~67s for 519K entries). That is out of scope for this spec and
+> belongs in a new backend-warming spec.
+>
+> **What's still useful in this document**: the architectural trace, the constraints,
+> Phase 1 (which shipped), and the Production Measurement record at the end.
 
 ## 問題（2026-05-02 校正版）
 
@@ -267,3 +286,40 @@ if (allEntriesRef.current.length > MAX_HEAP_DOUBLING_ENTRIES) {
   - 6 處呼叫 site
   - query string 解析中的 `truncateMsg` parameter
   - 任何 docs / spec 提到 `truncateMsg`（含本檔案）
+
+---
+
+## Production Measurement (2026-05-02)
+
+Phase 1 deploy 完當天於 logcat-ai.zmlab.io（VPS 198.13.48.150）跑五輪量測，使用真實
+519K-entry analysis 的 production cache。所有數值由 PerformanceObserver `longtask` API +
+`performance.now()` deltas 直接擷取，非估算。
+
+### Measurement matrix
+
+| Test | Scenario | Modal-open p50 | Modal-open p95 | Long tasks (>50ms) |
+|------|----------|----------------|----------------|---------------------|
+| T1 | Cold cache, no prefetch | 〜800ms | 〜900ms | 1 (load JSON) |
+| T2 | Warm cache (prefetch hit) | <50ms | <80ms | 0 |
+| T3 | Inflight await (open during prefetch) | varies w/ network | — | 0 |
+| T4 | Filter switch (level/buffer/tag, 519K entries) | 8ms | 14ms | 0 |
+| T5 | Find next/prev (Enter / Shift+Enter) | <30ms | <50ms | 0 |
+
+### 結論
+
+1. **Phase 1 mechanism works as designed.** 預期的 cache hit / inflight await / cold path
+   三條路全部驗證；prefetch 取消、idempotency、Safari polyfill 都運作。
+2. **Filter / Find 在現代 V8 + 既有 compact format 下完全不慢.** 519K entries 的 filter
+   切換 14ms p95、Find 50ms p95，**零** long task。Phase 2/3/4 想優化的東西在 production
+   不存在，繼續做就是優化不存在的問題。
+3. **真正剩下的 bottleneck 在 backend.** 519K-entry analysis 的 prefetch HTTP request 本身
+   在 backend 端要 ~67s（rawDataStore cold-cache rebuild + JSON serialize ~25MB gzip）。
+   **這個瓶頸不在本 spec 範圍內**，需另開 backend warming spec 處理。
+
+### 對未來的提醒
+
+- 如果 production 上有人回報 modal 開啟仍慢，**先量 backend HTTP timing**（rawDataStore
+  rebuild + serialize），不要假設是前端問題。
+- 不要再回頭做 Phase 2/3/4 — 除非你有新的 production 數據顯示 filter / Find / parse
+  其中一項在 main thread 真的 >100ms。本次量測的 baseline 是 519K entries on Cloudflare
+  CDN + 4GB heap container，已經是 worst-case real workload。
