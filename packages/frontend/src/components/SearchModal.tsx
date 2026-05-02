@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { List, useListRef } from 'react-window';
 import { searchLogcat, searchKernel } from '../lib/api';
+import { useAnalysisContext } from '../contexts/AnalysisContext';
 import { entriesToCSV, entriesToLogcatText, kernelEntriesToCSV, kernelEntriesToDmesgText, downloadBlob } from '../lib/export-utils';
 import { RowComponent, SearchFilters, SearchStatusBar, ROW_HEIGHT, DETAIL_HEIGHT } from './search';
 import type { SearchSource, BaseEntry, LogcatEntry, KernelEntry, RowExtraProps } from './search';
@@ -20,6 +21,8 @@ interface Props {
 }
 
 export default function SearchModal({ uploadId, onClose, initialTag, initialStartTime, initialEndTime, initialSource, initialFocusTime }: Props) {
+  // Phase 1 prefetch: pull cache + in-flight accessors from context
+  const { getPrefetchedEntries, getInflightPrefetch } = useAnalysisContext();
   const [source, setSource] = useState<SearchSource>(initialSource ?? 'logcat');
   const [q, setQ] = useState('');
   const [useRegex, setUseRegex] = useState(false);
@@ -88,6 +91,38 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
   const loadData = useCallback(async (opts?: { src?: SearchSource }) => {
     const effectiveSource = opts?.src ?? source;
 
+    // Phase 1 prefetch: only logcat is prefetched. Kernel always cold-loads.
+    if (effectiveSource === 'logcat') {
+      // Path 1: cache hit
+      const cached = getPrefetchedEntries(uploadId);
+      if (cached) {
+        allEntriesRef.current = cached as LogcatEntry[];
+        setDataVersion((v) => v + 1);
+        setMethod('keyword'); // matches in-memory path label
+        return;
+      }
+      // Path 2: prefetch in-flight — await it instead of starting a second fetch
+      const inflight = getInflightPrefetch(uploadId);
+      if (inflight) {
+        setLoading(true);
+        setError('');
+        try {
+          const entries = await inflight;
+          if (entries.length > 0) {
+            allEntriesRef.current = entries as LogcatEntry[];
+            setDataVersion((v) => v + 1);
+            setMethod('keyword');
+            return;
+          }
+          // entries.length === 0 means prefetch was aborted or errored;
+          // fall through to cold path below.
+        } finally {
+          setLoading(false);
+        }
+      }
+    }
+
+    // Path 3: cold path (original behavior, unchanged)
     setLoading(true);
     setError('');
     try {
@@ -114,7 +149,7 @@ export default function SearchModal({ uploadId, onClose, initialTag, initialStar
     } finally {
       setLoading(false);
     }
-  }, [uploadId, source]);
+  }, [uploadId, source, getPrefetchedEntries, getInflightPrefetch]);
 
   // ── Client-side Filtering ──
   // ALL filtering (level/pid/buffer/tag/excludeTags/startTime/endTime) is client-side
