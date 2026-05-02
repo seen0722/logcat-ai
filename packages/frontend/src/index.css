@@ -250,3 +250,38 @@
 .animate-pulse-subtle {
   animation: pulse-subtle 2s ease-in-out infinite;
 }
+
+/* Atmospheric backdrop for hero / upload surface — subtle dual gradient */
+.upload-atmosphere {
+  position: relative;
+}
+.upload-atmosphere::before {
+  content: '';
+  position: absolute;
+  inset: -4rem -8rem;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 0%, rgb(var(--color-accent) / 0.07), transparent 65%),
+    radial-gradient(ellipse 50% 45% at 50% 100%, rgb(var(--color-warm) / 0.05), transparent 65%);
+  z-index: 0;
+}
+.upload-atmosphere > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Drop zone soft inner glow — reads when card has empty/dragging state */
+.drop-zone-empty {
+  background-image: radial-gradient(
+    ellipse 70% 70% at 50% 50%,
+    rgb(var(--color-accent) / 0.035),
+    transparent 70%
+  );
+}
+.drop-zone-empty:hover {
+  background-image: radial-gradient(
+    ellipse 70% 70% at 50% 50%,
+    rgb(var(--color-accent) / 0.07),
+    transparent 70%
+  );
+}

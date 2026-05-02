@@ -85,6 +85,13 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
     return 'text-red-400';
   }
 
+  function healthAccent(score?: number): string {
+    if (score == null) return 'rgb(75 85 99 / 0.5)';
+    if (score >= 80) return 'rgb(74 222 128 / 0.75)';
+    if (score >= 60) return 'rgb(250 204 21 / 0.75)';
+    return 'rgb(248 113 113 / 0.85)';
+  }
+
   return (
     <div className={`fixed inset-0 z-50 flex justify-end transition-colors duration-200 ${visible ? 'bg-black/80' : 'bg-black/0'}`} onClick={handleClose}>
       <div
@@ -133,7 +140,8 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                 <div
                   key={item.id}
                   onClick={() => onLoad(item.id)}
-                  className="bg-surface-card border border-border rounded-xl p-4 cursor-pointer hover:border-accent/40 hover:bg-surface-hover hover:shadow-card transition-all duration-200"
+                  style={{ boxShadow: `inset 3px 0 0 ${healthAccent(item.healthOverall)}` }}
+                  className="bg-surface-card border border-border rounded-xl p-4 cursor-pointer hover:border-accent/40 hover:bg-surface-hover hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -184,10 +192,17 @@ export default function HistoryPanel({ onLoad, onClose, excludeId }: Props) {
                       <span className="text-gray-500 bg-surface px-2 py-0.5 rounded-lg border border-border/50">Quick</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs">
-                    <span className={`font-semibold ${healthColor(item.healthOverall)}`}>
-                      {item.healthOverall != null ? `${item.healthOverall}/100` : '\u2014'}
-                    </span>
+                  <div className="flex items-baseline gap-3 mt-2 text-xs">
+                    {item.healthOverall != null ? (
+                      <span className="flex items-baseline gap-0.5 leading-none">
+                        <span className={`font-display text-lg ${healthColor(item.healthOverall)}`}>
+                          {item.healthOverall}
+                        </span>
+                        <span className="text-gray-600 text-[10px]">/100</span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 font-semibold">{'\u2014'}</span>
+                    )}
                     {item.criticalCount > 0 && (
                       <span className="text-red-400">{item.criticalCount} critical</span>
                     )}
