@@ -31,6 +31,9 @@ test.describe('Search Full Load — Warm Cache', () => {
     const totalLoaded = await getShownCount();
     expect(totalLoaded).toBeGreaterThan(0);
 
+    // ── Open advanced filters to expose Tag input (Tag is collapsed behind toggle now) ──
+    await modal.locator('button', { hasText: 'Filters' }).click();
+
     // ── Filter by tag ──
     const tagInput = modal.locator('input[placeholder="e.g. RIL,RILJ"]');
     await tagInput.fill('ActivityManager');
@@ -44,17 +47,16 @@ test.describe('Search Full Load — Warm Cache', () => {
     await tagInput.clear();
     await page.waitForTimeout(300);
 
-    // ── Filter by level (E+) ──
-    const levelSelect = modal.locator('select').nth(1); // Min Level is 2nd select
-    await levelSelect.selectOption('E');
+    // ── Filter by level (E+) — level is now a row of <button> pills, not a <select> ──
+    await modal.locator('button', { hasText: /^E\+$/ }).click();
     await page.waitForTimeout(300);
 
     const levelFiltered = await getShownCount();
     expect(levelFiltered).toBeLessThan(totalLoaded);
     expect(levelFiltered).toBeGreaterThan(0);
 
-    // Reset level
-    await levelSelect.selectOption('');
+    // Reset level (click "All" pill)
+    await modal.locator('button', { hasText: /^All$/ }).first().click();
     await page.waitForTimeout(300);
 
     // ── Keyword search (Find highlight) ──
@@ -73,7 +75,7 @@ test.describe('Search Full Load — Warm Cache', () => {
     // ── Combined: tag + level ──
     await findInput.clear();
     await tagInput.fill('ActivityManager');
-    await levelSelect.selectOption('W');
+    await modal.locator('button', { hasText: /^W\+$/ }).click();
     await page.waitForTimeout(300);
 
     const combinedFiltered = await getShownCount();
@@ -120,6 +122,9 @@ test.describe('Search Full Load — Cold Cache (History Path)', () => {
     expect(totalLoaded).toBeGreaterThan(0);
 
     // ── Verify filters work on cold-loaded data ──
+
+    // Open advanced filters to expose Tag input
+    await modal.locator('button', { hasText: 'Filters' }).click();
 
     // Tag filter
     const tagInput = modal.locator('input[placeholder="e.g. RIL,RILJ"]');

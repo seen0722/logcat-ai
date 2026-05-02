@@ -14,15 +14,18 @@ test.describe('Search Modal', () => {
     const logcatTab = modal.locator('button', { hasText: 'Logcat' });
     await expect(logcatTab).toBeVisible();
 
-    // Logcat-specific filter labels should be visible
-    await expect(modal.locator('label', { hasText: 'Tag' })).toBeVisible();
-    await expect(modal.locator('label', { hasText: 'Buffer' })).toBeVisible();
-    await expect(modal.locator('label', { hasText: 'Min Level' })).toBeVisible();
-    await expect(modal.locator('label', { hasText: 'PID' })).toBeVisible();
+    // Always-visible filter section labels (rendered as <span>, not <label>)
+    await expect(modal.locator('text=Level').first()).toBeVisible();
+    await expect(modal.locator('text=Buffer').first()).toBeVisible();
+    await expect(modal.locator('text=From').first()).toBeVisible();
+    await expect(modal.locator('text=To').first()).toBeVisible();
 
-    // Time range inputs
+    // Time range inputs (always visible)
     const timeInputs = modal.locator('input[placeholder="MM-DD HH:mm:ss"]');
     expect(await timeInputs.count()).toBe(2);
+
+    // Advanced filters toggle (Tag/Exclude/PID are now collapsed behind this)
+    await expect(modal.locator('button', { hasText: 'Filters' })).toBeVisible();
 
     // Close
     await page.keyboard.press('Escape');
@@ -122,10 +125,8 @@ test.describe('Search Modal', () => {
     const initialShown = await getShownCount();
     expect(initialShown).toBeGreaterThan(0);
 
-    // Set level filter to E+ (Error and above)
-    // Filter order: Tag input, Buffer select, Min Level select, PID input
-    const levelSelect = modal.locator('select').nth(1); // Min Level is the second select
-    await levelSelect.selectOption('E');
+    // Set level filter to E+ (Error and above) — level is now a row of <button> pills
+    await modal.locator('button', { hasText: /^E\+$/ }).click();
     await page.waitForTimeout(500);
 
     // Shown count should decrease

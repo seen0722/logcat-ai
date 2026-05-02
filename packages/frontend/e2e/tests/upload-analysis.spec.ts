@@ -70,7 +70,7 @@ test.describe('Upload & Analysis Result', () => {
     // Feature cards
     await expect(page.locator('text=ANR Deep Analysis')).toBeVisible();
     await expect(page.locator('text=Health Scoring')).toBeVisible();
-    await expect(page.locator('text=FTS5 Log Search')).toBeVisible();
+    await expect(page.locator('text=Log Viewer')).toBeVisible();
     await expect(page.locator('text=Power Analysis')).toBeVisible();
 
     // Supported formats (text appears in hero subtitle and format list)
